@@ -1,6 +1,10 @@
-/* Face Off – flange face inspection (ASME B16.5 geometry; defect assessment by radial projection across the gasket seating band,
+/* Face Off – flange face inspection (ASME B16.5 geometry; defect assessment by radial projection across the gasket sealing face,
    following the ASME PCC-1 Appendix D approach). Acceptance fractions are editable and must be confirmed against the governing procedure. */
 const RF_DIA = { 15: 34.9, 20: 42.9, 25: 50.8, 32: 63.5, 40: 73.0, 50: 92.1, 65: 104.8, 80: 127.0, 90: 139.7, 100: 157.2, 125: 185.7, 150: 215.9, 200: 269.9, 250: 323.8, 300: 381.0, 350: 412.8, 400: 469.9, 450: 533.4, 500: 584.2, 600: 692.2 };
+/* ASME B16.20 spiral wound gaskets for B16.5 flanges, mm: [inner ring ID d1, sealing element ID d2, sealing element OD d3, centring ring OD d4] */
+const SWG_DIMS = {"150":{"15":[14.2,19.1,31.8,47.8],"20":[20.6,25.4,39.6,57.2],"25":[26.9,31.8,47.8,66.8],"32":[38.1,47.8,60.5,76.2],"40":[44.5,54.1,69.9,85.9],"50":[55.6,69.9,85.9,104.9],"65":[66.5,82.6,98.6,124.0],"80":[81.0,101.6,120.7,136.7],"100":[106.4,127.0,149.4,174.8],"125":[131.8,155.7,177.8,196.9],"150":[157.2,182.6,209.6,222.3],"200":[215.9,233.4,263.7,279.4],"250":[268.2,287.3,317.5,339.9],"300":[317.5,339.9,374.7,409.7],"350":[349.3,371.6,406.4,450.9],"400":[400.1,422.4,463.6,514.4],"450":[449.3,474.7,527.1,549.4],"500":[500.1,525.5,577.9,606.6],"600":[603.3,628.7,685.8,717.6]},"300":{"15":[14.2,19.1,31.8,54.1],"20":[20.6,25.4,39.6,66.8],"25":[26.9,31.8,47.8,73.2],"32":[38.1,47.8,60.5,82.6],"40":[44.5,54.1,69.9,95.3],"50":[55.6,69.9,85.9,111.3],"65":[66.5,82.6,98.6,130.3],"80":[81.0,101.6,120.7,149.4],"100":[106.4,127.0,149.4,181.1],"125":[131.8,155.7,177.8,215.9],"150":[157.2,182.6,209.6,251.0],"200":[215.9,233.4,263.7,308.1],"250":[268.2,287.3,317.5,362.0],"300":[317.5,339.9,374.7,422.4],"350":[349.3,371.6,406.4,485.9],"400":[400.1,422.4,463.6,539.8],"450":[449.3,474.7,527.1,596.9],"500":[500.1,525.6,577.9,654.1],"600":[603.3,628.7,685.8,774.7]},"400":{"15":[14.2,19.1,31.8,54.1],"20":[20.6,25.4,39.6,66.8],"25":[26.9,31.8,47.8,73.2],"32":[38.1,47.8,60.5,82.6],"40":[44.5,54.1,69.9,95.3],"50":[55.6,69.9,85.9,111.3],"65":[66.5,82.6,98.6,130.3],"80":[81.0,101.6,120.7,149.4],"100":[102.6,120.7,149.4,177.8],"125":[128.3,147.6,177.8,212.9],"150":[154.9,174.8,209.6,247.7],"200":[205.7,225.6,263.7,304.8],"250":[255.3,274.6,317.5,358.9],"300":[307.3,327.2,374.7,419.1],"350":[342.9,362.0,406.4,482.6],"400":[389.9,412.8,463.6,536.7],"450":[438.2,469.9,527.1,593.9],"500":[489.0,520.7,577.9,647.7],"600":[590.6,628.7,685.8,768.4]},"600":{"15":[14.2,19.1,31.8,54.1],"20":[20.6,25.4,39.6,66.8],"25":[26.9,31.8,47.8,73.2],"32":[38.1,47.8,60.5,82.6],"40":[44.5,54.1,69.9,95.3],"50":[55.6,69.9,85.9,111.3],"65":[66.5,82.6,98.6,130.3],"80":[78.7,101.6,120.7,149.4],"100":[102.6,120.7,149.4,193.8],"125":[128.3,147.6,177.8,241.3],"150":[154.9,174.8,209.6,266.7],"200":[205.7,225.6,263.7,320.8],"250":[255.3,274.6,317.5,400.1],"300":[307.3,327.2,374.7,457.2],"350":[342.9,362.0,406.4,492.3],"400":[389.9,412.8,463.6,565.2],"450":[438.2,469.9,527.1,612.9],"500":[489.0,520.7,577.9,682.8],"600":[590.6,628.7,685.8,790.7]},"900":{"15":[14.2,19.1,31.8,63.5],"20":[20.6,25.4,39.6,69.9],"25":[26.9,31.8,47.8,79.5],"32":[33.3,39.6,60.5,88.9],"40":[41.4,47.8,69.9,98.6],"50":[52.3,58.7,85.9,143.0],"65":[63.5,69.9,98.6,165.1],"80":[78.7,95.3,120.7,168.4],"100":[102.6,120.7,149.4,206.5],"125":[128.3,147.6,177.8,247.7],"150":[154.9,174.8,209.6,289.1],"200":[196.9,222.3,257.3,358.9],"250":[246.1,276.4,311.2,435.1],"300":[292.1,323.9,368.3,498.6],"350":[320.8,355.6,400.1,520.7],"400":[374.7,412.8,457.2,574.8],"450":[425.5,463.6,520.7,638.3],"500":[482.6,520.7,571.5,698.5],"600":[590.6,628.7,679.5,838.2]},"1500":{"15":[14.2,19.1,31.8,63.5],"20":[20.6,25.4,39.6,69.9],"25":[26.9,31.8,47.8,79.5],"32":[33.3,39.6,60.5,88.9],"40":[41.4,47.8,69.9,98.6],"50":[52.3,58.7,85.9,143.0],"65":[63.5,69.9,98.6,165.1],"80":[78.7,92.2,120.7,174.8],"100":[97.8,117.6,149.4,209.6],"125":[124.5,143.0,177.8,254.0],"150":[147.3,171.5,209.6,282.7],"200":[196.9,215.9,257.3,352.6],"250":[246.1,266.7,311.2,435.1],"300":[292.1,323.9,368.3,520.7],"350":[320.8,362.0,400.1,577.9],"400":[374.7,406.4,457.2,641.4],"450":[425.5,463.6,520.7,704.9],"500":[476.3,514.4,571.5,755.7],"600":[577.9,616.0,679.5,901.7]},"2500":{"15":[14.2,19.1,31.8,69.9],"20":[20.6,25.4,39.6,76.2],"25":[26.9,31.8,47.8,85.9],"32":[33.3,39.6,60.5,104.9],"40":[41.4,47.8,69.9,117.6],"50":[52.3,58.7,85.9,146.0],"65":[63.5,69.9,98.6,168.4],"80":[78.7,92.2,120.7,196.9],"100":[97.8,117.6,149.4,235.0],"125":[124.5,143.0,177.8,279.4],"150":[147.3,171.5,209.6,317.5],"200":[196.9,215.9,257.3,387.4],"250":[246.1,270.0,311.2,476.3],"300":[292.1,317.5,368.3,549.4]}};
+/* ASME B16.21 non-metallic ring gaskets for B16.5 RF flanges, mm: inside diameter and outside diameter by class */
+const FLAT_GK = {"15":{"id":21.0,"od":{"150":48.0,"300":54.0,"400":54.0,"600":54.0,"900":64.0}},"20":{"id":27.0,"od":{"150":57.0,"300":67.0,"400":67.0,"600":67.0,"900":70.0}},"25":{"id":33.0,"od":{"150":67.0,"300":73.0,"400":73.0,"600":73.0,"900":79.0}},"32":{"id":42.0,"od":{"150":76.0,"300":83.0,"400":83.0,"600":83.0,"900":89.0}},"40":{"id":48.0,"od":{"150":86.0,"300":95.0,"400":95.0,"600":95.0,"900":98.0}},"50":{"id":60.0,"od":{"150":105.0,"300":111.0,"400":111.0,"600":111.0,"900":143.0}},"65":{"id":73.0,"od":{"150":124.0,"300":130.0,"400":130.0,"600":130.2,"900":165.0}},"80":{"id":89.0,"od":{"150":137.0,"300":149.0,"400":149.0,"600":149.0,"900":168.0}},"100":{"id":114.0,"od":{"150":175.0,"300":181.0,"400":178.0,"600":194.0,"900":206.0}},"125":{"id":141.0,"od":{"150":197.0,"300":216.0,"400":213.0,"600":241.0,"900":248.0}},"150":{"id":168.0,"od":{"150":222.0,"300":251.0,"400":248.0,"600":267.0,"900":289.0}},"200":{"id":219.0,"od":{"150":279.0,"300":308.0,"400":305.0,"600":321.0,"900":359.0}},"250":{"id":273.0,"od":{"150":340.0,"300":362.0,"400":359.0,"600":400.0,"900":435.0}},"300":{"id":324.0,"od":{"150":410.0,"300":422.0,"400":419.0,"600":457.0,"900":498.0}},"350":{"id":356.0,"od":{"150":451.0,"300":486.0,"400":483.0,"600":492.0,"900":521.0}},"400":{"id":406.0,"od":{"150":514.0,"300":540.0,"400":537.0,"600":565.0,"900":575.0}},"450":{"id":457.0,"od":{"150":549.0,"300":597.0,"400":594.0,"600":613.0,"900":638.0}},"500":{"id":508.0,"od":{"150":606.0,"300":654.0,"400":648.0,"600":683.0,"900":699.0}},"600":{"id":610.0,"od":{"150":718.0,"300":775.0,"400":768.0,"600":791.0,"900":838.0}}};
 const FACE_DEFECTS = [['scratch', 'Radial scratch / score'], ['circ', 'Circumferential scratch'], ['pit', 'Pit / pitting'], ['dent', 'Dent / impact'], ['corr', 'Corrosion patch'], ['tool', 'Tool / machining mark'], ['spatter', 'Weld spatter'], ['residue', 'Gasket residue (removable)']];
 const FACE_LIMIT_DEFAULTS = { soft: { shallow: 0.5, deep: 0.25 }, hard: { shallow: 0.25, deep: 0.125 }, confirmed: false };
 TB.face = { id: 'facelib', items: [] };
@@ -15,10 +19,18 @@ function faceCtx(it) {
   const bore = pd ? r2(pd.od - 2 * (wt || pd.od * 0.05)) : null;
   const gk = gasketFor({ c: { general: { pipeClassId: it.classId } } }, dn);
   const cat = it.gasketCat || gasketCat(gk?.type);
-  const bandID = num(it.bandID) ?? bore, bandOD = num(it.bandOD) ?? rf;
+  // sealing face from the gasket specified: spiral wound -> B16.20 sealing element; sheet / tanged insert -> B16.21 ID to raised-face OD
+  let gd = null, bandSrc = 'bore → raised face (no gasket data)';
+  const swt = SWG_DIMS[rating >= 900 && +dn <= 65 ? 1500 : rating]?.[dn], flt = FLAT_GK[dn];
+  if (/spiral/i.test(gk?.type || '') && swt) { gd = { kind: 'sw', d1: /inner ring/i.test(gk.mat) ? swt[0] : null, d2: swt[1], d3: swt[2], d4: swt[3], t: 4.45 }; bandSrc = 'ASME B16.20 sealing element'; }
+  else if (/tanged|raised face|sheet|synthetic|full face/i.test(gk?.type || '') && flt) { const od = flt.od[rating] ?? flt.od[900]; gd = { kind: 'flat', id: flt.id, od, t: /1\.5/.test(gk.mat) ? 1.5 : 3.2 }; bandSrc = 'ASME B16.21 gasket ID → raised-face OD'; }
+  const gID = gd ? (gd.kind === 'sw' ? gd.d2 : gd.id) : bore, gOD = gd ? (gd.kind === 'sw' ? gd.d3 : Math.min(gd.od, rf || gd.od)) : rf;
+  const bandID = num(it.bandID) ?? gID, bandOD = num(it.bandOD) ?? gOD; if (num(it.bandID) != null || num(it.bandOD) != null) bandSrc = 'entered';
   const w = bandID && bandOD ? r2((bandOD - bandID) / 2) : null;
   const rfH = rating && rating <= 300 ? 1.6 : rating ? 6.4 : null;
-  return { cls, rating, dn, fd, rf, bore, gk, cat, bandID, bandOD, w, rfH, n: fd?.n || 8, od: fd?.od || (rf ? rf * 1.6 : 200), bc: fd?.bc || (rf ? rf * 1.3 : 150) };
+  const L = TB.face.limits[cat] || TB.face.limits.soft;
+  const maxShallow = w ? r2(L.shallow * w) : null, maxDeep = w ? r2(L.deep * w) : null;
+  return { cls, rating, dn, fd, rf, bore, gk, gd, bandSrc, maxShallow, maxDeep, cat, bandID, bandOD, w, rfH, n: fd?.n || 8, od: fd?.od || (rf ? rf * 1.6 : 200), bc: fd?.bc || (rf ? rf * 1.3 : 150) };
 }
 function faceEvalDefect(d, c) {
   const L = TB.face.limits, lim = L[c.cat] || L.soft;
@@ -27,12 +39,16 @@ function faceEvalDefect(d, c) {
   let r1, r2v;
   if (d.kind === 'line') { r1 = d.a[0]; r2v = d.b[0]; } else { const rd = (num(d.size) || 2) / 2; r1 = d.a[0] - rd; r2v = d.a[0] + rd; }
   const lo = Math.min(r1, r2v), hi = Math.max(r1, r2v);
-  if (hi < rIn || lo > rOut) return { proj: 0, verdict: 'out', text: 'Outside the gasket seating band – note only' };
+  if ((hi < rIn || lo > rOut) && !(num(d.rp) > 0)) return { proj: 0, verdict: 'out', text: 'Outside the gasket sealing face – note only' };
   if (['residue', 'spatter'].includes(d.t)) return { proj: r2(clip(hi) - clip(lo)), verdict: 'clean', text: 'Remove / clean before assembly' };
-  const proj = r2(clip(hi) - clip(lo)); const deep = d.depth !== 'shallow'; const frac = deep ? lim.deep : lim.shallow; const max = r2(frac * c.w);
-  if (proj >= c.w * 0.95) return { proj, max, verdict: 'reject', text: `Bridges the seating band (${proj} of ${c.w} mm) – re-machine or replace` };
-  if (proj > max) return { proj, max, verdict: 'reject', text: `Radial projection ${proj} mm > ${max} mm allowed (${deep ? 'deeper than serrations' : 'within serrations'}) – re-machine or replace` };
-  return { proj, max, verdict: 'ok', text: `Radial projection ${proj} mm ≤ ${max} mm allowed – acceptable` };
+  const geo = r2(clip(hi) - clip(lo));
+  const proj = num(d.rp) != null ? r2(Math.min(num(d.rp), c.w)) : geo;
+  const db = num(d.dBelow); const deep = db != null ? db > 0 : d.depth !== 'shallow';
+  const frac = deep ? lim.deep : lim.shallow; const max = r2(frac * c.w);
+  if (proj >= c.w * 0.95) return { proj, max, verdict: 'reject', text: `Runs right across the sealing face (${proj} of ${c.w} mm) – re-machine or replace` };
+  const dTxt = db != null ? (db > 0 ? `${db} mm below serration root` : 'not below serration root') : d.depth === 'shallow' ? 'not below serration root' : 'depth below serrations not measured – assessed as below';
+  if (proj > max) return { proj, max, verdict: 'reject', text: `Radial projection ${proj} mm > ${max} mm allowed (${dTxt}) – re-machine or replace` };
+  return { proj, max, verdict: 'ok', text: `Radial projection ${proj} mm ≤ ${max} mm allowed (${dTxt}) – acceptable` };
 }
 function faceEval(it, c = faceCtx(it)) {
   const out = { A: [], B: [], rejectA: false, rejectB: false, aligned: [] };
@@ -71,7 +87,7 @@ function faceMapSVG(it, c, sd, ev, opts = {}) {
     ${c.bore ? `<circle cx="${cx}" cy="${cy}" r="${c.bore / 2 * sc}" fill="#fff" stroke="#12385c" stroke-width="2"/>` : ''}
     ${ticks}${defs}
     <text x="10" y="318" font-size="10" fill="#333">Side ${sd} – viewed facing the face, 12 o'clock at top</text>
-    <g font-size="9.5"><rect x="10" y="325" width="14" height="8" fill="rgba(233,178,58,.7)"/><text x="28" y="333">Gasket seating band</text><circle cx="135" cy="329" r="4" fill="#2e7d32"/><text x="142" y="333">OK</text><circle cx="168" cy="329" r="4" fill="#d32f2f"/><text x="175" y="333">Re-machine</text><circle cx="232" cy="329" r="4" fill="#607d8b"/><text x="239" y="333">Outside band</text></g>
+    <g font-size="9.5"><rect x="10" y="325" width="14" height="8" fill="rgba(233,178,58,.7)"/><text x="28" y="333">Sealing face</text><circle cx="135" cy="329" r="4" fill="#2e7d32"/><text x="142" y="333">OK</text><circle cx="168" cy="329" r="4" fill="#d32f2f"/><text x="175" y="333">Re-machine</text><circle cx="232" cy="329" r="4" fill="#607d8b"/><text x="239" y="333">Outside band</text></g>
   </svg>`;
 }
 
@@ -80,7 +96,7 @@ function renderFaceLib() {
   cur.report = null; cur.face = null; cur.flange = null;
   setTop('Face Off', 'Flange face inspection', '/');
   const items = [...TB.face.items].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  $('#main').innerHTML = `<div class="card"><h2>🔍 Face Off</h2><p class="muted small">Flange face inspection when a joint is broken. Pick the class and size and you get a to-scale face from ASME B16.5 with the gasket seating band shaded. Drag across the face to record a scratch, tap to record a pit, and each defect is checked by its radial projection across the seating band (ASME PCC-1 Appendix D method).</p>
+  $('#main').innerHTML = `<div class="card"><h2>🔍 Face Off</h2><p class="muted small">Flange face inspection when a joint is broken. Pick the class and size and you get a to-scale face from ASME B16.5 with the gasket sealing face shaded. Drag across the face to record a scratch, tap to record a pit, and each defect is checked by its radial projection across the seating band (ASME PCC-1 Appendix D method).</p>
       <button class="btn primary block big" data-fc="new">＋ New face inspection</button></div>
     ${!TB.face.limits.confirmed ? `<div class="card notice small">⚠ The acceptance limits are <b>defaults</b> – check them against PCC-1 Appendix D or your site flange procedure in <a href="#/face-limits">Face Off limits</a>.</div>` : ''}
     ${items.length ? items.map(it => { const c = faceCtx(it), ev = faceEval(it, c); const nd = ['A', 'B'].reduce((a, k) => a + (it.sides?.[k]?.defects || []).length, 0);
@@ -93,7 +109,7 @@ function renderFaceLimits() {
   setTop('Face Off limits', 'Acceptance criteria', '/face');
   const L = TB.face.limits; const inp = (k1, k2) => `<input type="text" inputmode="decimal" data-fl="${k1}.${k2}" value="${L[k1][k2]}" style="width:80px">`;
   $('#main').innerHTML = `<div class="card"><h2>Acceptance limits</h2>
-    <p class="small">A defect is assessed by its <b>radial projection</b> across the gasket seating band (width <i>w</i>). It is acceptable if the projection is no more than the fraction of <i>w</i> below. Anything that bridges the band is always rejected.</p>
+    <p class="small">A defect is assessed by its <b>radial projection</b> across the gasket sealing face (width <i>w</i>). It is acceptable if the projection is no more than the fraction of <i>w</i> below. Anything that bridges the band is always rejected.</p>
     <table class="nomtbl"><tr><th></th><th>Within serrations</th><th>Deeper than serrations</th></tr>
       <tr><th>Soft-faced gaskets<br><small>(graphite, PTFE, fibre, tanged insert)</small></th><td>${inp('soft', 'shallow')} × w</td><td>${inp('soft', 'deep')} × w</td></tr>
       <tr><th>Hard-faced gaskets<br><small>(spiral wound, camprofile, metal)</small></th><td>${inp('hard', 'shallow')} × w</td><td>${inp('hard', 'deep')} × w</td></tr></table>
@@ -114,6 +130,7 @@ function renderFace(id) {
   const fi = (k, label, extra = '') => `<label class="field"><span>${label}</span><input type="text" data-ff="${k}" value="${esc(it[k] ?? '')}" ${extra}></label>`;
   const pill = (path, val, opts, label) => `<div class="field"><span>${label}</span><div class="pills">${opts.map(o => `<button type="button" class="pill ${val === o ? 'on blue' : ''}" data-fc="pill" data-p="${path}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
   $('#main').innerHTML = `
+    ${c.dn && c.w ? faceLimitCardHTML(c) : `<div class="card notice small">Enter the pipe class and size to see the gasket, sealing face and the maximum acceptable defect size.</div>`}
     <div class="card"><h2>Flange</h2>
       <div class="grid2">${fi('line', 'Line number', 'autocapitalize="characters"')}${fi('flangeNo', 'Flange number / ID')}</div>
       ${fi('location', 'Location / description')}
@@ -121,11 +138,12 @@ function renderFace(id) {
       <div class="grid2"><label class="field"><span>Size</span><select data-ff="dn" data-ffre><option value="">–</option>${sizes.map(d => `<option value="${d}" ${String(it.dn) === String(d) ? 'selected' : ''}>${sizeLabel(d)}</option>`).join('')}</select></label>
         <label class="field"><span>Rating</span><select data-ff="rating" data-ffre><option value="">${c.cls ? 'From class (' + c.cls.r + ')' : '–'}</option>${[150, 300, 600, 900, 1500, 2500].map(x => `<option value="${x}" ${+it.rating === x ? 'selected' : ''}>Class ${x}</option>`).join('')}</select></label></div>
       <div class="grid2">${fi('inspector', 'Inspector')}<label class="field"><span>Date</span><input type="date" data-ff="date" value="${esc(it.date)}"></label></div></div>
-    ${c.dn ? `<div class="card"><h2>Face geometry <small class="muted">ASME B16.5</small></h2>
-      <table class="nomtbl"><tr><th>Raised face Ø / height</th><td>${c.rf ?? '–'} mm / ${c.rfH ?? '–'} mm</td></tr><tr><th>Flange OD / bolt circle</th><td>${c.fd?.od ?? '–'} / ${c.fd?.bc ?? '–'} mm (${c.n} holes)</td></tr><tr><th>Bore (from class schedule)</th><td>${c.bore ?? '–'} mm</td></tr>
-        <tr><th>Gasket (class)</th><td>${c.gk ? esc(c.gk.type) : '–'} → <b>${c.cat === 'hard' ? 'hard-faced' : 'soft-faced'}</b> limits</td></tr></table>
-      <div class="grid2"><label class="field"><span>Seating band ID <em>(mm)</em></span><input type="text" inputmode="decimal" data-ff="bandID" data-ffre value="${esc(it.bandID ?? '')}" placeholder="${c.bore ?? ''}"></label><label class="field"><span>Seating band OD <em>(mm)</em></span><input type="text" inputmode="decimal" data-ff="bandOD" data-ffre value="${esc(it.bandOD ?? '')}" placeholder="${c.rf ?? ''}"></label></div>
-      <small class="muted">The seating band defaults to bore → raised-face Ø. For a spiral wound gasket, enter the sealing element ID / OD (or measure the old gasket footprint) for a tighter check. Band width w = ${c.w ?? '–'} mm.</small>
+    ${c.dn ? `<div class="card"><h2>Face & gasket data</h2>
+      <table class="nomtbl"><tr><th>Raised face Ø / height <small>(B16.5)</small></th><td>${c.rf ?? '–'} mm / ${c.rfH ?? '–'} mm</td></tr><tr><th>Flange OD / bolt circle</th><td>${c.fd?.od ?? '–'} / ${c.fd?.bc ?? '–'} mm (${c.n} holes)</td></tr><tr><th>Bore (from class schedule)</th><td>${c.bore ?? '–'} mm</td></tr>
+        ${c.gd?.kind === 'sw' ? `<tr><th>Spiral wound (B16.20)</th><td>${c.gd.d1 ? `inner ring ID ${c.gd.d1} · ` : ''}sealing element ${c.gd.d2}–${c.gd.d3} · centring ring OD ${c.gd.d4} mm · winding ${c.gd.t} mm thick</td></tr>` : ''}
+        ${c.gd?.kind === 'flat' ? `<tr><th>Flat ring gasket (B16.21)</th><td>ID ${c.gd.id} · OD ${c.gd.od} mm · ${c.gd.t} mm thick</td></tr>` : ''}</table>
+      <div class="grid2"><label class="field"><span>Sealing face ID <em>(mm)</em></span><input type="text" inputmode="decimal" data-ff="bandID" data-ffre value="${esc(it.bandID ?? '')}" placeholder="${c.bandID ?? ''}"></label><label class="field"><span>Sealing face OD <em>(mm)</em></span><input type="text" inputmode="decimal" data-ff="bandOD" data-ffre value="${esc(it.bandOD ?? '')}" placeholder="${c.bandOD ?? ''}"></label></div>
+      <small class="muted">From ${esc(c.bandSrc)}. Only override if the gasket fitted differs (e.g. measure the old gasket footprint).</small>
       ${pill('gasketCat', it.gasketCat || c.cat, ['soft', 'hard'], 'Assess as')}</div>` : ''}
     <div class="card"><div class="side-tabs">${['A', 'B'].map(k => `<button class="pill ${sd === k ? 'on blue' : ''}" data-fc="side" data-v="${k}">Side ${k}${ev['reject' + k] ? ' ⚠' : ''}</button>`).join('')}</div>
       ${pill('sides.' + sd + '.what', S2.what, ['Flange', 'Valve', 'Nozzle', 'Blind'], 'Side ' + sd + ' is')}
@@ -145,11 +163,20 @@ function renderFace(id) {
       <button class="btn ghost sm danger-t" data-fc="del" style="margin-top:12px">🗑 Delete this inspection</button></div>`;
   bindFaceMap(); faceThumbs(it);
 }
+function faceLimitCardHTML(c) {
+  return `<div class="card limcard"><h2>Max acceptable defect</h2>
+    <div class="limgrid"><div><span>Not below serration root</span><b>${c.maxShallow} mm</b></div><div><span>Below serration root</span><b>${c.maxDeep} mm</b></div></div>
+    <p class="small">Maximum <b>radial projection</b> across the sealing face (<b>w = ${c.w} mm</b>, ${c.bandID}–${c.bandOD} mm). Anything that runs right across the sealing face is rejected whatever its depth. Length along the circumference and pit diameter don't matter – only how far the defect reaches across the face.</p>
+    <div class="gasket"><b>Gasket for class ${esc(c.cls?.c || '')}:</b> ${c.gk ? esc(c.gk.type) + ' – ' + esc(c.gk.mat) : 'not in data pack'}
+      ${c.gk?.swatches?.length ? `<div class="swatches">${c.gk.swatches.map(s2 => `<span class="sw"><i style="background:${s2.c}${s2.stripe ? ';height:6px;margin:5px 0' : ''}"></i>${esc(s2.l)}</span>`).join('')}</div>` : ''}
+      ${c.gd?.kind === 'sw' ? `<div class="small">Sealing element ${c.gd.d2}–${c.gd.d3} mm${c.gd.d1 ? `, inner ring ID ${c.gd.d1}` : ''}, centring ring OD ${c.gd.d4} mm (ASME B16.20)</div>` : c.gd?.kind === 'flat' ? `<div class="small">Ring gasket ID ${c.gd.id} / OD ${c.gd.od} mm, ${c.gd.t} mm (ASME B16.21)</div>` : ''}</div>
+    <small class="muted">${c.cat === 'hard' ? 'Hard-faced' : 'Soft-faced'} gasket limits (${TB.face.limits[c.cat].shallow}·w / ${TB.face.limits[c.cat].deep}·w)${TB.face.limits.confirmed ? '' : ' – <b>defaults, not yet confirmed</b> (<a href="#/face-limits">check</a>)'}.</small></div>`;
+}
 function faceDefsHTML(it, c, sd, ev) {
   const ds = it.sides[sd].defects || [];
   if (!ds.length) return '<p class="muted small">No defects recorded on this side.</p>';
   return `<div class="deflist">${ds.map((d, i) => { const e = ev[sd][i]; const pos = d.kind === 'line' ? `${clockOf(d.a[1])} → ${clockOf(d.b[1])}, r ${r2(d.a[0])}–${r2(d.b[0])} mm` : `${clockOf(d.a[1])}, r ${r2(d.a[0])} mm`;
-    return `<div class="defrow ${e.verdict}"><b class="dn">${i + 1}</b><div class="dt"><b>${esc((FACE_DEFECTS.find(x => x[0] === d.t) || [, d.t])[1])}</b> <span class="muted small">${pos}${d.size ? ', Ø ' + d.size + ' mm' : ''}${d.depthMm ? ', ' + d.depthMm + ' mm deep' : ''}</span><br><span class="small">${esc(e.text)}</span></div>
+    return `<div class="defrow ${e.verdict}"><b class="dn">${i + 1}</b><div class="dt"><b>${esc((FACE_DEFECTS.find(x => x[0] === d.t) || [, d.t])[1])}</b>${e.proj != null && e.verdict !== 'out' ? ` <span class="rp">RP ${e.proj} mm${e.max != null ? ' / ' + e.max : ''}</span>` : ''} <span class="muted small">${pos}</span><br><span class="small">${esc(e.text)}</span></div>
       <button class="btn ghost sm" data-fc="edit" data-i="${i}">✎</button><button class="btn ghost sm" data-fc="delDef" data-i="${i}">🗑</button></div>`; }).join('')}</div>`;
 }
 function faceResultHTML(it, c, ev) {
@@ -182,12 +209,14 @@ function bindFaceMap() {
   });
 }
 async function editDefect(d, isNew) {
+  const c = faceCtx(cur.face); const geo = faceEvalDefect({ ...d, rp: undefined }, c);
   const res = await modal(isNew ? 'New defect' : 'Edit defect', `<label class="field"><span>Type</span><select name="t" class="inp">${FACE_DEFECTS.filter(([k]) => d.kind === 'line' ? !['pit', 'dent'].includes(k) : !['scratch', 'circ'].includes(k)).map(([k, l]) => `<option value="${k}" ${d.t === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span>Depth</span><select name="depth" class="inp"><option value="shallow" ${d.depth === 'shallow' ? 'selected' : ''}>Within serrations (not below the serration roots)</option><option value="deep" ${d.depth === 'deep' ? 'selected' : ''}>Deeper than the serrations</option><option value="unknown" ${d.depth === 'unknown' ? 'selected' : ''}>Not known (assessed as deep)</option></select></label>
-    <div class="grid2">${d.kind === 'spot' ? `<label class="field"><span>Size Ø (mm)</span><input name="size" class="inp" inputmode="decimal" value="${esc(d.size)}"></label>` : ''}<label class="field"><span>Depth (mm, optional)</span><input name="depthMm" class="inp" inputmode="decimal" value="${esc(d.depthMm || '')}"></label></div>
+    <label class="field"><span><b>Radial projection</b> across the sealing face (mm)</span><input name="rp" class="inp" inputmode="decimal" value="${esc(d.rp ?? '')}" placeholder="${geo.proj != null ? 'from sketch ≈ ' + geo.proj : ''}"><small>How far the defect reaches across the face from bore towards OD – not its length or diameter. Leave blank to use the sketch.${c.w ? ` Limits: ${c.maxShallow} mm / ${c.maxDeep} mm (not below / below serrations).` : ''}</small></label>
+    <label class="field"><span><b>Depth below serration root</b> (mm)</span><input name="dBelow" class="inp" inputmode="decimal" value="${esc(d.dBelow ?? (d.depth === 'shallow' && isNew ? '0' : ''))}"><small>0 = not below the serrations. Leave blank if not measured – it is then assessed as below.</small></label>
     <label class="field"><span>Notes</span><input name="notes" class="inp" value="${esc(d.notes || '')}"></label>`, [['Cancel', ''], ['Save', 'ok', 'primary']]);
   if (!res) return false;
-  Object.assign(d, { t: res.vals.t, depth: res.vals.depth, size: res.vals.size ?? d.size, depthMm: res.vals.depthMm, notes: res.vals.notes }); return true;
+  Object.assign(d, { t: res.vals.t, rp: res.vals.rp === '' ? undefined : res.vals.rp, dBelow: res.vals.dBelow === '' ? undefined : res.vals.dBelow, notes: res.vals.notes });
+  delete d.depth; return true;
 }
 function refreshFace() { const y = scrollY; renderFace(cur.face.id); scrollTo(0, y); }
 async function faceThumbs(it) { for (const cv of $$('canvas[data-fcthumb]')) { const p = it.photos[+cv.dataset.fcthumb]; if (!p) continue; try { const c = await compositeCanvas(p, 600); cv.width = c.width; cv.height = c.height; cv.getContext('2d').drawImage(c, 0, 0); } catch { } } }
@@ -216,8 +245,10 @@ async function buildFaceDocx(it, H) {
   const g4 = [2200, 3033, 2200, 3033];
   const det = T([R(L('Line number'), C(P(v(it.line), { bold: true })), L('Flange'), C(P(v(it.flangeNo), { bold: true }))), R(L('Location'), C(v(it.location), { span: 3 })),
     R(L('Pipe class'), C(c.cls ? `${c.cls.c} – ${c.cls.m}` : v(it.classId)), L('Size / rating'), C(`${c.dn ? sizeLabel(c.dn) : '–'} / Class ${c.rating || '–'}`)),
-    R(L('Raised face Ø / height'), C(`${v(c.rf)} / ${v(c.rfH)} mm`), L('Gasket (class)'), C(c.gk ? c.gk.type : '–')),
-    R(L('Seating band'), C(`${v(c.bandID)} – ${v(c.bandOD)} mm (w = ${v(c.w)} mm)`), L('Assessed as'), C(c.cat === 'hard' ? 'Hard-faced gasket' : 'Soft-faced gasket')),
+    R(L('Raised face Ø / height'), C(`${v(c.rf)} / ${v(c.rfH)} mm`), L('Bore'), C(`${v(c.bore)} mm`)),
+    R(L('Sealing face'), C(`${v(c.bandID)} – ${v(c.bandOD)} mm (w = ${v(c.w)} mm)\n${c.bandSrc}`), L('Assessed as'), C(c.cat === 'hard' ? 'Hard-faced gasket' : 'Soft-faced gasket')),
+    R(L('Max acceptable radial projection'), C(P(`${v(c.maxShallow)} mm not below serration root · ${v(c.maxDeep)} mm below serration root`, { bold: true }), { span: 3 })),
+    R(L('Gasket specified'), C(`${c.gk ? c.gk.type + ' – ' + c.gk.mat : '–'}${c.gk?.swatches?.length ? '\nIdentification: ' + c.gk.swatches.map(s2 => s2.l).join('; ') : ''}${c.gd?.kind === 'sw' ? `\nB16.20: ${c.gd.d1 ? 'inner ring ID ' + c.gd.d1 + ', ' : ''}sealing element ${c.gd.d2}–${c.gd.d3}, centring ring OD ${c.gd.d4} mm` : c.gd?.kind === 'flat' ? `\nB16.21: ID ${c.gd.id}, OD ${c.gd.od} mm, ${c.gd.t} mm` : ''}`, { span: 3 })),
     R(L('Inspector'), C(v(it.inspector)), L('Date'), C(fmtDate(it.date) || '–'))], g4);
   const kids = [Hd('Flange details'), det];
   for (const sd of ['A', 'B']) {
@@ -228,15 +259,15 @@ async function buildFaceDocx(it, H) {
     kids.push(T([R(C(img ? [new Paragraph({ children: [img], alignment: AlignmentType.CENTER })] : [P('–')]), C([
       P(`Serrations: ${v(S2.serr)}`), P(`Face corrosion: ${v(S2.corr)}`), P(`Raised face height: ${v(S2.rfH)} mm (nom. ${v(c.rfH)})`), P(`Roughness: ${S2.ra ? S2.ra + ' µm Ra' : '–'}`),
       P(why ? 'RE-MACHINE (or replace)' : 'ACCEPTABLE FOR RE-USE', { bold: true, color: why ? 'C00000' : '1A7F37', before: 80 }), ...(S2.notes ? [P(S2.notes, { italics: true })] : [])]))], [5233, 5233]));
-    if (ds.length) kids.push(T([R(...['No.', 'Defect', 'Position', 'Size / depth', 'Assessment'].map(t => C(P(t, { bold: true, size: 16 }), { shade: 'D9E2EC' }))),
-      ...ds.map((d, i) => { const e = ev[sd][i]; return R(C(P(String(i + 1), { bold: true })), C((FACE_DEFECTS.find(x => x[0] === d.t) || [, d.t])[1]),
+    if (ds.length) kids.push(T([R(...['No.', 'Defect', 'Position', 'Depth', 'Assessment'].map(t => C(P(t, { bold: true, size: 16 }), { shade: 'D9E2EC' }))),
+      ...ds.map((d, i) => { const e = ev[sd][i]; return R(C(P(String(i + 1), { bold: true })), C([P((FACE_DEFECTS.find(x => x[0] === d.t) || [, d.t])[1]), ...(e.proj != null && e.verdict !== 'out' ? [P(`Radial projection ${e.proj} mm`, { bold: true, size: 17 })] : [])]),
         C(d.kind === 'line' ? `${clockOf(d.a[1])} → ${clockOf(d.b[1])}\nr ${r2(d.a[0])}–${r2(d.b[0])} mm` : `${clockOf(d.a[1])}, r ${r2(d.a[0])} mm`),
-        C(`${d.size ? 'Ø ' + d.size + ' mm, ' : ''}${d.depth === 'shallow' ? 'within serrations' : d.depth === 'deep' ? 'deeper than serrations' : 'depth not known'}${d.depthMm ? ' (' + d.depthMm + ' mm)' : ''}`),
+        C(num(d.dBelow) != null ? (num(d.dBelow) > 0 ? `${d.dBelow} mm below serration root` : 'Not below serration root') : d.depth === 'shallow' ? 'Not below serration root' : 'Not measured (assessed as below)'),
         C(P(e.text, { color: e.verdict === 'reject' ? 'C00000' : undefined, bold: e.verdict === 'reject', size: 17 }))); })], [700, 2300, 2400, 2266, 2800]));
     else kids.push(P('No defects recorded.', { italics: true }));
   }
   if (ev.aligned.length) kids.push(P(`Defects line up across the joint (A${ev.aligned.map(p => p[0] + '↔B' + p[1]).join(', A')}) – together they can form a single leak path.`, { bold: true, color: 'B45309', before: 80 }));
-  kids.push(P(`Assessment: radial projection of each defect across the gasket seating band compared with ${c.cat === 'hard' ? 'hard' : 'soft'}-faced limits (${TB.face.limits[c.cat].shallow}·w within serrations, ${TB.face.limits[c.cat].deep}·w deeper), per the ASME PCC-1 Appendix D method${TB.face.limits.confirmed ? '' : ' – limits are defaults not yet confirmed against the governing procedure'}. Face geometry ASME B16.5.`, { size: 15, color: '555555', before: 80 }));
+  kids.push(P(`Assessment: radial projection of each defect across the gasket sealing face compared with ${c.cat === 'hard' ? 'hard' : 'soft'}-faced limits (${TB.face.limits[c.cat].shallow}·w within serrations, ${TB.face.limits[c.cat].deep}·w deeper), per the ASME PCC-1 Appendix D method${TB.face.limits.confirmed ? '' : ' – limits are defaults not yet confirmed against the governing procedure'}. Face geometry ASME B16.5.`, { size: 15, color: '555555', before: 80 }));
   const sections = [{ properties: { page: { margin: { top: 1900, bottom: 900, left: 720, right: 720, header: 400, footer: 400 } } }, headers: { default: hdr }, footers: { default: ftr }, children: kids }];
   if ((it.photos || []).length) {
     const rows = []; const half = Math.floor(W / 2);

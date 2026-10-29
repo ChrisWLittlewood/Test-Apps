@@ -451,3 +451,8 @@ input.ok{background:#e7f6ea!important;border-color:#43a047!important}input.bad{b
 .defrow.ok{border-left-color:#2e7d32}.defrow.reject{border-left-color:#d32f2f;background:rgba(211,47,47,.06)}.defrow.clean{border-left-color:#ef6c00}
 .defrow .dn{min-width:22px;text-align:center}.defrow .dt{flex:1;line-height:1.3}
 .choice{display:flex;flex-direction:column;gap:8px;margin:8px 0}.choice .btn{text-align:left}
+
+.limcard{border:2px solid var(--yellow,#e9b23a)}.limcard h2{margin-bottom:8px}
+.limgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.limgrid div{background:var(--card2,rgba(0,0,0,.04));border-radius:10px;padding:10px;text-align:center}
+.limgrid span{display:block;font-size:.78rem;opacity:.8}.limgrid b{font-size:1.5rem}
+.rp{display:inline-block;font-size:.78rem;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.07)}
