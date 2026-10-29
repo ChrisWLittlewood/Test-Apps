@@ -1,5 +1,5 @@
-INSPECTION TOOLBOX – v1.7 (trial)
-IMSn't · Isometricks · Gasket Case
+INSPECTION TOOLBOX – v1.8 (trial)
+IMSn't · Isometricks · Gasket Case · Face Off
 =========================================
 
 Two parts:
@@ -50,3 +50,11 @@ New in v1.7
 - Gasket Case: line no., flange no., pipe class and size -> nominal flange/bolting/gasket data, numbered bolt circle,
   stud-by-stud table with front and base A/F for each nut (sides A and B), PS 1.8 checks, photos, Word / PDF sheet.
 - "Backup everything" now includes sketches and flange sheets.
+
+New in v1.8
+-----------
+- Face Off: flange face inspection. ASME B16.5 face geometry, gasket seating band shaded, drag = scratch / tap = pit,
+  each defect assessed by radial projection across the seating band (PCC-1 App. D method; limits editable and must be
+  confirmed against the governing procedure), side A / B with aligned-defect warning, photos, Word / PDF.
+- Iso tool: elbows / pulled bends / sharp corners, 45° offsets with hatched plane triangle, line-number tool,
+  valve tags, labels sit beside the pipe and read along it; drag to move (leader arrow appears), rotate button.

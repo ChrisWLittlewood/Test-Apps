@@ -21,6 +21,7 @@ function renderToolbox() {
     ${tile('#/imsnt', '<img src="img/icon-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}
     ${tile('#/flange', flIconSVG(), 'Gasket Case', 'Flange & bolting inspection sheets – stud by stud', nFl ? `${nFl} sheet${nFl === 1 ? '' : 's'}` : '')}
+    ${tile('#/face', faceIconSVG(), 'Face Off', 'Flange face inspection – scratches & pits vs the gasket seating band', TB.face.items.length ? `${TB.face.items.length} inspection${TB.face.items.length === 1 ? '' : 's'}` : '')}
     <div class="section-title"><h2>Tools</h2></div>
     <div class="grid2">
       <a class="btn ghost" href="#/settings">⚙ Settings</a>
@@ -33,6 +34,9 @@ function renderToolbox() {
 }
 function isoIconSVG() {
   return `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2f7f86"/><g stroke="#f4e7c9" stroke-width="5" stroke-linecap="round" fill="none"><path d="M12 44 L28 35 L28 18 L48 29"/></g><path d="M23 38 l5 -9 l5 9z" fill="#e9b23a" stroke="#1d2b36" stroke-width="2"/><circle cx="48" cy="29" r="5" fill="#c8402f" stroke="#1d2b36" stroke-width="2"/></svg>`;
+}
+function faceIconSVG() {
+  return `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1d2b36"/><circle cx="32" cy="32" r="25" fill="#cfd8e3"/><circle cx="32" cy="32" r="18" fill="none" stroke="#e9b23a" stroke-width="8"/><circle cx="32" cy="32" r="9" fill="#fff"/><line x1="40" y1="16" x2="46" y2="27" stroke="#c8402f" stroke-width="3.5" stroke-linecap="round"/><circle cx="21" cy="42" r="2.6" fill="#c8402f"/></svg>`;
 }
 function flIconSVG() {
   let h = ''; for (let i = 0; i < 8; i++) { const a = Math.PI * 2 * i / 8 + Math.PI / 8; h += `<circle cx="${32 + 19 * Math.cos(a)}" cy="${32 + 19 * Math.sin(a)}" r="4" fill="#1d2b36"/>`; }
@@ -202,7 +206,7 @@ function renderFlange(id) {
         <input class="cap" data-fp="photos.${i}.caption" value="${esc(p.caption)}" placeholder="Caption"><div class="thumb-acts"><button class="btn ghost sm" data-tb="flAnn" data-i="${i}">✎ Annotate</button><button class="btn ghost sm" data-tb="flDelPh" data-i="${i}">🗑</button></div></figure>`).join('')}</div></section>
 
     <div class="card"><h2>Export</h2><div class="grid2"><button class="btn primary" data-tb="flDocx">📄 Word sheet</button><button class="btn ghost" data-tb="flPdf">🖨 Save as PDF</button></div>
-      <div id="flOut"></div><button class="btn ghost sm danger-t" data-tb="flDel" style="margin-top:12px">🗑 Delete this sheet</button></div>`;
+      <div id="flOut"></div><button class="btn ghost block" data-tb="flFace" style="margin-top:10px">🔍 Inspect the flange faces (Face Off)</button><button class="btn ghost sm danger-t" data-tb="flDel" style="margin-top:12px">🗑 Delete this sheet</button></div>`;
   flThumbs(it);
 }
 function flResultHTML(it, c, ev) {
@@ -327,6 +331,7 @@ document.addEventListener('click', async e => {
     }
     if (a === 'flAnn') { const p = it.photos[+b.dataset.i]; if (p && await openAnnotator(p)) { saveTB('fl'); const y = scrollY; renderFlange(it.id); scrollTo(0, y); } return; }
     if (a === 'flDelPh') { if (!await confirmBox('Delete photo', 'Delete this photo?')) return; const [p] = it.photos.splice(+b.dataset.i, 1); if (p) await DB.del('blobs', p.blobId); saveTB('fl'); renderFlange(it.id); return; }
+    if (a === 'flFace') { const ex = TB.face.items.find(x => x.fromFl === it.id); if (ex) return go('/face/' + ex.id); return newFace({ fromFl: it.id, line: it.line, flangeNo: it.flangeNo, location: it.location, classId: it.classId, dn: it.dn, rating: it.rating }); }
     if (a === 'flDel') { if (!await confirmBox('Delete flange sheet', 'Delete this flange sheet and its photos?')) return; for (const p of it.photos || []) await DB.del('blobs', p.blobId); TB.fl.items = TB.fl.items.filter(x => x !== it); await flushTB(); go('/flange'); return; }
     const H = { compositeCanvas, loadImg, loadUrlImg, canvasToBlob, getBlob, svgToPng, settingsLogo: S.settings.logoId };
     const name = `Flange_${safeName(it.line || 'line')}_F${safeName(it.flangeNo || '')}_${(it.date || todayISO()).replace(/-/g, '')}`;

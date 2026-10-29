@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -458,6 +458,8 @@ async function route() {
   if (p[0] === 'imsnt') return renderHome();
   if (p[0] === 'iso') return renderIsoLib();
   if (p[0] === 'flange') return p[1] ? renderFlange(p[1]) : renderFlangeLib();
+  if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
+  if (p[0] === 'face-limits') return renderFaceLimits();
   if (p[0] === 'settings') return renderSettings();
   if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
@@ -1268,11 +1270,11 @@ const safeName = s2 => String(s2 || 'report').replace(/[^\w\-]+/g, '_').replace(
 const b64 = { enc: blob => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); }), dec: async d => (await fetch(d)).blob() };
 async function makeBackup(systems, reports, withTools) {
   const blobs = [];
-  if (withTools) for (const id of [...TB.iso.items.map(i => i.blobId), ...TB.fl.items.flatMap(i => (i.photos || []).map(p => p.blobId))]) { const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) }); }
+  if (withTools) for (const id of [...TB.iso.items.map(i => i.blobId), ...[...TB.fl.items, ...TB.face.items].flatMap(i => (i.photos || []).map(p => p.blobId))]) { const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) }); }
   for (const r of reports) for (const id of [...(r.att || []).flatMap(a => [a.blobId, a.origId]), r.sigId, r.ech?.pdfId, ...(r.ech?.photos || []).map(p => p.blobId)].filter(Boolean)) {
     const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) });
   }
-  return new Blob([JSON.stringify({ format: 'vte-backup', version: 1, exported: new Date().toISOString(), systems, reports, blobs, ...(withTools ? { isolib: TB.iso.items, flangelib: TB.fl.items } : {}) })], { type: 'application/json' });
+  return new Blob([JSON.stringify({ format: 'vte-backup', version: 1, exported: new Date().toISOString(), systems, reports, blobs, ...(withTools ? { isolib: TB.iso.items, flangelib: TB.fl.items, facelib: TB.face.items } : {}) })], { type: 'application/json' });
 }
 async function importBackup(file) {
   const j = JSON.parse(await file.text());
@@ -1282,8 +1284,8 @@ async function importBackup(file) {
   for (const b of j.blobs) await DB.put('blobs', { id: b.id, blob: await b64.dec(b.data) });
   for (const s2 of j.systems) { await DB.put('systems', s2); S.systems = S.systems.filter(x => x.id !== s2.id).concat(s2); }
   for (const r of j.reports) { await DB.put('reports', r); S.reports = S.reports.filter(x => x.id !== r.id).concat(r); }
-  for (const [k, key] of [['iso', 'isolib'], ['fl', 'flangelib']]) for (const it of j[key] || []) TB[k].items = TB[k].items.filter(x => x.id !== it.id).concat(it);
-  if (j.isolib || j.flangelib) await flushTB();
+  for (const [k, key] of [['iso', 'isolib'], ['fl', 'flangelib'], ['face', 'facelib']]) for (const it of j[key] || []) TB[k].items = TB[k].items.filter(x => x.id !== it.id).concat(it);
+  if (j.isolib || j.flangelib || j.facelib) { await flushTB(); await DB.put('meta', TB.face); }
   imgCache.clear(); toast('Backup imported'); route();
 }
 
@@ -1619,7 +1621,7 @@ const actions = {
     } catch { toast('Could not check – try again later'); }
     finally { el.disabled = false; el.textContent = '⟳ Check for updates'; }
   },
-  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup(S.systems, S.reports, true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
+  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length && !TB.face.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup(S.systems, S.reports, true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
   echImport: () => $('#fileEch').click(),
@@ -1723,7 +1725,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await loadPack(); await loadPidLib();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
-    await loadTools();
+    await loadTools(); await loadFace();
     route();
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

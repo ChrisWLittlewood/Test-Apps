@@ -40,7 +40,7 @@ function docTreeToHtml(doc, urls) {
     const ind = p.indent ? `;padding-left:${pt(p.indent.left)};text-indent:-${pt(p.indent.hanging || 0)}` : '';
     const tab = (p.children || []).findIndex(c => c.text === '\t');
     if (tab > 0) return `<p class="tabrow" style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)}"><span>${p.children.slice(0, tab).map(run).join('')}</span><span>${p.children.slice(tab + 1).map(run).join('')}</span></p>`;
-    return `<p style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)};text-align:${p.alignment || 'left'}${ind}">${(p.children || []).map(run).join('') || '&nbsp;'}</p>`;
+    return `<p style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)};text-align:${p.alignment || 'left'}${ind}${p.keepNext ? ';break-after:avoid' : ''}">${(p.children || []).map(run).join('') || '&nbsp;'}</p>`;
   };
   const block = b => b instanceof HTMLDOCX.Table ? table(b) : para(b);
   const table = t => {
