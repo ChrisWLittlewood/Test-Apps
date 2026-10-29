@@ -403,6 +403,32 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 }
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
+/* ================= app updates ================= */
+const APP_VERSION = '1.5.1';
+function setupUpdates() {
+  const hadController = !!navigator.serviceWorker.controller; let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', async () => {
+    if (!hadController || reloading) return; reloading = true;
+    try { await flushSaves(); } catch { }
+    try { sessionStorage.setItem('vte_updated', '1'); } catch { }
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    reg.update().catch(() => { });
+    // check again whenever the app comes back to the front (Android keeps installed apps alive in the background)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => { }); });
+  }).catch(e => console.warn('SW', e));
+  try { if (sessionStorage.getItem('vte_updated')) { sessionStorage.removeItem('vte_updated'); setTimeout(() => toast('App updated to v' + APP_VERSION), 600); } } catch { }
+}
+async function forceUpdate() {
+  if (!navigator.onLine) return toast('Needs signal – try again when online');
+  await flushSaves().catch(() => { });
+  // only the app files are cleared – reports, photos and the data pack are kept
+  try { const regs = await navigator.serviceWorker?.getRegistrations?.() || []; await Promise.all(regs.map(r => r.unregister())); } catch { }
+  try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch { }
+  location.reload();
+}
+
 /* ================= routing & chrome ================= */
 function setTop(title, sub, back) {
   $('#title').textContent = title; $('#subtitle').textContent = sub || '';
@@ -508,7 +534,9 @@ function renderSettings() {
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
     <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack</button>${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
-  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection v1.4 – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
+  <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
+    <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
+  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
   return `<label class="field"><span>${esc(label)}</span><input type="${type}" data-bind="${bind}" data-path="${path}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
@@ -1525,6 +1553,7 @@ const actions = {
   saveDocx: () => downloadBlob(cur.docx.blob, cur.docx.name),
   exportReport: async () => { const r = cur.report; toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
+  forceUpdate: () => forceUpdate(),
   exportAll: async () => { if (!S.systems.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); shareBlob(await makeBackup(S.systems, S.reports), `VTE_backup_all_${todayISO()}.json`, 'VTE backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
@@ -1628,7 +1657,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     applyTheme();
     await loadPack(); await loadPidLib();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
-    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
     route();
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

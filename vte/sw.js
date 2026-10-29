@@ -1,25 +1,30 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v1.5.0';
+const VERSION = 'vte-v1.5.1';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './checklist.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js',
   './manifest.webmanifest', './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
   './img/icon-192.png', './img/icon-512.png', './img/icon-180.png'
 ];
+// cache: 'reload' bypasses the browser's HTTP cache so a new version never stores stale copies of the old files
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
+self.addEventListener('message', e => { if (e.data === 'version') e.source.postMessage({ version: VERSION }); });
+const put = (req, res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; };
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(res => {
-      if (res.ok && new URL(e.request.url).origin === location.origin) {
-        const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy));
-      }
-      return res;
-    }).catch(() => caches.match('./index.html')))
-  );
+  const req = e.request; if (req.method !== 'GET') return;
+  const url = new URL(req.url); if (url.origin !== location.origin) return;
+  const fromCache = () => caches.match(req, { ignoreSearch: true }).then(h => h || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error()));
+  // big libraries and images: cache first
+  if (/\/vendor\/|\/img\//.test(url.pathname)) { e.respondWith(caches.match(req, { ignoreSearch: true }).then(h => h || fetch(req).then(r => put(req, r)))); return; }
+  // app files: network first (so updates show straight away when there is signal), cache if offline or slow
+  e.respondWith(new Promise(resolve => {
+    let done = false; const fin = r => { if (!done) { done = true; resolve(r); } };
+    const t = setTimeout(() => fromCache().then(fin), 3000);
+    fetch(req, { cache: 'no-cache' }).then(r => { clearTimeout(t); fin(put(req, r)); }).catch(() => { clearTimeout(t); fromCache().then(fin); });
+  }));
 });
