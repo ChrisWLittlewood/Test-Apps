@@ -1,8 +1,8 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v1.2.0';
+const VERSION = 'vte-v1.3.0';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './checklist.js', './report.js', './pipedims.js', './pipeclasses.js',
-  './manifest.webmanifest', './vendor/docx.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
+  './manifest.webmanifest', './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
   './img/icon-192.png', './img/icon-512.png', './img/icon-180.png'
 ];
 self.addEventListener('install', e => {

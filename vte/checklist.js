@@ -64,12 +64,15 @@ const STAGES = [
   {
     key: 'corrosion', no: 4, title: 'Corrosion', heading: 'EXT Corrosion', photos: true,
     fields: [
+      { k: 'generalCondition', t: 'area', label: 'General condition of line', hint: 'Describe the overall external condition first (coating, corrosion, cleanliness, general appearance) – required.', req: true },
       { k: 'externalCorrosion', t: 'yn', pol: 'bad', label: 'External corrosion observed' },
       { k: 'corrCategory', t: 'sel', label: 'Corrosion / pit category', opts: CORR_CAT, show: r => yes(g(r, 'c.corrosion.externalCorrosion')), refImg: 'ref:category' },
       { k: 'corrGrade', t: 'sel', label: 'Corrosion grade (150 × 150 mm area)', opts: CORR_GRADE, show: r => yes(g(r, 'c.corrosion.externalCorrosion')), refImg: 'ref:grade' },
       { k: 'corrType', t: 'sel', label: 'Corrosion type', opts: CORR_TYPE, show: r => yes(g(r, 'c.corrosion.externalCorrosion')), refImg: 'ref:type' },
       { k: 'corrLocation', t: 'text', label: 'Location(s) of corrosion', show: r => yes(g(r, 'c.corrosion.externalCorrosion')) },
-      { k: 'meas', t: 'meas', label: 'Wall thickness / pit measurements', show: r => yes(g(r, 'c.corrosion.externalCorrosion')) },
+      { k: 'areas', t: 'areas', label: 'Corrosion areas on pipe', show: r => yes(g(r, 'c.corrosion.externalCorrosion')) },
+      { k: 'flangeCorr', t: 'yn', pol: 'bad', label: 'Corrosion on flanges / fasteners?' },
+      { k: 'flanges', t: 'flanges', label: 'Flange sheets', show: r => yes(g(r, 'c.corrosion.flangeCorr')) },
       { k: 'followUp', t: 'yn', pol: 'follow', label: 'Follow-up required' },
       { k: 'comments', t: 'area', label: 'Comments' }
     ]
@@ -148,6 +151,7 @@ const PHOTO_GROUPS = [
 ];
 
 /* ---------- helpers ---------- */
+function fdef(stage, k) { return STAGES.find(s2 => s2.key === stage).fields.find(f => f.k === k); }
 function fkey(src) { return String(src).replace(/\./g, '__'); }
 function g(obj, path) { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); }
 function s(obj, path, val) {
@@ -166,8 +170,16 @@ function num(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); retur
 
 function measText(x) {
   const m = x.m, L = x.L;
-  const what = m.type === 'pit' ? `pit depth ${x.pit} mm (indicative) → RWT ${x.rwt} mm` : `measured RWT ${x.rwt} mm${m.method ? ' (' + m.method + ')' : ''}`;
-  return `${sizeLabel(m.dn)}${m.where ? ' at ' + m.where : ''}${m.loc === 'Bend intrados' ? ' (bend intrados)' : ''}: ${what}; NWT ${L.nwt} mm, CA ${L.ca} mm, PC005 min. ${x.psMin} mm – CA remaining ${x.caLeft} mm, margin to PC005 ${x.margin} mm`;
+  const where = `Area ${x.n} (${sizeLabel(m.dn)}${m.where ? ', ' + m.where : ''}${m.loc === 'Bend intrados' ? ', bend intrados' : ''})`;
+  if (x.visual) return `${where}: visual assessment only${m.notes ? ' – ' + m.notes : ''}`;
+  if (!x.ok) return `${where}: measurement incomplete`;
+  const what = m.assess === 'pitut' ? `UT of adjacent steel ${x.ut} mm, max pit depth ${x.pit} mm (pit gauge, indicative) → estimated RWT ${x.rwt} mm` : `UT minimum wall ${x.rwt} mm`;
+  return `${where}: ${what}; NWT ${L.nwt} mm, CA ${L.ca} mm, PC005 min. ${x.psMin} mm – CA remaining ${x.caLeft} mm, margin to PC005 ${x.margin} mm${m.notes ? ' – ' + m.notes : ''}`;
+}
+function flangeText(fl) {
+  const f = fl.f; const bits = fl.rows.filter(x => x.meas != null).map(x => `${x.label.toLowerCase()} ${x.meas} mm${x.loss != null ? ` (nom. ${x.nom}, loss ${x.loss} mm / ${x.pct}%${x.fail ? ' – EXCEEDS LIMIT' : ''})` : ''}`);
+  const extra = [f.missing === 'Yes' && 'bolting missing/loose', f.engagement === 'No' && 'incomplete nut engagement', f.nAffected && `${f.nAffected} stud(s)/nut(s) affected`].filter(Boolean);
+  return `Flange ${fl.n}${fl.dn ? ' ' + sizeLabel(fl.dn) : ''}${f.where ? ' at ' + f.where : ''}: ${[...bits, ...extra].join('; ') || 'corrosion noted, not measured'}${f.notes ? ' – ' + f.notes : ''}`;
 }
 
 /* ---------- findings (auto-detected anomalies) ---------- */
@@ -190,7 +202,7 @@ function autoFindings(r) {
       if (text) {
         // enrich some texts
         if (st.key === 'corrosion' && f.k === 'externalCorrosion') {
-          const bits = [vals.corrCategory && optLabel(STAGES[3].fields[1], vals.corrCategory), vals.corrGrade, vals.corrType, vals.corrLocation && ('at ' + vals.corrLocation)].filter(Boolean);
+          const bits = [vals.corrCategory && optLabel(fdef('corrosion', 'corrCategory'), vals.corrCategory), vals.corrGrade, vals.corrType, vals.corrLocation && ('at ' + vals.corrLocation)].filter(Boolean);
           if (bits.length) text += ' – ' + bits.join(', ');
         }
         if (st.key === 'coating' && f.k === 'coatingDamage' && vals.coatingCondition) text += ' – ' + optLabel(st.fields[1], vals.coatingCondition);
@@ -200,9 +212,18 @@ function autoFindings(r) {
     }
     if (st.key === 'corrosion' && yes(vals.externalCorrosion)) {
       for (const x of allMeas(r).filter(x => x.ok)) {
-        const id = x.m.id, at = `${sizeLabel(x.m.dn)}${x.m.where ? ' at ' + x.m.where : ''}`;
+        const id = x.m.id, at = `Area ${x.n}, ${sizeLabel(x.m.dn)}${x.m.where ? ' at ' + x.m.where : ''}`;
         if (x.status === 'red') out.push({ src: 'corrosion.ps_' + id, stage: 'corrosion', text: `Wall thickness below PC005 minimum: RWT ${x.rwt} mm vs ${x.psMin} mm min. (${at}) – FFS by Mechanical Static TA required` });
         else if (x.caLeft != null && x.caLeft < 0) out.push({ src: 'corrosion.ca_' + id, stage: 'corrosion', text: `Corrosion allowance consumed: RWT ${x.rwt} mm (NWT ${x.L.nwt}, CA ${x.L.ca} mm) at ${at} – ${x.margin} mm margin to PC005 minimum` });
+      }
+    }
+    if (st.key === 'corrosion' && yes(vals.flangeCorr)) {
+      for (const fl of allFlanges(r)) {
+        const at = `Flange ${fl.n}${fl.dn ? ' ' + sizeLabel(fl.dn) : ''}${fl.f.where ? ' at ' + fl.f.where : ''}`;
+        const bad = fl.rows.filter(x => x.fail).map(x => `${x.label.toLowerCase()} loss ${x.loss} mm (${x.pct}%)`);
+        if (fl.f.missing === 'Yes') bad.push('bolting missing/loose');
+        if (fl.f.engagement === 'No') bad.push('incomplete nut engagement');
+        if (bad.length) out.push({ src: 'corrosion.fl_' + fl.f.id, stage: 'corrosion', text: `${at}: ${bad.join('; ')} – exceeds PC005 1.8 criteria` });
       }
     }
     if (vals.followUp === 'Yes' && out.length === before) out.push({ src: st.key + '.followUp', stage: st.key, text: `${st.title}: follow-up required (see comments)` });
@@ -249,12 +270,13 @@ function genText(r) {
     if (C.coatingDamage) b.push(yes(C.coatingDamage) ? 'coating damage observed' : 'no coating damage observed');
     if (b.length) ext.push(cap(joinList(b)) + '.');
   }
+  if (K.generalCondition) ext.push(K.generalCondition.trim().replace(/([^.!?])$/, '$1.'));
   if (K.externalCorrosion === 'No') ext.push('No external corrosion observed.');
   if (yes(K.externalCorrosion)) {
-    const b = [K.corrCategory && optLabel(STAGES[3].fields[1], K.corrCategory), K.corrGrade && lc(K.corrGrade), K.corrType && lc(K.corrType)].filter(Boolean);
+    const b = [K.corrCategory && optLabel(fdef('corrosion', 'corrCategory'), K.corrCategory), K.corrGrade && lc(K.corrGrade), K.corrType && lc(K.corrType)].filter(Boolean);
     let t = `External corrosion observed${b.length ? ': ' + b.join(', ') : ''}${K.corrLocation ? ', at ' + K.corrLocation : ''}.`;
-    const ms = allMeas(r).filter(x => x.ok);
-    if (ms.length) t += ' Measurements: ' + ms.map(x => measText(x) + (x.status === 'red' ? ' – BELOW PC005 MINIMUM' : '')).join('; ') + '.' + (ms.some(x => x.pit != null) ? ' Pit gauge readings are indicative only.' : '');
+    const ms = allMeas(r);
+    if (ms.length) t += ' ' + ms.map(x => measText(x) + (x.status === 'red' ? ' – BELOW PC005 MINIMUM' : '')).join('. ') + '.' + (ms.some(x => x.m.assess === 'pitut') ? ' ' + PIT_DISCLAIMER : '');
     ext.push(t);
   }
   const oth = [];
@@ -294,6 +316,7 @@ function genText(r) {
     if (ko.length) fit.push(cap(joinList(ko)) + ': anomaly – see findings.');
   }
   if (A.comments) fit.push(A.comments.trim().replace(/([^.!?])$/, '$1.'));
+  if (yes(K.flangeCorr)) { const fls = allFlanges(r); fit.push(fls.length ? 'Flange / fastener corrosion: ' + fls.map(flangeText).join('. ') + '.' : 'Corrosion noted on flanges / fasteners.'); }
 
   const vte = (h.inspType || 'VTE') === 'VTE';
   const restr = [p.restrictions, p.scopeChanges && ('Scope changes: ' + p.scopeChanges)].filter(Boolean).join('\n') || 'None.';
@@ -354,11 +377,19 @@ function validate(r) {
   if (!G0.classManual && !G0.pipeClassId) W.push({ msg: 'Stage 1 General: pipe class not selected (needed for wall thickness & bolting)', step: 'st_general' });
   if (G0.classManual && !G0.pipeClass) W.push({ msg: 'Stage 1 General: manual pipe class – class number not entered', step: 'st_general' });
   if (!(G0.sizes || []).length) W.push({ msg: 'Stage 1 General: line size(s) not selected', step: 'st_general' });
+  if (!g(r, 'c.corrosion.generalCondition')) E.push({ msg: 'Stage 4: general condition of line not described', step: 'st_corrosion' });
   if (yes(g(r, 'c.corrosion.externalCorrosion'))) {
     const ms = allMeas(r);
-    if (!ms.length) W.push({ msg: 'Corrosion observed but no wall thickness / pit measurement recorded', step: 'st_corrosion' });
-    ms.filter(x => !x.ok).forEach(() => W.push({ msg: 'Corrosion: a measurement has no value or no nominal wall thickness for its size', step: 'st_corrosion' }));
+    if (!ms.length) W.push({ msg: 'Corrosion observed but no corrosion area (Area 1, 2…) added', step: 'st_corrosion' });
+    ms.filter(x => !x.visual && !x.ok).forEach(x => W.push({ msg: `Corrosion Area ${x.n}: measurement incomplete${x.L.nwt == null ? ' (no NWT – select class/size)' : ''}`, step: 'st_corrosion' }));
   }
+  if (yes(g(r, 'c.corrosion.flangeCorr'))) {
+    const fls = allFlanges(r);
+    if (!fls.length) W.push({ msg: 'Flange/fastener corrosion = Yes but no flange sheet added', step: 'st_corrosion' });
+    fls.filter(x => !x.measured).forEach(x => W.push({ msg: `Flange ${x.n}: no measurements recorded`, step: 'st_corrosion' }));
+    fls.filter(x => !x.fd).forEach(x => W.push({ msg: `Flange ${x.n}: no B16.5 nominal for this size/rating – check size and class`, step: 'st_corrosion' }));
+  }
+  if ((r.att || []).some(a => a.kind === 'pid' && !a.revOk)) W.push({ msg: 'P&ID: latest revision not confirmed', step: 'drawings' });
   if (yes(g(r, 'c.other.leaks')) && g(r, 'c.other.leakReported') !== 'Yes') E.push({ msg: 'Leak observed – confirm it has been reported to Operations', step: 'st_other' });
 
   // photos

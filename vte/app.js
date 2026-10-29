@@ -35,7 +35,7 @@ const DB = {
   del(st, id) { return DB.tx(st, 'readwrite', s => s.delete(id)); }
 };
 
-const S = { settings: null, systems: [], reports: [] };
+const S = { settings: null, systems: [], reports: [], pidlib: { id: 'pidlib', items: [] } };
 const cur = { system: null, report: null, step: null, ai: null, docx: null };
 const DEFAULT_SETTINGS = { id: 'settings', inspectorName: '', position: 'Plant Inspector', defaultSite: '', photoMax: 2000 };
 
@@ -311,6 +311,7 @@ async function route() {
   window.scrollTo(0, 0);
   if (!p.length) return renderHome();
   if (p[0] === 'settings') return renderSettings();
+  if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
   if (p[0] === 'report') return renderReport(p[1], p[2] || 'header');
   renderHome();
@@ -335,6 +336,7 @@ function renderHome() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install app on this phone</button>` : ''}
     ${!PACK ? `<div class="card notice">📦 No data pack loaded – import your asset's data pack in <a href="#/settings">Settings</a> to enable pipe classes, plot plans and FM areas.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="section-title"><h2>Piping systems</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
+    <button class="btn ghost block" data-action="importLines">📥 Import line list from Excel (new system)</button>
     ${sys.length ? sys.map(s2 => {
       const lines = S.reports.filter(r => r.systemId === s2.id);
       const issued = lines.filter(r => reportStatus(r)[0] === 'Issued').length;
@@ -362,13 +364,15 @@ function renderSettings() {
     <label class="field"><span>Photo size</span><select data-bind="settings" data-path="photoMax">
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
+  <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this phone.</p><a class="btn primary block" href="#/pids">Open P&ID library</a></div>
+  <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
   <div class="card"><h3>📦 Data pack</h3>
     ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
     <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack</button>${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
-  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection v1.2 – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from PC005/PC007.</p></div>`;
+  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection v1.3 – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from PC005/PC007.</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
   return `<label class="field"><span>${esc(label)}</span><input type="${type}" data-bind="${bind}" data-path="${path}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
@@ -402,6 +406,7 @@ function renderSystem(id) {
         <span class="pill-s ${cls}">${st}</span></a>
         <div class="line-acts"><button class="btn ghost sm" data-action="dupLine" data-id="${r.id}">⧉ Copy</button><button class="btn ghost sm" data-action="delLine" data-id="${r.id}">🗑</button></div></div>`;
     }).join('') : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
+    <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {
@@ -445,12 +450,20 @@ function stepsFor(r) {
 function renderReport(id, step) {
   const r = S.reports.find(x => x.id === id); if (!r) return go('/');
   cur.report = r; cur.system = S.systems.find(x => x.id === r.systemId) || { id: r.systemId, name: '' }; cur.step = step;
-  const steps = stepsFor(r); let idx = steps.findIndex(x => x.id === step); if (idx < 0) idx = 0;
+  const steps = stepsFor(r); const isFl = /^fl_\d+$/.test(step);
+  let idx = steps.findIndex(x => x.id === (isFl ? 'st_corrosion' : step)); if (idx < 0) idx = 0;
   setTop(r.h?.tagNo || 'New line report', cur.system.name || '', '/system/' + r.systemId);
   document.body.classList.add('wizard');
   const sp = $('#stepper'); sp.hidden = false;
-  sp.innerHTML = steps.map(x => `<button class="chip ${x.id === step ? 'on' : ''} ${x.skipped ? 'skip' : ''}" data-action="goto" data-step="${x.id}">${esc(x.label)}</button>`).join('');
+  sp.innerHTML = steps.map(x => `<button class="chip ${x.id === step || (isFl && x.id === 'st_corrosion') ? 'on' : ''} ${x.skipped ? 'skip' : ''}" data-action="goto" data-step="${x.id}">${esc(x.label)}</button>`).join('');
   const on = $('.chip.on', sp); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+  if (isFl) {
+    const fi = +step.slice(3);
+    $('#main').innerHTML = flangeSheetHTML(r, fi) + photoGroupHTML(r, PHOTO_GROUPS.find(x => x.key === 'corrosion'));
+    $('#bottombar').hidden = false; $('#prevBtn').disabled = false; $('#prevBtn').onclick = () => go(`/report/${r.id}/st_corrosion`);
+    $('#nextBtn').textContent = 'Done ✓'; $('#nextBtn').onclick = () => go(`/report/${r.id}/st_corrosion`);
+    $('#stepCount').textContent = `Flange ${fi + 1}`; drawThumbs(); return;
+  }
   $('#main').innerHTML = stepHTML(r, steps[idx]);
   const nav = dir => { let j = idx + dir; while (steps[j] && steps[j].skipped) j += dir; return steps[j]; };
   const prev = nav(-1), next = nav(1);
@@ -499,7 +512,8 @@ function fieldHTML(f, base, vals) {
       return h;
     }
     case 'pipeclass': return pipeClassHTML(cur.report);
-    case 'meas': return measHTML(cur.report);
+    case 'areas': return areasHTML(cur.report);
+    case 'flanges': return flangesHTML(cur.report);
   }
   return '';
 }
@@ -568,40 +582,87 @@ function boltingHTML(r, compact) {
 
 /* ---------- corrosion measurements ---------- */
 function measResultHTML(x) {
-  if (!x.ok) return `<div class="calc">Enter a value${x.L.nwt == null ? ' – and select the pipe class/size so the NWT is known' : ''}.</div>`;
+  if (x.visual) return `<div class="calc small">Visual assessment only – no wall thickness calculation.</div>`;
+  if (!x.ok) return `<div class="calc">Enter the reading(s)${x.L.nwt == null ? ' – and select the pipe class/size in stage 1 so the NWT is known' : ''}.</div>`;
   const L = x.L; const pct = Math.max(0, Math.min(100, x.usedPct ?? 0));
   return `<div class="calc ${x.status === 'red' ? 'bad' : x.status === 'amber' ? 'warn' : 'ok'}">
     <div class="mgrid"><span>NWT</span><b>${L.nwt} mm</b><span>Corrosion allowance</span><b>${L.ca} mm</b>
-      ${x.pit != null ? `<span>Pit depth (indicative)</span><b>${x.pit} mm</b>` : ''}
-      <span>Remaining wall (RWT)</span><b>${x.rwt} mm</b><span>Metal loss</span><b>${x.loss} mm</b>
+      ${x.pit != null ? `<span>UT adjacent steel</span><b>${x.ut} mm</b><span>Max pit depth (gauge)</span><b>${x.pit} mm</b>` : ''}
+      <span>${x.pit != null ? 'Estimated RWT' : 'Remaining wall (RWT)'}</span><b>${x.rwt} mm</b><span>Metal loss</span><b>${x.loss} mm</b>
       <span>CA remaining</span><b>${x.caLeft} mm</b><span>PC005 min. RWT${x.m.loc === 'Bend intrados' ? ' (intrados)' : ''}</span><b>${x.psMin} mm</b>
       <span>Remaining to PC005</span><b>${x.margin} mm</b></div>
     <div class="bar"><i style="width:${pct}%"></i></div><small>${pct}% of the allowable loss to PC005 used</small>
     ${x.rwt > L.nwt ? '<div><b>⚠ Reading is greater than NWT – check the size / schedule selected.</b></div>' : ''}
-    <div><b>${esc(x.verdict)}</b></div></div>`;
+    <div><b>${esc(x.verdict)}</b></div>${x.pit != null ? `<div class="disc">ⓘ ${esc(PIT_DISCLAIMER)}</div>` : ''}</div>`;
 }
-function measHTML(r) {
-  const K = r.c.corrosion || (r.c.corrosion = {}); const list = K.meas || [];
+function areasHTML(r) {
+  const K = r.c.corrosion || (r.c.corrosion = {}); const list = K.areas || [];
   const sizes = selectedSizes(r);
   const sizeOpts = sizes.length ? sizes : Object.keys(findClass(r.c.general?.pipeClassId)?.sch || {});
-  return `<div class="field"><span>Wall thickness / pit measurements</span>
+  return `<div class="field"><span>Corrosion areas on pipe</span>
     ${!sizes.length ? '<div class="calc warn small">Select pipe class and line size(s) in stage 1 to get NWT, CA and PC005 limits.</div>' : ''}
     ${list.map((m, i) => {
-      const base = `c.corrosion.meas.${i}`;
-      return `<div class="meas"><div class="f-head"><b>Measurement ${i + 1}</b><button class="btn ghost sm danger-t" data-action="delMeas" data-i="${i}">🗑</button></div>
+      const base = `c.corrosion.areas.${i}`;
+      return `<div class="meas"><div class="f-head"><b>Area ${i + 1}</b><button class="btn ghost sm danger-t" data-action="delArea" data-i="${i}" aria-label="Remove area">🗑</button></div>
+        <label class="field"><span>Location / description</span><input type="text" data-path="${base}.where" value="${esc(m.where)}" placeholder="e.g. 6 o'clock, 300 mm d/s of support 3"></label>
         <label class="field"><span>Size</span><select data-path="${base}.dn" data-rerender>${sizeOpts.map(d => `<option value="${d}" ${String(m.dn) === String(d) ? 'selected' : ''}>${sizeLabel(d)}</option>`).join('')}</select></label>
-        ${pillsHTML('report', base + '.type', m.type, [['rwt', 'Remaining wall (UT)'], ['pit', 'Pit depth (gauge)']], 'Reading')}
-        <label class="field"><span>${m.type === 'pit' ? 'Pit depth' : 'Measured remaining wall thickness'} <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.val" data-measrow="${i}" value="${esc(m.val)}"></label>
-        ${m.type !== 'pit' ? `<label class="field"><span>Method</span><select data-path="${base}.method"><option value="">–</option>${['UT thickness gauge', 'UT by NDT contractor', 'Calipers', 'Other'].map(o => `<option ${m.method === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : ''}
         ${pillsHTML('report', base + '.loc', m.loc, ['Straight / extrados', 'Bend intrados'], 'Location type')}
-        <label class="field"><span>Position</span><input type="text" data-path="${base}.where" value="${esc(m.where)}" placeholder="e.g. 6 o'clock, 300 mm d/s of support 3"></label>
-        <div id="measRes_${i}">${measResultHTML(assessMeas(r, m))}</div></div>`;
+        ${pillsHTML('report', base + '.assess', m.assess, ASSESS_TYPES, 'Assessment type')}
+        ${m.assess === 'ut' ? `<label class="field"><span>Minimum UT wall thickness <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.ut" data-arearow="${i}" value="${esc(m.ut)}"></label>` : ''}
+        ${m.assess === 'pitut' ? `<div class="grid2"><label class="field"><span>UT of adjacent steel <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.ut" data-arearow="${i}" value="${esc(m.ut)}"></label>
+          <label class="field"><span>Max pit depth <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.pit" data-arearow="${i}" value="${esc(m.pit)}"></label></div>
+          <div class="disc">ⓘ ${esc(PIT_DISCLAIMER)}</div>` : ''}
+        <label class="field"><span>Notes</span><input type="text" data-path="${base}.notes" value="${esc(m.notes)}" placeholder="Extent, morphology, coating breakdown…"></label>
+        <div id="areaRes_${i}">${measResultHTML(assessMeas(r, m, i))}</div>
+        <button class="btn ghost sm" data-action="camera" data-group="corrosion" data-cap="Area ${i + 1}${m.where ? ' – ' + esc(m.where) : ''}">📷 Photo of Area ${i + 1}</button></div>`;
     }).join('')}
-    <button class="btn ghost block" data-action="addMeas">+ Add measurement</button></div>`;
+    <button class="btn ghost block" data-action="addArea">+ Add Area ${list.length + 1}</button></div>`;
 }
-function updateMeas(i) {
-  const r = cur.report; const m = r.c?.corrosion?.meas?.[i]; const box = $('#measRes_' + i);
-  if (m && box) box.innerHTML = measResultHTML(assessMeas(r, m));
+function updateArea(i) {
+  const r = cur.report; const m = r.c?.corrosion?.areas?.[i]; const box = $('#areaRes_' + i);
+  if (m && box) box.innerHTML = measResultHTML(assessMeas(r, m, i));
+}
+function flangesHTML(r) {
+  const list = allFlanges(r);
+  return `<div class="field"><span>Flange sheets</span>
+    ${list.map(fl => `<div class="meas fl-row ${fl.fail ? 'bad' : ''}"><div class="f-head"><b>Flange ${fl.n}</b><span class="pill-s">${fl.dn ? sizeLabel(fl.dn) : 'size?'}${fl.rating ? ' · ' + fl.rating + '#' : ''}</span>
+        ${fl.measured ? `<span class="pill-s ${fl.fail ? 'warn' : 'ok'}">${fl.fail ? 'Exceeds limit' : 'Within limits'}</span>` : '<span class="pill-s">Not measured</span>'}</div>
+        <div class="small muted">${esc(fl.f.where || '')}</div>
+        <div class="grid2"><button class="btn primary sm" data-action="goto" data-step="fl_${fl.n - 1}">Open flange sheet ›</button><button class="btn ghost sm danger-t" data-action="delFlange" data-i="${fl.n - 1}">🗑 Remove</button></div></div>`).join('')}
+    <button class="btn ghost block" data-action="addFlange">+ Add Flange ${list.length + 1}</button></div>`;
+}
+function flangeCalcHTML(fl) {
+  return `<table class="mini data"><tr><th>Dimension</th><th>Nominal</th><th>Measured</th><th>Loss mm</th><th>Loss %</th><th>Limit</th></tr>
+    ${fl.rows.map(x => `<tr class="${x.fail ? 'fail' : ''}"><td><b>${x.key === 'tf' ? 'A' : x.key === 'stud' ? 'B' : 'C'}</b> ${esc(x.label)}</td><td>${x.nom ?? '–'}</td><td>${x.meas ?? '–'}</td><td>${x.loss ?? '–'}</td><td>${x.pct != null ? x.pct + '%' : '–'}</td><td><small>${esc(x.rule)}</small>${x.fail ? '<br><b class="red-t">FAIL</b>' : x.loss != null ? '<br><b class="green-t">OK</b>' : ''}</td></tr>`).join('')}</table>`;
+}
+function flangeSheetHTML(r, i) {
+  const f = r.c?.corrosion?.flanges?.[i]; if (!f) return '<div class="card">Flange not found.</div>';
+  const fl = flangeData(r, f, i); const base = `c.corrosion.flanges.${i}`;
+  const sizes = selectedSizes(r); const sizeOpts = sizes.length ? sizes : Object.keys(PIPE_DIMS).filter(d => FLANGE_DIMS['150'][d]);
+  const cls = findClass(r.c?.general?.pipeClassId);
+  return `<div class="card"><div class="stage-head"><h2>Flange ${i + 1} – sheet</h2><button class="btn ghost sm" data-action="goto" data-step="st_corrosion">‹ Corrosion</button></div>
+    <label class="field"><span>Location / description</span><input type="text" data-path="${base}.where" value="${esc(f.where)}" placeholder="e.g. AK-V-2902 inlet nozzle flange"></label>
+    <div class="grid2"><label class="field"><span>Size</span><select data-path="${base}.dn" data-rerender><option value="">–</option>${sizeOpts.map(d => `<option value="${d}" ${String(f.dn) === String(d) ? 'selected' : ''}>${sizeLabel(d)}</option>`).join('')}</select></label>
+      <label class="field"><span>Rating</span><select data-path="${base}.rating" data-rerender>${[150, 300, 600, 900, 1500, 2500].map(x => `<option value="${x}" ${+fl.rating === x ? 'selected' : ''}>Class ${x}${cls?.r === x ? ' (pipe class)' : ''}</option>`).join('')}</select></label></div>
+    ${!fl.bolt || f.studNom ? `<label class="field"><span>Nominal stud size <em>(inch)</em></span><select data-path="${base}.studNom" data-rerender><option value="">–</option>${STUD_SIZES.map(s2 => `<option ${f.studNom === s2 ? 'selected' : ''}>${s2}</option>`).join('')}</select><small>Taken from the piping class when available.</small></label>` : ''}
+    <div class="flsvg" id="flSvg">${flangeSVG(fl)}</div>
+    <h3>Measured (minimum, after removing loose corrosion product)</h3>
+    <div class="grid3">
+      <label class="field"><span>A Flange thk <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.tf" data-flrow="${i}" value="${esc(f.tf)}"></label>
+      <label class="field"><span>B Stud Ø <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.stud" data-flrow="${i}" value="${esc(f.stud)}"></label>
+      <label class="field"><span>C Nut A/F <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.nut" data-flrow="${i}" value="${esc(f.nut)}"></label></div>
+    <div id="flCalc">${flangeCalcHTML(fl)}</div>
+    <label class="field"><span>No. of studs / nuts affected</span><input type="text" inputmode="numeric" data-path="${base}.nAffected" value="${esc(f.nAffected)}"></label>
+    ${pillsHTML('report', base + '.missing', f.missing, ['Yes', 'No'], 'Missing or loose bolting?', '', ynColor('bad'))}
+    ${pillsHTML('report', base + '.engagement', f.engagement, ['Yes', 'No'], 'Full nut engagement (threads through nut)?', '', ynColor('good'))}
+    <label class="field"><span>Notes</span><textarea rows="2" data-path="${base}.notes">${esc(f.notes)}</textarea></label>
+    <small class="muted">Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes the 1.6 mm raised face; Class 400+ excludes the 6.4 mm raised face). Stud/nut per class bolting table and ASME B18.2.2. PC005 1.8: reject studs/nuts &lt; 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).</small>
+    <div style="margin-top:10px"><button class="btn ghost" data-action="camera" data-group="corrosion" data-cap="Flange ${i + 1}${f.where ? ' – ' + esc(f.where) : ''}">📷 Photo of Flange ${i + 1}</button></div>
+  </div>`;
+}
+function updateFlange(i) {
+  const r = cur.report; const f = r.c?.corrosion?.flanges?.[i]; if (!f) return;
+  const fl = flangeData(r, f, i); $('#flSvg').innerHTML = flangeSVG(fl); $('#flCalc').innerHTML = flangeCalcHTML(fl);
 }
 function photoNumbers(r) {
   const order = PHOTO_GROUPS.map(gp => gp.key); const map = {}; let n = 0;
@@ -613,6 +674,7 @@ function thumbsHTML(r, list, opts = {}) {
   return `<div class="thumbs">${list.map(a => `<figure class="thumb">
       <div class="thumb-img" data-action="annotate" data-id="${a.id}"><canvas data-thumb="${a.id}"></canvas>${nums[a.id] ? `<b class="num">Photo ${nums[a.id]}</b>` : ''}${(a.ann || []).length ? '<b class="annb">✎</b>' : ''}</div>
       <input class="cap" data-attcap="${a.id}" value="${esc(a.caption)}" placeholder="${opts.capPh || 'Caption (what / where)'}">
+      ${opts.rev ? `<label class="revok"><input type="checkbox" data-attrev="${a.id}" ${a.revOk ? 'checked' : ''}> Latest revision confirmed</label>` : ''}
       <div class="thumb-acts"><button class="btn ghost sm" data-action="annotate" data-id="${a.id}">✎ Annotate</button><button class="btn ghost sm" data-action="delAtt" data-id="${a.id}" aria-label="Delete">🗑</button></div>
     </figure>`).join('')}</div>`;
 }
@@ -679,8 +741,10 @@ function stepHTML(r, step) {
         return `<section class="photos ${none ? 'none' : ''}"><div class="ph-head"><h3>${esc(title)}</h3>
           ${kind !== 'other' ? `<label class="nophoto"><input type="checkbox" data-path="noDrawing.${kind}" data-rerender ${none ? 'checked' : ''}> Not available</label>` : ''}</div>
           <p class="muted small">${esc(hint)}</p>
-          ${none && !list.length ? '' : `<div class="grid2"><button class="btn primary" data-action="addDrawing" data-kind="${kind}">📄 Add file (PDF / image)</button><button class="btn ghost" data-action="camera" data-group="${kind}" data-kind="${kind}">📷 Photo of drawing</button></div>`}
-          ${thumbsHTML(r, list, { capPh: 'Drawing number / title' })}</section>`;
+          ${kind === 'pid' ? `<div class="revnote">⚠ Check each P&ID is the <b>latest revision</b> (document control / FMC) before marking it up, then tick "Latest revision confirmed".</div>` : ''}
+          ${none && !list.length ? '' : `${kind === 'pid' ? `<button class="btn primary block" data-action="pidPickToggle">📚 Choose from P&ID library (${S.pidlib.items.length})</button>${cur.pidPick ? pidPickerHTML() : ''}` : ''}
+            <div class="grid2"><button class="btn ${kind === 'pid' ? 'ghost' : 'primary'}" data-action="addDrawing" data-kind="${kind}">📄 Add file (PDF / image)</button><button class="btn ghost" data-action="camera" data-group="${kind}" data-kind="${kind}">📷 Photo of drawing</button></div>`}
+          ${thumbsHTML(r, list, { capPh: 'Drawing number / title', rev: kind === 'pid' })}</section>`;
       };
       return `<div class="card"><h2>Isometric & P&ID</h2><p class="muted small">PDF pages are converted to images so you can mark them up (inspection extent, anomaly locations, photo positions).</p></div>
         ${grp('iso', 'Isometric', 'Mark the inspected extent and anomaly locations.')}
@@ -941,6 +1005,15 @@ async function copyText(t) {
     try { document.execCommand('copy'); toast('Copied to clipboard'); } catch { toast('Copy failed – select and copy manually'); } ta.remove();
   }
 }
+async function svgToPng(svg, w) {
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    const im = await loadUrlImg(url); const sc = w / (im.naturalWidth || 640);
+    const c = document.createElement('canvas'); c.width = w; c.height = Math.round((im.naturalHeight || 320) * sc);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0, c.width, c.height);
+    const b = await canvasToBlob(c, 'image/png'); return { data: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height };
+  } finally { URL.revokeObjectURL(url); }
+}
 function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
 async function shareBlob(blob, name, title) {
   const file = new File([blob], name, { type: blob.type });
@@ -969,6 +1042,131 @@ async function importBackup(file) {
   imgCache.clear(); toast('Backup imported'); route();
 }
 
+/* ================= P&ID library ================= */
+async function loadPidLib() { S.pidlib = (await DB.get('meta', 'pidlib')) || { id: 'pidlib', items: [] }; }
+function savePidLib() { return DB.put('meta', S.pidlib); }
+function pidListHTML(q, pick) {
+  q = String(q || '').toLowerCase().trim();
+  const items = S.pidlib.items.filter(x => !q || x.title.toLowerCase().includes(q) || (x.src || '').toLowerCase().includes(q));
+  if (!S.pidlib.items.length) return `<p class="small muted" style="padding:10px">Library is empty – import your P&IDs ${pick ? 'in Settings → P&ID library' : 'with the button above'}.</p>`;
+  return items.map(x => pick
+    ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b><br><small>${esc(x.src || '')}</small></span></button>`
+    : `<div class="pid-item"><img src="${x.thumb}" alt=""><span style="flex:1"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}"><small>${esc(x.src || '')} · added ${esc((x.added || '').slice(0, 10))}</small></span><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';
+}
+function pidPickerHTML() {
+  return `<div class="card" style="margin-top:6px"><input type="search" id="pidQ" placeholder="Search P&ID number / title" autocomplete="off"><div id="pidList" class="pidlist">${pidListHTML('', true)}</div></div>`;
+}
+function renderPidLib() {
+  setTop('P&ID library', `${S.pidlib.items.length} drawing page(s) on this phone`, '/settings');
+  $('#main').innerHTML = `<div class="card"><p class="small">Import all your P&IDs once (PDF or images – multi-page PDFs become one entry per page). When writing a report, pick the P&ID from this list, then mark it up.</p>
+    <div class="revnote">⚠ The library is a local copy. Always confirm a P&ID is the latest revision before using it in a report.</div>
+    <button class="btn primary block" data-action="importPids">⬆ Import P&IDs (PDF / images)</button>
+    <input type="search" id="pidLibQ" placeholder="Search" autocomplete="off"><div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>
+    ${S.pidlib.items.length ? '<button class="btn ghost block danger-t" data-action="clearPids">Remove all P&IDs</button>' : ''}</div>`;
+}
+async function thumbOf(blob) {
+  const bmp = await createImageBitmap(blob); const sc = Math.min(1, 160 / bmp.width);
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.7);
+}
+async function importPidFiles(files) {
+  let n = 0; toast(`Importing ${files.length} file(s)…`, 60000);
+  for (const f of files) {
+    const base = f.name.replace(/\.[^.]+$/, '');
+    const add = async (img, page, pages) => {
+      const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: img.blob });
+      S.pidlib.items.push({ id, title: base + (pages > 1 ? ` – page ${page}` : ''), src: f.name, page, blobId, w: img.w, h: img.h, thumb: await thumbOf(img.blob), added: new Date().toISOString() }); n++;
+      toast(`Imported ${n}…`, 60000);
+    };
+    try {
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) await importPdf(f, (img, i, tot) => add(img, i, tot));
+      else { const img = await importImage(f, 2600); await add(img, 1, 1); }
+    } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
+  }
+  S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true }));
+  await savePidLib(); toast(`${n} P&ID page(s) added to library`);
+}
+
+/* ================= line list import (Excel / CSV) ================= */
+function colIdx(ref) { const m = /^([A-Z]+)/.exec(ref); let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+async function readSheetRows(file) {
+  if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
+    return (await file.text()).split(/\r?\n/).filter(l => l.trim()).map(l => { const out = []; let cur2 = '', q = false;
+      for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { out.push(cur2); cur2 = ''; } else cur2 += ch; } out.push(cur2); return out.map(s2 => s2.trim()); });
+  }
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const P = new DOMParser(); const xml = async p => P.parseFromString(await zip.file(p).async('string'), 'application/xml');
+  const wb = await xml('xl/workbook.xml'); const sheet = wb.getElementsByTagName('sheet')[0];
+  const rid = sheet.getAttribute('r:id') || sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+  const rels = await xml('xl/_rels/workbook.xml.rels');
+  let target = [...rels.getElementsByTagName('Relationship')].find(x => x.getAttribute('Id') === rid)?.getAttribute('Target') || 'worksheets/sheet1.xml';
+  target = target.replace(/^\/?xl\//, '').replace(/^\//, '');
+  let shared = [];
+  if (zip.file('xl/sharedStrings.xml')) shared = [...(await xml('xl/sharedStrings.xml')).getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join(''));
+  const ws = await xml('xl/' + target); const rows = [];
+  for (const row of ws.getElementsByTagName('row')) {
+    const arr = [];
+    for (const c of row.getElementsByTagName('c')) {
+      const t = c.getAttribute('t'); const v = c.getElementsByTagName('v')[0]?.textContent;
+      let val = t === 's' ? shared[+v] : t === 'inlineStr' ? [...c.getElementsByTagName('t')].map(x => x.textContent).join('') : t === 'b' ? (v === '1') : v ?? '';
+      arr[colIdx(c.getAttribute('r'))] = val;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+function parseLineRows(rows) {
+  let hi = rows.findIndex(r2 => (r2 || []).some(c => /equip|tag|line|item/i.test(String(c ?? ''))));
+  let head = hi >= 0 ? rows[hi].map(c => String(c ?? '')) : [];
+  const find = re => head.findIndex(h => re.test(h));
+  let ci = find(/equip|tag|line/i), di = find(/desc/i), ai = find(/active/i);
+  if (hi < 0 || ci < 0) { hi = -1; ci = 0; di = 1; }
+  const out = [];
+  for (const r2 of rows.slice(hi + 1)) {
+    const tag = String(r2?.[ci] ?? '').trim(); if (!tag) continue;
+    const act = ai >= 0 ? r2[ai] : true; const active = !(act === false || /^(false|no|0|n)$/i.test(String(act)));
+    out.push({ tag, desc: String(r2?.[di] ?? '').trim(), active });
+  }
+  return out;
+}
+async function importLineList(file, systemId) {
+  const rows = parseLineRows(await readSheetRows(file));
+  if (!rows.length) throw new Error('No line numbers found in the first sheet');
+  const sys = systemId ? S.systems.find(x => x.id === systemId) : null;
+  const existing = new Set(S.reports.filter(r => sys && r.systemId === sys.id).map(r => (r.h?.tagNo || '').toUpperCase()));
+  const sysName = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = document.createElement('div'); m.className = 'modal-back';
+  m.innerHTML = `<div class="modal"><h3>Import line list</h3>
+    ${sys ? `<p class="small">Adding to <b>${esc(sys.name || 'this system')}</b></p>` : `<label class="field"><span>Piping system name</span><input type="text" name="sysName" value="${esc(sysName)}"></label>`}
+    <div class="row"><button class="btn ghost sm" data-sel="all">Select all</button><button class="btn ghost sm" data-sel="none">None</button><span class="small muted">${rows.length} row(s)</span></div>
+    <div class="imp-list">${rows.map((x, i) => { const dup = existing.has(x.tag.toUpperCase());
+      return `<label class="imp-row ${dup ? 'dis' : ''}"><input type="checkbox" data-i="${i}" ${x.active && !dup ? 'checked' : ''} ${dup ? 'disabled' : ''}><span><b>${esc(x.tag)}</b>${!x.active ? ' <span class="pill-s">inactive</span>' : ''}${dup ? ' <span class="pill-s">already added</span>' : ''}<br>${esc(x.desc)}</span></label>`; }).join('')}</div>
+    <div class="modal-btns"><button class="btn ghost" data-v="">Cancel</button><button class="btn primary" data-v="ok">Import</button></div></div>`;
+  document.body.append(m);
+  const res = await new Promise(resolve => m.addEventListener('click', e => {
+    const s2 = e.target.closest('[data-sel]'); if (s2) { $$('input[data-i]:not(:disabled)', m).forEach(c => c.checked = s2.dataset.sel === 'all'); return; }
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    const picked = $$('input[data-i]:checked', m).map(c => rows[+c.dataset.i]); const name = $('[name=sysName]', m)?.value;
+    m.remove(); resolve(b.dataset.v ? { picked, name } : null);
+  }));
+  if (!res || !res.picked.length) return;
+  let target = sys;
+  if (!target) { target = { id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: 'ASME B31.3', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
+  for (const x of res.picked) {
+    const r = blankReport(target); r.h.tagNo = x.tag; r.h.equipDesc = x.desc; S.reports.push(r); await DB.put('reports', r);
+  }
+  toast(`${res.picked.length} line(s) imported`); go('/system/' + target.id);
+}
+
+/* ================= theme ================= */
+function applyTheme() {
+  const t = S.settings?.theme || 'auto';
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  $('#themeBtn').textContent = dark ? '☀' : '🌙'; $('#themeBtn').title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+  document.querySelector('meta[name=theme-color]').content = dark ? '#0b1b2b' : '#12385c';
+}
+
 /* ================= data pack ================= */
 async function loadPack() {
   Object.values(PACK_URLS).forEach(u => URL.revokeObjectURL(u)); for (const k in PACK_URLS) delete PACK_URLS[k];
@@ -994,21 +1192,34 @@ async function importPack(file) {
 }
 
 /* ================= event handling ================= */
+function propagateSys(path, oldV, newV) {
+  if (!['site', 'floc', 'sce', 'designCode'].includes(path) || !cur.system) return;
+  for (const r of S.reports.filter(x => x.systemId === cur.system.id)) {
+    r.h = r.h || {}; if (!r.h[path] || r.h[path] === oldV) { r.h[path] = newV; persist('report', r); }
+  }
+}
 function targetObj(bind) { return bind === 'sys' ? cur.system : bind === 'settings' ? S.settings : cur.report; }
 let rerenderTimer = null;
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.attcap) { const a = cur.report.att.find(x => x.id === el.dataset.attcap); if (a) { a.caption = el.value; persist('report'); } return; }
+  if (el.dataset.attrev) { const a = cur.report.att.find(x => x.id === el.dataset.attrev); if (a) { a.revOk = el.checked; persist('report'); } return; }
+  if (el.id === 'pidQ') { $('#pidList').innerHTML = pidListHTML(el.value, true); return; }
+  if (el.id === 'pidLibQ') { $('#pidLibList').innerHTML = pidListHTML(el.value, false); return; }
+  if (el.dataset.pidtitle) { const it = S.pidlib.items.find(x => x.id === el.dataset.pidtitle); if (it) { it.title = el.value; savePidLib(); } return; }
   if (el.id === 'classQ') { $('#classList').innerHTML = classListHTML(el.value); return; }
   if (!el.dataset.path) return;
   const bind = el.dataset.bind || 'report'; const obj = targetObj(bind); if (!obj) return;
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (bind === 'settings' && el.dataset.path === 'photoMax') v = +v;
+  const oldV = g(obj, el.dataset.path);
   s(obj, el.dataset.path, v); persist(bind);
+  if (bind === 'sys') propagateSys(el.dataset.path, oldV, v);
   if (bind === 'sys' && el.dataset.path === 'name') $('#title').textContent = v || 'New piping system';
   if (bind === 'report' && el.dataset.path === 'h.tagNo') $('#title').textContent = v || 'New line report';
   if (bind === 'report' && el.dataset.path === 'h.size') cur.report.h._autoSize = false;
-  if (el.dataset.measrow !== undefined) updateMeas(+el.dataset.measrow);
+  if (el.dataset.arearow !== undefined) updateArea(+el.dataset.arearow);
+  if (el.dataset.flrow !== undefined) updateFlange(+el.dataset.flrow);
   if (el.dataset.retot !== undefined) {
     const fm = cur.report.fm; const tot = [fm.re69, fm.re45, fm.re13].map(num).reduce((a, b) => a + (b || 0), 0); const ok = Math.abs(tot - 100) < 0.5;
     const box = $('#reTot'); box.className = 'calc ' + (ok ? 'ok' : 'bad'); box.textContent = `Total: ${tot}%${ok ? ' ✓' : ' – must total 100%'}`;
@@ -1030,8 +1241,9 @@ const actions = {
   goto: el => go(`/report/${cur.report.id}/${el.dataset.step}`),
   pill: el => {
     const bind = el.dataset.bind || 'report', obj = targetObj(bind), path = el.dataset.path;
-    const curV = g(obj, path); s(obj, path, curV === el.dataset.val ? '' : el.dataset.val); persist(bind);
-    if (bind === 'sys') renderSystem(cur.system.id); else rerender();
+    const curV = g(obj, path); const nv = curV === el.dataset.val ? '' : el.dataset.val; s(obj, path, nv); persist(bind);
+    if (bind === 'sys') propagateSys(path, curV, nv);
+    if (bind === 'sys') renderSystem(cur.system.id); else if (bind === 'settings') { applyTheme(); renderSettings(); } else rerender();
   },
   multi: el => { const r = cur.report; const arr = [...(g(r, el.dataset.path) || [])]; const i = arr.indexOf(el.dataset.val); i >= 0 ? arr.splice(i, 1) : arr.push(el.dataset.val); s(r, el.dataset.path, arr); persist('report'); rerender(); },
   allAcc: el => {
@@ -1046,7 +1258,7 @@ const actions = {
     }
     persist('report'); rerender(); toast(`${n} item(s) set acceptable${skipped ? ` – ${skipped} still need an answer` : ''}`);
   },
-  camera: el => { pending = { group: el.dataset.group, kind: el.dataset.kind || 'photo' }; $('#fileCamera').click(); },
+  camera: el => { pending = { group: el.dataset.group, kind: el.dataset.kind || 'photo', cap: el.dataset.cap || '' }; $('#fileCamera').click(); },
   gallery: el => { pending = { group: el.dataset.group, kind: 'photo' }; $('#fileGallery').click(); },
   addDrawing: el => { pending = { group: el.dataset.kind, kind: el.dataset.kind }; $('#fileDrawing').click(); },
   annotate: async el => { const a = cur.report.att.find(x => x.id === el.dataset.id); if (a && await openAnnotator(a)) rerender(); },
@@ -1081,13 +1293,20 @@ const actions = {
     if (!cur.report.h.size || cur.report.h._autoSize) { cur.report.h.size = G.sizes.map(x => (npsOf(x) || x) + '"').join(' / '); cur.report.h._autoSize = true; }
     persist('report'); rerender();
   },
-  addMeas: () => {
-    const r = cur.report; const K = r.c.corrosion || (r.c.corrosion = {}); K.meas = K.meas || [];
-    const sizes = selectedSizes(r); const last = K.meas[K.meas.length - 1];
-    K.meas.push({ id: uid(), dn: last?.dn || sizes[0] || '', type: last?.type || 'rwt', loc: 'Straight / extrados', val: '', where: '' });
+  addArea: () => {
+    const r = cur.report; const K = r.c.corrosion || (r.c.corrosion = {}); K.areas = K.areas || [];
+    const sizes = selectedSizes(r); const last = K.areas[K.areas.length - 1];
+    K.areas.push({ id: uid(), dn: last?.dn || sizes[0] || '', assess: last?.assess || 'visual', loc: 'Straight / extrados', where: '' });
     persist('report'); rerender();
   },
-  delMeas: async el => { if (!await confirmBox('Remove measurement', 'Remove this measurement?', 'Remove')) return; cur.report.c.corrosion.meas.splice(+el.dataset.i, 1); persist('report'); rerender(); },
+  delArea: async el => { if (!await confirmBox('Remove area', `Remove Area ${+el.dataset.i + 1}? Later areas are renumbered.`, 'Remove')) return; cur.report.c.corrosion.areas.splice(+el.dataset.i, 1); persist('report'); rerender(); },
+  addFlange: () => {
+    const r = cur.report; const K = r.c.corrosion || (r.c.corrosion = {}); K.flanges = K.flanges || [];
+    const sizes = selectedSizes(r); const cls = findClass(r.c.general?.pipeClassId);
+    K.flanges.push({ id: uid(), dn: sizes[sizes.length - 1] || '', rating: cls?.r || '', where: '' });
+    persist('report'); go(`/report/${r.id}/fl_${K.flanges.length - 1}`);
+  },
+  delFlange: async el => { if (!await confirmBox('Remove flange', `Remove Flange ${+el.dataset.i + 1} and its measurements?`, 'Remove')) return; cur.report.c.corrosion.flanges.splice(+el.dataset.i, 1); persist('report'); rerender(); },
   fmToggle: el => { const r = cur.report; r.fm = r.fm || { areas: [] }; const arr = r.fm.areas; const i = arr.indexOf(el.dataset.val); i >= 0 ? arr.splice(i, 1) : arr.push(el.dataset.val); persist('report'); rerender(); },
   fmAdd: () => { const v = $('#fmCustom').value.trim().toUpperCase().replace(/\s+/g, ' '); if (!v) return; const r = cur.report; r.fm = r.fm || { areas: [] }; if (!r.fm.areas.includes(v)) r.fm.areas.push(v); persist('report'); rerender(); },
   addFinding: () => { const r = cur.report; r.mf = r.mf || []; r.mf.push({ id: uid(), stage: 'other', text: '' }); persist('report'); rerender(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 50); },
@@ -1110,7 +1329,7 @@ const actions = {
     try {
       await flushSaves();
       const r = cur.report; const draft = el.dataset.draft === '1';
-      const blob = await buildDocx(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob });
+      const blob = await buildDocx(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng });
       const name = `VTE_${safeName(r.h?.tagNo)}_${(r.h?.examDate || todayISO()).replace(/-/g, '')}${draft ? '_DRAFT' : ''}.docx`;
       cur.docx = { blob, name };
       if (!draft) { r.issuedAt = Date.now(); r.updatedAt = r.issuedAt; await DB.put('reports', r); }
@@ -1124,6 +1343,26 @@ const actions = {
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   exportAll: async () => { if (!S.systems.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); shareBlob(await makeBackup(S.systems, S.reports), `VTE_backup_all_${todayISO()}.json`, 'VTE backup'); },
   importBackup: () => $('#fileBackup').click(),
+  importLines: el => { pending = { lineSys: el.dataset.sys || null }; $('#fileLines').click(); },
+  importPids: () => $('#filePids').click(),
+  pidPickToggle: () => { cur.pidPick = !cur.pidPick; rerender(); },
+  pickPid: async el => {
+    const it = S.pidlib.items.find(x => x.id === el.dataset.id); if (!it) return; const r = cur.report;
+    const b = await getBlob(it.blobId); if (!b) return toast('Drawing missing – re-import it');
+    const a = { id: 'a_' + uid(), kind: 'pid', group: 'pid', libId: it.id, caption: it.title, blobId: await putBlob(b), w: it.w, h: it.h, ann: [], revOk: false };
+    r.att.push(a); if (!r.c.general) r.c.general = {}; if (!r.c.general.pidNumber) r.c.general.pidNumber = it.title.replace(/ – page \d+$/, '');
+    cur.pidPick = false; persist('report'); rerender();
+    toast('⚠ Check this is the latest revision – then mark it up', 3500);
+    if (await openAnnotator(a)) rerender();
+  },
+  delPid: async el => { const it = S.pidlib.items.find(x => x.id === el.dataset.id); if (!it || !await confirmBox('Remove P&ID', `Remove "${it.title}" from the library? Reports keep their own copies.`, 'Remove')) return;
+    await DB.del('blobs', it.blobId); S.pidlib.items = S.pidlib.items.filter(x => x.id !== it.id); await savePidLib(); renderPidLib(); },
+  clearPids: async () => { if (!await confirmBox('Remove all P&IDs', 'Remove every P&ID from the library on this phone? Reports keep their own copies.', 'Remove all')) return;
+    for (const it of S.pidlib.items) await DB.del('blobs', it.blobId); S.pidlib.items = []; await savePidLib(); renderPidLib(); },
+  toggleTheme: () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    S.settings.theme = dark ? 'light' : 'dark'; persist('settings'); applyTheme();
+  },
   importPack: () => $('#filePack').click(),
   removePack: async () => {
     if (!await confirmBox('Remove data pack', 'Remove the data pack from this phone? Existing reports are not affected.', 'Remove')) return;
@@ -1143,7 +1382,7 @@ document.addEventListener('click', e => {
 
 async function handleFiles(files) {
   if (!files.length || !pending || !cur.report) return;
-  const r = cur.report; const { group, kind } = pending; let n = 0;
+  const r = cur.report; const { group, kind, cap } = pending; let n = 0;
   toast(`Processing ${files.length} file(s)…`, 10000);
   for (const f of files) {
     try {
@@ -1153,13 +1392,17 @@ async function handleFiles(files) {
         });
       } else {
         const img = await importImage(f, kind === 'photo' ? undefined : 2600);
-        r.att.push({ id: 'a_' + uid(), kind, group, caption: kind === 'photo' ? '' : f.name.replace(/\.[^.]+$/, ''), blobId: await putBlob(img.blob), w: img.w, h: img.h, ann: [], taken: new Date().toISOString() }); n++;
+        r.att.push({ id: 'a_' + uid(), kind, group, caption: kind === 'photo' ? (cap || '') : f.name.replace(/\.[^.]+$/, ''), blobId: await putBlob(img.blob), w: img.w, h: img.h, ann: [], taken: new Date().toISOString() }); n++;
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
   persist('report'); rerender(); toast(`${n} added`);
 }
 ['fileCamera', 'fileGallery', 'fileDrawing'].forEach(id => $('#' + id).addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; await handleFiles(files); }));
+$('#fileLines').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) importLineList(f, pending?.lineSys).catch(err => toast('⚠ ' + err.message, 5000)); });
+$('#filePids').addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; if (files.length) { await importPidFiles(files); if (location.hash.startsWith('#/pids')) renderPidLib(); else route(); } });
+document.getElementById('themeBtn').addEventListener('click', () => actions.toggleTheme());
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme());
 $('#filePack').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) importPack(f).catch(err => toast('⚠ ' + err.message, 5000)); });
 $('#fileBackup').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f).catch(err => toast('⚠ ' + err.message, 5000)); });
 window.addEventListener('hashchange', route);
@@ -1171,7 +1414,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await DB.open();
     S.settings = { ...DEFAULT_SETTINGS, ...(await DB.get('meta', 'settings') || {}) };
     S.systems = await DB.all('systems'); S.reports = await DB.all('reports');
-    await loadPack();
+    applyTheme();
+    await loadPack(); await loadPidLib();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
     route();

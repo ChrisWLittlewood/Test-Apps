@@ -14,6 +14,7 @@
 <header id="topbar">
   <button id="backBtn" class="icon-btn" aria-label="Back" hidden>&#8592;</button>
   <div id="titleWrap"><div id="title">VTE Piping Inspection</div><div id="subtitle"></div></div>
+  <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode">🌙</button>
   <span id="saveState" title="Saved on this device"></span>
 </header>
 <nav id="stepper" hidden></nav>
@@ -27,9 +28,12 @@
 <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileGallery" accept="image/*" multiple hidden>
 <input type="file" id="fileDrawing" accept="image/*,application/pdf" multiple hidden>
+<input type="file" id="fileLines" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
+<input type="file" id="filePids" accept="image/*,application/pdf" multiple hidden>
 <input type="file" id="filePack" accept="application/json,.json" hidden>
 <input type="file" id="fileBackup" accept="application/json,.json" hidden>
 <script src="vendor/docx.js"></script>
+<script src="vendor/jszip.min.js"></script>
 <script src="pipedims.js"></script>
 <script src="pipeclasses.js"></script>
 <script src="checklist.js"></script>

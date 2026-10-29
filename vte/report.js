@@ -132,14 +132,33 @@ async function buildDocx(r, sys, settings, H) {
     hd(['Size', 'Stud bolts (no. × Ø × length)', 'Stud Ø (mm)', 'Nut A/F', 'Reject stud < (mm)', 'Reject nut A/F < (mm)'], gB),
     ...bl.map(L => { const b = L.bolt; return R(sm(sizeLabel(L.dn), { bold: true }), sm(`${b.n} × ${b.dia}" ${b.thread} × ${b.len} mm`), sm(b.diaMm), sm(`${b.afIn} (${b.afMm} mm)`), sm(b.dia90), sm(b.af90)); })
   ], gB) : null;
-  const ms = allMeas(r).filter(x => x.ok);
-  const gM = [550, 1750, 1150, 1000, 1000, 1000, 1150, 1200, 1666];
-  const measTbl = ms.length ? T([
-    hd(['No.', 'Size / position', 'Reading', 'RWT (mm)', 'NWT (mm)', 'CA (mm)', 'CA remaining (mm)', 'PC005 min (mm)', 'Remaining to PC005 (mm)'], gM),
-    ...ms.map((x, i) => { const col = x.status === 'red' ? 'C00000' : x.status === 'amber' ? 'B45309' : '1A7F37';
-      return R(sm(i + 1), sm(`${sizeLabel(x.m.dn)}${x.m.where ? '\n' + x.m.where : ''}${x.m.loc === 'Bend intrados' ? '\n(bend intrados)' : ''}`), sm(x.m.type === 'pit' ? `Pit ${x.pit} mm (gauge, indicative)` : `UT${x.m.method ? ' – ' + x.m.method : ''}`),
-        sm(x.rwt, { bold: true }), sm(x.L.nwt), sm(x.L.ca), sm(x.caLeft, { color: x.caLeft < 0 ? 'B45309' : undefined }), sm(x.psMin), sm(x.margin, { bold: true, color: col })); })
+  const msAll = yes(g(r, 'c.corrosion.externalCorrosion')) ? allMeas(r) : [];
+  const gM = [800, 1700, 1500, 950, 900, 850, 1100, 1100, 1566];
+  const measTbl = msAll.length ? T([
+    hd(['Area', 'Size / location', 'Assessment', 'RWT (mm)', 'NWT (mm)', 'CA (mm)', 'CA remaining (mm)', 'PC005 min (mm)', 'Remaining to PC005 (mm)'], gM),
+    ...msAll.map(x => { const col = x.status === 'red' ? 'C00000' : x.status === 'amber' ? 'B45309' : '1A7F37';
+      const how = x.visual ? 'Visual only' : x.m.assess === 'pitut' ? `UT adjacent ${x.ut ?? '–'} mm, pit ${x.pit ?? '–'} mm (gauge)*` : 'UT wall thickness';
+      return R(sm(`Area ${x.n}`, { bold: true }), sm(`${sizeLabel(x.m.dn)}${x.m.where ? '\n' + x.m.where : ''}${x.m.loc === 'Bend intrados' ? '\n(bend intrados)' : ''}${x.m.notes ? '\n' + x.m.notes : ''}`), sm(how),
+        sm(x.ok ? x.rwt : '–', { bold: true }), sm(x.L.nwt), sm(x.L.ca), sm(x.ok ? x.caLeft : '–', { color: x.caLeft < 0 ? 'B45309' : undefined }), sm(x.ok ? x.psMin : '–'), sm(x.ok ? x.margin : '–', { bold: true, color: x.ok ? col : undefined })); })
   ], gM) : null;
+  const hasPit = msAll.some(x => x.m.assess === 'pitut');
+
+  /* ---------- flange sheets ---------- */
+  const fls = yes(g(r, 'c.corrosion.flangeCorr')) ? allFlanges(r) : [];
+  const flBlocks = [];
+  for (const fl of fls) {
+    const f = fl.f; let img = null;
+    try { img = await H.svgToPng(flangeSVG(fl), 1280); } catch (e) { console.warn(e); }
+    const gF2 = [2800, 1300, 1300, 1200, 1100, 2766];
+    flBlocks.push(Hd(`Flange ${fl.n}${fl.dn ? ' – ' + sizeLabel(fl.dn) : ''}${fl.rating ? ', Class ' + fl.rating : ''}${f.where ? ' – ' + f.where : ''}`, 2));
+    if (img) flBlocks.push(new Paragraph({ children: [new ImageRun({ type: 'png', data: img.data, transformation: { width: 600, height: 300 } })], alignment: AlignmentType.CENTER }));
+    flBlocks.push(T([
+      hd(['Dimension', 'Nominal (mm)', 'Measured (mm)', 'Loss (mm)', 'Loss (%)', 'Limit / result'], gF2),
+      ...fl.rows.map(x => R(sm(`${x.key === 'tf' ? 'A' : x.key === 'stud' ? 'B' : 'C'}  ${x.label}`, { bold: true }), sm(x.nom ?? '–'), sm(x.meas ?? '–', { bold: true }), sm(x.loss ?? '–'), sm(x.pct != null ? x.pct + '%' : '–'),
+        sm(`${x.rule}${x.loss != null ? (x.fail ? ' – FAIL' : ' – OK') : ''}`, { bold: x.fail, color: x.fail ? 'C00000' : undefined })))
+    ], gF2));
+    flBlocks.push(P([f.nAffected && `Studs/nuts affected: ${f.nAffected}`, f.missing && `Missing/loose bolting: ${f.missing}`, f.engagement && `Full nut engagement: ${f.engagement}`, f.notes].filter(Boolean).join('   ·   ') || ' ', { size: 17, before: 60 }));
+  }
 
   /* ---------- checklist ---------- */
   const g3 = [4600, 2200, W - 6800];
@@ -150,7 +169,7 @@ async function buildDocx(r, sys, settings, H) {
     clRows.push(R(C(P(`${st.no}  ${st.heading.toUpperCase()}${st.extra ? ' (additional)' : ''}`, { bold: true, color: 'FFFFFF' }), { span: 3, shade: NAVY })));
     if (!vis) { clRows.push(R(C(`Not applicable – ${st.skipText}.`, { span: 3 }))); continue; }
     for (const f of st.fields) {
-      if (f.t === 'area' || f.t === 'meas' || !fieldVisible(r, f)) continue;
+      if (f.t === 'area' || f.t === 'areas' || f.t === 'flanges' || !fieldVisible(r, f)) continue;
       const v = vals[f.k]; let shown = f.t === 'pipeclass' ? [classSummary(r), selectedSizes(r).map(sizeLabel).join(', ')].filter(Boolean).join(' – ') : optLabel(f, v); let color;
       if (f.t === 'yn' && v) color = (f.pol === 'bad' && v === 'Yes') || (f.pol === 'good' && v === 'No') ? 'C00000' : (f.pol === 'follow' && v === 'Yes') ? 'B45309' : undefined;
       if (f.t === 'acc' && v === 'Anomaly') color = 'C00000';
@@ -160,10 +179,13 @@ async function buildDocx(r, sys, settings, H) {
       clRows.push(R(C(f.label), C(P(val(shown), { bold: !!color, color })), C('')));
     }
     if (st.key === 'corrosion' && yes(vals.externalCorrosion)) {
-      allMeas(r).filter(x => x.ok).forEach((x, i) => {
+      allMeas(r).forEach(x => {
         const col = x.status === 'red' ? 'C00000' : x.status === 'amber' ? 'B45309' : '1A7F37';
-        clRows.push(R(C(`Measurement ${i + 1}: ${sizeLabel(x.m.dn)}${x.m.where ? ' – ' + x.m.where : ''}`), C(P(`RWT ${x.rwt} mm`, { bold: true, color: col })), C(x.verdict)));
+        clRows.push(R(C(`Area ${x.n}: ${sizeLabel(x.m.dn)}${x.m.where ? ' – ' + x.m.where : ''}`), C(P(x.ok ? `RWT ${x.rwt} mm` : x.visual ? 'Visual only' : 'Incomplete', { bold: x.ok, color: x.ok ? col : undefined })), C(x.ok ? x.verdict : (x.m.notes || ''))));
       });
+    }
+    if (st.key === 'corrosion' && yes(vals.flangeCorr)) {
+      allFlanges(r).forEach(fl => clRows.push(R(C(`Flange ${fl.n}: ${fl.dn ? sizeLabel(fl.dn) : ''}${fl.f.where ? ' – ' + fl.f.where : ''}`), C(P(!fl.measured ? 'Not measured' : fl.fail ? 'Exceeds limit' : 'Within limits', { bold: true, color: fl.fail ? 'C00000' : fl.measured ? '1A7F37' : undefined })), C('See flange sheet'))));
     }
     const ph = photos.filter(a => a.group === st.key).map(a => nums[a.id]);
     const comm = vals.comments ? vals.comments : '';
@@ -217,7 +239,9 @@ async function buildDocx(r, sys, settings, H) {
     Hd('1. Inspection details'), det,
     Hd('Line data & PC005 minimum wall thickness', 2), lineTbl,
     P('PC005 1.4: MRWT = (NWT − CA) × 0.67 (× 0.9 at bend intrados); DN25 & DN40 not less than 2.5 mm. NWT per ASME B36.10/B36.19 for the class schedule' + (sizes.some(L => L.nwtOverride) ? '; * NWT entered manually' : '') + '. Below MRWT, continued operation only after FFS by the Mechanical Static TA.', { size: 15, color: '555555', before: 40 }),
-    ...(measTbl ? [Hd('Corrosion assessment', 2), measTbl, P('Pit gauge readings are indicative only (IBMS). CA remaining = CA − metal loss; remaining to PC005 = RWT − PC005 minimum.', { size: 15, color: '555555', before: 40 })] : []),
+    ...(g(r, 'c.corrosion.generalCondition') ? [Hd('General condition of line', 2), P(g(r, 'c.corrosion.generalCondition'))] : []),
+    ...(measTbl ? [Hd('Corrosion assessment', 2), measTbl, P((hasPit ? '* ' + PIT_DISCLAIMER + ' Estimated RWT = UT of adjacent steel − max pit depth. ' : '') + 'CA remaining = CA − metal loss; remaining to PC005 = RWT − PC005 minimum.', { size: 15, color: hasPit ? '7A4B00' : '555555', before: 40, bold: hasPit })] : []),
+    ...(flBlocks.length ? [Hd('Flange / fastener assessment', 2), ...flBlocks, P('Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes 1.6 mm raised face; Class 400+ excludes 6.4 mm raised face). PC005 1.8: reject studs/nuts < 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).', { size: 15, color: '555555', before: 40 })] : []),
     ...(boltTbl ? [Hd('Flange bolting reference (from piping class)', 2), boltTbl, P('Nut A/F per ASME B18.2.2 heavy hex. PC005 1.8: reject studs/nuts < 90% of nominal after removal of corrosion product.', { size: 15, color: '555555', before: 40 })] : []),
     Hd('2. IMS piping system checklist', 2), checklist,
     Hd('3. Findings & remedial actions', 2), findTbl
