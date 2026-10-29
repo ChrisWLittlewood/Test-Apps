@@ -37,16 +37,23 @@ function docTreeToHtml(doc, urls) {
   };
   const para = p => {
     const sp = p.spacing || {};
-    return `<p style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)};text-align:${p.alignment || 'left'}">${(p.children || []).map(run).join('') || '&nbsp;'}</p>`;
+    const ind = p.indent ? `;padding-left:${pt(p.indent.left)};text-indent:-${pt(p.indent.hanging || 0)}` : '';
+    const tab = (p.children || []).findIndex(c => c.text === '\t');
+    if (tab > 0) return `<p class="tabrow" style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)}"><span>${p.children.slice(0, tab).map(run).join('')}</span><span>${p.children.slice(tab + 1).map(run).join('')}</span></p>`;
+    return `<p style="margin:${pt(sp.before || 0)} 0 ${pt(sp.after ?? 40)};text-align:${p.alignment || 'left'}${ind}">${(p.children || []).map(run).join('') || '&nbsp;'}</p>`;
   };
   const block = b => b instanceof HTMLDOCX.Table ? table(b) : para(b);
   const table = t => {
     const tot = (t.columnWidths || []).reduce((a, b) => a + b, 0) || W;
     const wPct = Math.min(100, ((t.width?.size || W) / W) * 100);
-    return `<table style="width:${wPct}%"><colgroup>${(t.columnWidths || []).map(w => `<col style="width:${(w / tot * 100).toFixed(2)}%">`).join('')}</colgroup>${(t.rows || []).map(r =>
-      `<tr>${(r.children || []).map(c => `<td${c.columnSpan ? ` colspan="${c.columnSpan}"` : ''}${c.shading?.fill ? ` style="background:#${c.shading.fill}"` : ''}>${(c.children || []).map(block).join('')}</td>`).join('')}</tr>`).join('')}</table>`;
+    return `<table class="${t.borders ? 'boxed' : ''}" style="width:${wPct}%"><colgroup>${(t.columnWidths || []).map(w => `<col style="width:${(w / tot * 100).toFixed(2)}%">`).join('')}</colgroup>${(t.rows || []).map(r =>
+      `<tr>${(r.children || []).map(c => `<td${c.columnSpan ? ` colspan="${c.columnSpan}"` : ''} style="${c.shading?.fill ? `background:#${c.shading.fill};` : ''}${c.verticalAlign === 'CENTER' || c.verticalAlign === 'center' ? 'vertical-align:middle;' : ''}">${(c.children || []).map(block).join('')}</td>`).join('')}</tr>`).join('')}</table>`;
   };
-  return (doc.sections || []).map((s, i) => `<section class="sheet${s.properties?.page?.size?.orientation === 'landscape' ? ' land' : ''}">${(s.children || []).map(block).join('')}</section>`).join('');
+  const s0 = (doc.sections || [])[0] || {};
+  const hdr = k => { const H = s0.headers?.[k] || s0.headers?.default; return H ? `<div class="pv-hdr">${(H.children || []).map(block).join('')}</div>` : ''; };
+  const h1 = hdr('first'), h2 = hdr('default');
+  // the header sits in a repeating table head so it prints at the top of every page
+  return (doc.sections || []).map((s, i) => `<section class="sheet${s.properties?.page?.size?.orientation === 'landscape' ? ' land' : ''}"><table class="pv-page"><thead><tr><td>${i === 0 ? h1 : h2}</td></tr></thead><tbody><tr><td>${(s.children || []).map(block).join('')}</td></tr></tbody></table></section>`).join('');
 }
 
 async function openPdfView(r, sys, settings, H, fileName) {
@@ -56,10 +63,9 @@ async function openPdfView(r, sys, settings, H, fileName) {
   const cssStr = v => '"' + String(v || '').replace(/["\\]/g, '\\$&').replace(/\n/g, ' ') + '"';
   const pv = document.createElement('div'); pv.id = 'printView';
   pv.innerHTML = `<style>
-    @page { size: A4 portrait; margin: 14mm 12.7mm 14mm;
-      @top-left { content: ${cssStr('Visual Inspection Report – Piping (VTE)' + (H.draft ? '   DRAFT – NOT ISSUED' : ''))}; font: bold 9pt Arial, sans-serif; color: ${H.draft ? '#c00000' : '#12385c'}; }
-      @top-right { content: ${cssStr(h.tagNo)}; font: 9pt Arial, sans-serif; }
-      @bottom-center { content: ${cssStr((h.site || '') + ' · Temporary report format (IMS unavailable) · Page ')} counter(page) " of " counter(pages); font: 7.5pt Arial, sans-serif; color: #666; } }
+    @page { size: A4 portrait; margin: 10mm 12.7mm 16mm;
+      @bottom-left { content: ${cssStr(PACK?.report?.formRef || '')}; font: 7.5pt Arial, sans-serif; border-top: .75pt solid #000; padding-top: 2mm; vertical-align: top; }
+      @bottom-right { content: "Page " counter(page) " of " counter(pages); font: bold 7.5pt Arial, sans-serif; border-top: .75pt solid #000; padding-top: 2mm; vertical-align: top; } }
     @page land { size: A4 landscape; }
   </style>
   <div class="pv-top"><button class="btn ghost sm" data-pv="close">✕ Close</button><span>Tap <b>Save as PDF</b>, then choose <b>Save as PDF</b> as the printer.</span><button class="btn primary sm" data-pv="print">⬇ Save as PDF</button></div>

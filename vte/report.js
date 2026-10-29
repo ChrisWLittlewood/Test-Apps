@@ -28,6 +28,13 @@ async function buildDocx(r, sys, settings, H) {
   const R = (...cells) => new TableRow({ children: cells, cantSplit: true });
   const Hd = (text, lvl = 1) => new Paragraph({ children: [new TextRun({ text, bold: true, size: lvl === 1 ? 28 : 23, color: NAVY, font: FONT })], spacing: { before: lvl === 1 ? 0 : 200, after: 100 }, keepNext: true });
   const val = v => (v == null || v === '') ? '–' : String(v);
+  // bullet text: "• item" lines and "   – sub-item" lines become indented paragraphs
+  const Bul = (text, o = {}) => String(text || '–').split('\n').map(ln => {
+    const sub = /^\s+[–-]\s/.test(ln), top = /^•\s/.test(ln);
+    return new Paragraph({ children: runs(sub ? '–  ' + ln.replace(/^\s+[–-]\s/, '') : top ? '•  ' + ln.slice(2) : ln, o),
+      indent: sub ? { left: 620, hanging: 220 } : top ? { left: 260, hanging: 220 } : undefined, spacing: { after: 30 } });
+  });
+  const svc = h.service === '__other' ? '' : h.service;
   const sectionBar = text => R(C(P(text, { bold: true, color: 'FFFFFF', size: 20 }), { span: 4, shade: NAVY }));
 
   async function imgRun(att, maxPxW, maxPxH, srcW) {
@@ -46,7 +53,7 @@ async function buildDocx(r, sys, settings, H) {
   const fnd = allFindings(r);
   const nums = H.photoNumbers(r);
   const photos = (r.att || []).filter(a => a.kind === 'photo').sort((a, b) => nums[a.id] - nums[b.id]);
-  const cair = fnd.some(f => f.cair === 'Yes');
+  const cair = !r.cairNA && fnd.length > 0;
   const sapNos = fnd.map(f => f.sapNo).filter(Boolean);
   const fitStmt = con.fit === 'notfit'
     ? 'The inspected item is NOT considered fit for continued service. Operations and the Area Inspector have been informed.'
@@ -69,28 +76,28 @@ async function buildDocx(r, sys, settings, H) {
   const front = T([
     R(L('Installation/Site:'), C(val(h.site)), L('Tag No:'), C(P(val(h.tagNo), { bold: true }))),
     R(L('Safety Critical Element:'), C(val(h.sce)), L('F/Loc:'), C(val(h.floc))),
-    R(L('Equipment Description:'), C([h.equipDesc, [h.service && 'Service: ' + h.service, h.size && 'Size: ' + h.size].filter(Boolean).join('   ')].filter(Boolean).join('\n') || '–', { span: 3 })),
+    R(L('Equipment Description:'), C([h.equipDesc, [svc && 'Service: ' + svc, h.size && 'Size: ' + h.size].filter(Boolean).join('   ')].filter(Boolean).join('\n') || '–', { span: 3 })),
     R(L('FM Area(s):'), C(P((fm.areas || []).join(', ') || '–', { bold: true }), { span: 3 })),
     R(L('Date of Construction:'), C(val(h.dateConstruction)), L('Design code:'), C(val(h.designCode))),
     R(L('Type of last inspection:'), C(val(h.lastInspType)), L('Date of Last Report:'), C(val(fmtDate(h.lastReportDate)))),
-    R(L('Unique No:'), C(val(h.uniqueNo)), L('Type of Inspection Performed:'), C(P(val(h.inspType), { bold: true }))),
+    R(L('Unique No. (EP):'), C(P(val(h.uniqueNo), { bold: true })), L('Type of Inspection Performed:'), C(P(val(h.inspType), { bold: true }))),
     R(L('IMS Schedule No. to Credit:'), C(val(h.imsSchedule)), L('Date of Examination:'), C(val(fmtDate(h.examDate)))),
     R(L('SAP Work Order No:'), C(val(h.sapWO)), L('P&ID:'), C(val(g(r, 'c.general.pidNumber')))),
     R(L('Pipe class / size(s):'), C(P([classSummary(r), selectedSizes(r).map(sizeLabel).join(', ')].filter(Boolean).join(' – ') || '–', { bold: true })), L('Performance standard:'), C(h.perfStd ?? ('Performance Standard (PC005) – Piping Systems' + (hasRV ? '; Performance Standard (PC007) – Relief Systems' : '')))),
     sectionBar('REPORT ON CONDITION'),
-    R(C([P('External Condition:', { bold: true }), P(getText(r, 'ext'))], { span: 4 })),
-    R(C([P('External Fittings: (Supports, Access Fittings, Bridles, Instrument Fittings, etc.)', { bold: true }), P(getText(r, 'fit'))], { span: 4 })),
+    R(C([P('External Condition:', { bold: true }), ...Bul(getText(r, 'ext'))], { span: 4 })),
+    R(C([P('External Fittings: (Supports, Access Fittings, Bridles, Instrument Fittings, etc.)', { bold: true }), ...Bul(getText(r, 'fit'))], { span: 4 })),
     R(C([P('Internal Condition:', { bold: true }), P(getText(r, 'int') || '–')], { span: 4 })),
     R(C([P('Internal Fittings:', { bold: true }), P(getText(r, 'intf') || '–')], { span: 4 })),
     R(C([P('Protective Device(s):', { bold: true }),
       hasRV ? Rich([['Tag: ', { bold: true }], [val(pd.rvTag) + '     '], ['Unique No: ', { bold: true }], [val(pd.rvUnique) + '     '], ['Set Pressure: ', { bold: true }], [(pd.rvSetPressure ? pd.rvSetPressure + ' barg' : '–') + '     '], ['Test Status/Next Due: ', { bold: true }], [val(pd.rvTestStatus)]])
         : P('None on this line.')], { span: 4 })),
-    R(C([P('Inspection Restrictions:', { bold: true }), P(getText(r, 'restr'))], { span: 4 })),
+    R(C([P('Inspection Restrictions:', { bold: true }), ...Bul(getText(r, 'restr'))], { span: 4 })),
     R(L('CAIR Required?:'), C(P(cair ? 'Yes' : 'No', { bold: true, color: cair ? 'B45309' : undefined })), L('SAP Notification No.'), C(sapNos.join(', ') || '–')),
-    R(C([P('Inspector Remarks:', { bold: true }), P(fitStmt, { italics: true }), ...(con.fit === 'fitActions' ? [P('Fit for continued service subject to the remedial actions listed below.', { bold: true })] : []),
+    R(C([P('Inspector Remarks:', { bold: true }), P(fitStmt, { italics: true }), ...(con.fit === 'fitActions' ? [P('Fit for continued service subject to remedial actions to be confirmed by the Area Inspector (see CAIR items, section 3).', { bold: true })] : []),
       ...(con.remarks ? [P(con.remarks)] : [])], { span: 4 })),
     R(C(P('Remedial Action Required', { bold: true, size: 18 }), { span: 3, shade: SHADE2 }), C(P('Due Date for Completion', { bold: true, size: 18 }), { shade: SHADE2 })),
-    ...(fnd.length ? fnd.map((f, i) => R(C(`${i + 1}. ${f.action || '(action not stated)'}${f.text ? '  [' + f.text + ']' : ''}`, { span: 3 }), C(val(fmtDate(f.due)))))
+    ...(cair ? [R(C([P(`To be decided by the Area Inspector after review – ${fnd.length} CAIR item(s) listed in section 3 with suggested actions.`, { italics: true, size: 17, color: '555555' }), P(' '), P(' ')], { span: 3 }), C(''))]
       : [R(C('None', { span: 3 }), C('–'))]),
     R(L('Next Inspection due on or before'), C(P(val(fmtDate(con.nextDue)), { bold: true })), L('Change of Inspection Interval?'), C(val(con.intervalChange) + (con.intervalChange === 'Yes' && con.intervalReason ? ' – ' + con.intervalReason : ''))),
     R(C(Rich([['Are any changes required to the Written Scheme of Examination? (UK Onshore Plants only):  ', { bold: true }], [val(con.wsoe) + (con.wsoe === 'Yes' && con.wsoeDetails ? ' – ' + con.wsoeDetails : '')]]), { span: 4 })),
@@ -106,7 +113,6 @@ async function buildDocx(r, sys, settings, H) {
     R(L('Reason for inspection'), C(`Periodic external visual examination (VTE) as per IMS inspection schedule ${val(h.imsSchedule)}${h.sapWO ? ', SAP WO ' + h.sapWO : ''}. Report raised in temporary format while IMS is unavailable.`)),
     R(L('Inspection carried out by'), C(val(con.inspector || p.inspector))),
     R(L('Previous history (ECH) reviewed'), C(val(p.echReviewed) + (p.history ? '\n' + p.history : ''))),
-    R(L('Permit to Work'), C(val(p.permit))),
     R(L('Method'), C(((p.method || []).join(', ') || '–') + ' – direct visual examination with the naked eye / simple aids. Measurements by pit gauge or ruler are indicative only.')),
     R(L('Access'), C((p.access || []).join(', ') || '–')),
     R(L('Inspection tools used'), C((p.tools || []).join(', ') || '–')),
@@ -114,6 +120,7 @@ async function buildDocx(r, sys, settings, H) {
     R(L('Extent inspected'), C(val(p.extent))),
     R(L('Changes to scope'), C(val(p.scopeChanges))),
     R(L('Line details'), C([`Pipe class: ${val(classSummary(r))}${(() => { const c = findClass(g(r, 'c.general.pipeClassId')); return c && !g(r, 'c.general.classManual') ? ` – ${c.m}, ASME ${c.r}#, CA ${c.ca} mm (${PIPE_SOURCES[c.s] || c.s}, rev ${c.rev || '–'})` : ''; })()}`, `P&ID: ${val(g(r, 'c.general.pidNumber'))}`, `Design code: ${val(h.designCode)}`, `Insulated: ${val(g(r, 'c.general.insulationPresent'))}   Coated: ${val(g(r, 'c.general.coatingPresent'))}   Relief device: ${val(g(r, 'c.general.reliefDevice'))}`].join('\n'))),
+    R(L('Credible damage mechanisms (API 571)'), C(damageMechanisms(r).map(d => d.name).join('; ') + (svc ? `\n(Service: ${svc}; material: ${MAT_LABEL[dmContext(r).mat]})` : ''))),
     R(L('Attention list / criteria'), C('IMS NAM Piping System Checklist; IBMS attention list for direct external visual inspection; Performance Standard (PC005) – Piping Systems' + (hasRV ? '; Performance Standard (PC007) – Relief Systems' : '') + '.'))
   ], g2);
 
@@ -187,6 +194,8 @@ async function buildDocx(r, sys, settings, H) {
     if (st.key === 'corrosion' && yes(vals.flangeCorr)) {
       allFlanges(r).forEach(fl => clRows.push(R(C(`Flange ${fl.n}: ${fl.dn ? sizeLabel(fl.dn) : ''}${fl.f.where ? ' – ' + fl.f.where : ''}`), C(P(!fl.measured ? 'Not measured' : fl.fail ? 'Exceeds limit' : 'Within limits', { bold: true, color: fl.fail ? 'C00000' : fl.measured ? '1A7F37' : undefined })), C('See flange sheet'))));
     }
+    stageObs(r, st.key).forEach(o => { const op = photos.filter(a => a.obsId === o.id).map(a => nums[a.id]);
+      clRows.push(R(C(P(obsLabel(r, o), { bold: true })), C([P(o.text || '–'), ...(op.length ? [P(`Photos: ${op.join(', ')}`, { size: 17, color: '555555' })] : [])], { span: 2 }))); });
     const ph = photos.filter(a => a.group === st.key).map(a => nums[a.id]);
     const comm = vals.comments ? vals.comments : '';
     clRows.push(R(C([P(comm ? 'Comments: ' + comm : 'Comments: –', { italics: !comm }), P(ph.length ? `Photos: ${ph.join(', ')}` : (r.noPhotos?.[st.key] ? 'Photos: not required' : 'Photos: none'), { size: 17, color: '555555' })], { span: 3, shade: 'FAFBFC' })));
@@ -194,14 +203,14 @@ async function buildDocx(r, sys, settings, H) {
   const checklist = T(clRows, g3);
 
   /* ---------- findings ---------- */
-  const gF = [500, 3300, 3000, 1500, 1166, 1000];
-  const findTbl = T([
-    R(...['No.', 'Finding / location', 'Remedial action', 'CAIR / SAP notif.', 'Due date', 'Photos'].map(t => C(P(t, { bold: true, size: 17 }), { shade: SHADE }))),
+  const gF = [500, 3800, 3500, 1400, 1266];
+  const findTbl = r.cairNA ? P('Not required – no CAIR items raised for this line.', { italics: true }) : T([
+    R(...['No.', 'CAIR item / location', 'Suggested action (for Area Inspector review)', 'SAP notif.', 'Photos'].map(t => C(P(t, { bold: true, size: 17 }), { shade: SHADE }))),
     ...(fnd.length ? fnd.map((f, i) => {
       const ph = photos.filter(a => a.group === f.stage).map(a => nums[a.id]);
       return R(C(String(i + 1)), C([P(f.text || '–'), ...(f.location ? [P('Location: ' + f.location, { size: 17, color: '555555' })] : [])]), C(val(f.action)),
-        C(`${val(f.cair)}${f.sapNo ? '\n' + f.sapNo : ''}`), C(val(fmtDate(f.due))), C(ph.join(', ') || '–'));
-    }) : [R(C('No anomalies recorded.', { span: 6 }))])
+        C(val(f.sapNo)), C(ph.join(', ') || '–'));
+    }) : [R(C('No CAIR items.', { span: 5 }))])
   ], gF);
 
   /* ---------- IMS template (FM) ---------- */
@@ -225,14 +234,43 @@ async function buildDocx(r, sys, settings, H) {
   });
 
   /* ---------- assemble ---------- */
-  const draftMark = H.draft ? [new TextRun({ text: '   DRAFT – NOT ISSUED', bold: true, color: 'C00000', size: 20, font: FONT })] : [];
-  const header = new Header({ children: [new Paragraph({ children: [new TextRun({ text: 'Visual Inspection Report – Piping (VTE)', bold: true, size: 18, color: NAVY, font: FONT }), new TextRun({ text: `\t${h.tagNo || ''}`, size: 18, font: FONT }), ...draftMark], tabStops: [{ type: D.TabStopType.RIGHT, position: W }], border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: NAVY, space: 2 } } })] });
-  const footer = new Footer({ children: [new Paragraph({ children: [new TextRun({ text: `${h.site || ''} · Temporary report format (IMS unavailable) · Page `, size: 15, color: '666666', font: FONT }), new TextRun({ children: [PageNumber.CURRENT], size: 15, color: '666666', font: FONT }), new TextRun({ text: ' of ', size: 15, color: '666666', font: FONT }), new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 15, color: '666666', font: FONT })], alignment: AlignmentType.CENTER })] });
-  const portrait = { page: { margin: { top: 720, bottom: 720, left: 720, right: 720, header: 360, footer: 360 } } };
-  const landscape = { page: { size: { orientation: PageOrientation.LANDSCAPE }, margin: { top: 720, bottom: 720, left: 720, right: 720, header: 360, footer: 360 } } };
+  const RPT = { title: 'EXAMINATION REPORT', restricted: '', formRef: '', ...(PACK?.report || {}) };
+  async function logoRun(key, box) {
+    try {
+      let blob = null;
+      if (H.settingsLogo) blob = await H.getBlob(H.settingsLogo);
+      else { const u = packImg(key); if (u) blob = await (await fetch(u)).blob(); }
+      if (!blob) return null;
+      const url = URL.createObjectURL(blob); const im = await H.loadUrlImg(url); URL.revokeObjectURL(url);
+      const sc = Math.min(box / im.naturalWidth, box / im.naturalHeight);
+      return new ImageRun({ type: blob.type.includes('png') ? 'png' : 'jpg', data: new Uint8Array(await blob.arrayBuffer()), transformation: { width: Math.round(im.naturalWidth * sc), height: Math.round(im.naturalHeight * sc) } });
+    } catch { return null; }
+  }
+  const noB = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, box = { style: BorderStyle.SINGLE, size: 8, color: '000000' };
+  const hdrTable = async key => {
+    const lg = await logoRun(key, 62);
+    return new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [2000, 5266, 3200], layout: TableLayoutType.FIXED,
+      borders: { top: box, bottom: box, left: box, right: box, insideHorizontal: noB, insideVertical: noB },
+      rows: [new TableRow({ children: [
+        new TableCell({ children: [new Paragraph({ children: lg ? [lg] : [new TextRun(' ')], alignment: AlignmentType.CENTER })], verticalAlign: VerticalAlign.CENTER, margins: { top: 40, bottom: 40, left: 90, right: 90 } }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: RPT.title, bold: true, size: 26, font: FONT })], alignment: AlignmentType.CENTER })], verticalAlign: VerticalAlign.CENTER }),
+        new TableCell({ children: [
+          new Paragraph({ children: [new TextRun({ text: 'EP' + (h.uniqueNo ? ' ' + String(h.uniqueNo).replace(/^\s*EP[\s\-:]*/i, '') : ''), bold: true, size: 22, font: FONT })], alignment: AlignmentType.CENTER }),
+          new Paragraph({ children: [new TextRun({ text: `rev. ${h.rev ?? '0'}`, bold: true, size: 22, font: FONT })], alignment: AlignmentType.CENTER }),
+          new Paragraph({ children: [new TextRun({ text: RPT.restricted, italics: true, bold: true, size: 13, font: FONT }), ...(H.draft ? [new TextRun({ text: '  DRAFT – NOT ISSUED', bold: true, color: 'C00000', size: 15, font: FONT })] : [])], alignment: AlignmentType.CENTER })
+        ], verticalAlign: VerticalAlign.CENTER })
+      ] })] });
+  };
+  const header1 = new Header({ children: [await hdrTable('ref:logo1'), new Paragraph({ children: [], spacing: { after: 60 } })] });
+  const header2 = new Header({ children: [await hdrTable('ref:logo2'), new Paragraph({ children: [], spacing: { after: 60 } })] });
+  const fr = (t, o = {}) => new TextRun({ text: t, size: 15, font: FONT, ...o });
+  const footer = new Footer({ children: [new Paragraph({ children: [fr(RPT.formRef), fr('\t'), fr('Page ', { bold: true }), new TextRun({ children: [PageNumber.CURRENT], size: 15, bold: true, font: FONT }), fr(' of ', { bold: true }), new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 15, bold: true, font: FONT })],
+    tabStops: [{ type: D.TabStopType.RIGHT, position: W }], border: { top: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 4 } } })] });
+  const portrait = { page: { margin: { top: 1900, bottom: 900, left: 720, right: 720, header: 400, footer: 400 } } };
+  const landscape = { page: { size: { orientation: PageOrientation.LANDSCAPE }, margin: { top: 1900, bottom: 900, left: 720, right: 720, header: 400, footer: 400 } } };
 
   const sections = [];
-  sections.push({ properties: portrait, headers: { default: header }, footers: { default: footer }, children: [
+  sections.push({ properties: { ...portrait, titlePage: true }, headers: { first: header1, default: header2 }, footers: { first: footer, default: footer }, children: [
     Hd('INSPECTION REPORT – PIPING SYSTEM (VTE)'), front
   ] });
   sections.push({ properties: portrait, children: [
@@ -244,7 +282,7 @@ async function buildDocx(r, sys, settings, H) {
     ...(flBlocks.length ? [Hd('Flange / fastener assessment', 2), ...flBlocks, P('Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes 1.6 mm raised face; Class 400+ excludes 6.4 mm raised face). PS 1.8: reject studs/nuts < 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).', { size: 15, color: '555555', before: 40 })] : []),
     ...(boltTbl ? [Hd('Flange bolting reference (from piping class)', 2), boltTbl, P('Nut A/F per ASME B18.2.2 heavy hex. PS 1.8: reject studs/nuts < 90% of nominal after removal of corrosion product.', { size: 15, color: '555555', before: 40 })] : []),
     Hd('2. IMS piping system checklist', 2), checklist,
-    Hd('3. Findings & remedial actions', 2), findTbl
+    Hd('3. CAIR items', 2), findTbl
   ] });
 
   // IMS template page for FM
@@ -269,7 +307,7 @@ async function buildDocx(r, sys, settings, H) {
       for (const a of pair) {
         const grp = PHOTO_GROUPS.find(gp => gp.key === a.group);
         cells.push(C([new Paragraph({ children: [await imgRun(a, 330, 300, 1400)], alignment: AlignmentType.CENTER }),
-          Rich([[`Photo ${nums[a.id]}`, { bold: true, size: 17 }], [` – ${grp ? grp.title : ''}${a.caption ? ': ' + a.caption : ''}`, { size: 17 }]], { align: AlignmentType.CENTER })], { w: half }));
+          Rich([[`Photo ${nums[a.id]}`, { bold: true, size: 17 }], [` – ${grp ? grp.title : ''}${(() => { const o = (r.obs || []).find(x => x.id === a.obsId); return o ? ' – ' + obsLabel(r, o) + (o.text ? ': ' + o.text : '') : ''; })()}${a.caption ? (a.obsId ? ' (' + a.caption + ')' : ': ' + a.caption) : ''}`, { size: 17 }]], { align: AlignmentType.CENTER })], { w: half }));
       }
       if (cells.length === 1) cells.push(C('', { w: half }));
       rows.push(R(...cells));
@@ -295,7 +333,7 @@ async function buildDocx(r, sys, settings, H) {
   }
 
   const doc = new Document({
-    creator: con.inspector || 'VTE app', title: `VTE report ${h.tagNo || ''}`, description: 'Visual external inspection report',
+    creator: con.inspector || "IMSn't", title: `VTE report ${h.tagNo || ''}`, description: 'Visual external inspection report',
     styles: { default: { document: { run: { font: FONT, size: 19 } } } },
     sections
   });

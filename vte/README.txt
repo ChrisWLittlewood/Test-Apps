@@ -1,4 +1,4 @@
-VTE PIPING INSPECTION APP – v1.5 (trial)
+IMSn't – v1.6 (trial)  ·  When IMS isn't working
 =========================================
 
 Two parts:
@@ -30,3 +30,14 @@ New in v1.5
   sketch tool now has the full markup set (arrows, lines, boxes, circles, clouds, highlighter, text) with colours.
 - Home button on every screen, plus a yellow "Back to report" bar to jump back to the line you were working on.
 - Save as PDF (Export step) – same layout as the Word report, uses the phone's "Save as PDF" print option, works offline.
+
+New in v1.6
+-----------
+- Renamed IMSn't, with an atomic-age launch screen and new icons; version and "Check for updates" on the home screen.
+- EP report number entered at Line prep; shown top right of every page in a header matching the EPE examination report form
+  (logos and form reference come from the data pack – needs data pack v1.1).
+- Service / fluid drop-down; "What to look for" page with likely damage mechanisms (API 571) and inspection tips (API 574).
+- Flange sheets show the gasket specified by the piping class and its colour code.
+- Photo observations: "+ Add photo observation" under each stage heading, each with its own photos; general photos at the bottom.
+- Findings renamed CAIR items with a suggested action for the Area Inspector; "Not required" option.
+- Report text in bullet points; permit to work removed.

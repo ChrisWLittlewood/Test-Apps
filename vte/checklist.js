@@ -238,6 +238,10 @@ function allFindings(r) {
   return [...auto, ...manual];
 }
 
+/* ---------- photo observations ---------- */
+function stageObs(r, key) { return (r.obs || []).filter(o => o.stage === key); }
+function obsLabel(r, o) { const st = STAGES.find(x => x.key === o.stage); return `Observation ${st ? st.no : ''}.${stageObs(r, o.stage).indexOf(o) + 1}`; }
+
 /* ---------- report text generation ---------- */
 function joinList(a) { a = a.filter(Boolean); if (a.length <= 1) return a[0] || ''; return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
 function lc(x) { return x ? x.charAt(0).toLowerCase() + x.slice(1) : x; }
@@ -277,7 +281,7 @@ function genText(r) {
     const b = [K.corrCategory && optLabel(fdef('corrosion', 'corrCategory'), K.corrCategory), K.corrGrade && lc(K.corrGrade), K.corrType && lc(K.corrType)].filter(Boolean);
     let t = `External corrosion observed${b.length ? ': ' + b.join(', ') : ''}${K.corrLocation ? ', at ' + K.corrLocation : ''}.`;
     const ms = allMeas(r);
-    if (ms.length) t += ' ' + ms.map(x => measText(x) + (x.status === 'red' ? ' – BELOW PS MINIMUM' : '')).join('. ') + '.' + (ms.some(x => x.m.assess === 'pitut') ? ' ' + PIT_DISCLAIMER : '');
+    if (ms.length) t += ms.map(x => '\n   – ' + measText(x) + (x.status === 'red' ? ' – BELOW PS MINIMUM' : '')).join('') + (ms.some(x => x.m.assess === 'pitut') ? '\n   – ' + PIT_DISCLAIMER : '');
     ext.push(t);
   }
   const oth = [];
@@ -317,21 +321,24 @@ function genText(r) {
     if (ko.length) fit.push(cap(joinList(ko)) + ': anomaly – see findings.');
   }
   if (A.comments) fit.push(A.comments.trim().replace(/([^.!?])$/, '$1.'));
-  if (yes(K.flangeCorr)) { const fls = allFlanges(r); fit.push(fls.length ? 'Flange / fastener corrosion: ' + fls.map(flangeText).join('. ') + '.' : 'Corrosion noted on flanges / fasteners.'); }
+  if (yes(K.flangeCorr)) { const fls = allFlanges(r); fit.push(fls.length ? 'Flange / fastener corrosion:' + fls.map(fl => '\n   – ' + flangeText(fl)).join('') : 'Corrosion noted on flanges / fasteners.'); }
+  // photo observations
+  (r.obs || []).filter(o => o.text).forEach(o => { const st = STAGES.find(x => x.key === o.stage); (['support', 'other', 'additional', 'relief'].includes(o.stage) ? fit : ext).push(`${obsLabel(r, o)}: ${o.text.trim().replace(/([^.!?])$/, '$1.')}`); });
 
   const vte = (h.inspType || 'VTE') === 'VTE';
-  const restr = [p.restrictions, p.scopeChanges && ('Scope changes: ' + p.scopeChanges)].filter(Boolean).join('\n') || 'None.';
+  const bl = a => a.filter(Boolean).map(x => '• ' + x).join('\n');
+  const restr = bl([p.restrictions, p.scopeChanges && ('Scope changes: ' + p.scopeChanges)]) || 'None.';
   const fnd = allFindings(r);
   const ech = [
     `VTE carried out ${h.examDate ? fmtDate(h.examDate) : ''} on ${tag}${h.equipDesc ? ' (' + h.equipDesc + ')' : ''} against IMS schedule ${h.imsSchedule || '[schedule]'}.`,
-    fnd.length ? `Findings: ${fnd.map((f, i) => (i + 1) + ') ' + (f.text || f.finding)).join('; ')}.` : 'No anomalies found; line meets the Performance Standard (PC005) acceptance criteria within the extent inspected.',
+    fnd.length && !r.cairNA ? `CAIR items: ${fnd.map((f, i) => (i + 1) + ') ' + (f.text || f.finding)).join('; ')}.` : 'No anomalies found; line meets the Performance Standard (PC005) acceptance criteria within the extent inspected.',
     `Conclusion: ${conclusionSentence(r)}`,
     r.con?.nextDue ? `Next inspection due on or before ${fmtDate(r.con.nextDue)}.` : ''
   ].filter(Boolean).join(' ');
 
   return {
-    ext: ext.join(' '),
-    fit: fit.join(' ') || 'No external fittings of note.',
+    ext: bl(ext),
+    fit: bl(fit) || '• No external fittings of note.',
     int: vte ? 'Not applicable – external visual examination (VTE) only.' : '',
     intf: vte ? 'Not applicable – external visual examination (VTE) only.' : '',
     restr, ech
@@ -341,7 +348,7 @@ function genText(r) {
 function conclusionSentence(r) {
   const v = r.con?.fit;
   if (v === 'fit') return 'Fit for continued service until the next inspection date.';
-  if (v === 'fitActions') return 'Fit for continued service subject to the remedial actions listed.';
+  if (v === 'fitActions') return 'Fit for continued service subject to remedial actions to be confirmed by the Area Inspector.';
   if (v === 'notfit') return 'NOT fit for continued service – Operations and Area Inspector informed.';
   return '[conclusion not yet selected]';
 }
@@ -358,7 +365,7 @@ function validate(r) {
   const h = r.h || {};
   const req = [['tagNo', 'Tag / line number'], ['site', 'Installation / site'], ['floc', 'Functional location'], ['imsSchedule', 'IMS schedule No. to credit'], ['examDate', 'Date of examination'], ['inspType', 'Type of inspection']];
   for (const [k, l] of req) if (!h[k]) E.push({ msg: `Header: ${l} missing`, step: 'header' });
-  for (const [k, l] of [['sce', 'Safety Critical Element'], ['uniqueNo', 'Unique No.'], ['sapWO', 'SAP work order'], ['designCode', 'Design code'], ['equipDesc', 'Equipment description']]) if (!h[k]) W.push({ msg: `Header: ${l} not filled`, step: 'header' });
+  for (const [k, l] of [['sce', 'Safety Critical Element'], ['uniqueNo', 'EP report number'], ['sapWO', 'SAP work order'], ['designCode', 'Design code'], ['equipDesc', 'Equipment description']]) if (!h[k]) W.push({ msg: `Header: ${l} not filled`, step: 'header' });
   const p = r.pre || {};
   if (!(p.method || []).length) W.push({ msg: 'Pre-inspection: inspection method (GVI/CVI) not recorded', step: 'pre' });
   if (!p.echReviewed) W.push({ msg: 'Pre-inspection: previous ECH history review not confirmed', step: 'pre' });
@@ -401,15 +408,13 @@ function validate(r) {
     if (!n && !r.noPhotos?.[pg.key]) W.push({ msg: `Photos – ${pg.title}: none added (tick "No photos required" if not needed)`, step: pg.stage ? 'st_' + pg.key : 'photos' });
   }
   const fnd = allFindings(r);
-  fnd.forEach((f, i) => {
-    const label = `Finding ${i + 1} (${(f.text || f.finding || '').slice(0, 40)})`;
-    if (!f.action) E.push({ msg: `${label}: remedial action not stated`, step: 'findings' });
-    if (!f.due) W.push({ msg: `${label}: due date not set`, step: 'findings' });
-    if (!f.cair) W.push({ msg: `${label}: CAIR required? not answered`, step: 'findings' });
-    if (f.cair === 'Yes' && !f.sapNo) W.push({ msg: `${label}: CAIR required but no SAP notification No.`, step: 'findings' });
+  if (!r.cairNA) fnd.forEach((f, i) => {
+    const label = `CAIR item ${i + 1} (${(f.text || f.finding || '').slice(0, 40)})`;
+    if (!f.action) W.push({ msg: `${label}: no suggested action for the Area Inspector`, step: 'findings' });
     const ph = (r.att || []).filter(a => a.kind === 'photo' && (a.group === f.stage || (f.photoIds || []).includes(a.id)));
     if (f.auto && !ph.length) W.push({ msg: `${label}: no supporting photo in that stage`, step: 'st_' + f.stage });
   });
+  (r.obs || []).forEach(o => { if (!o.text) W.push({ msg: `${obsLabel(r, o)}: no description`, step: 'st_' + o.stage }); });
   const fm = r.fm || {};
   if (!(fm.areas || []).length) W.push({ msg: 'FM area not selected (front page & IMS template)', step: 'plot' });
   if (!(r.att || []).some(a => a.kind === 'plot')) W.push({ msg: 'No plot plan location added', step: 'plot' });
@@ -424,7 +429,7 @@ function validate(r) {
   if (!(r.att || []).some(a => a.kind === 'pid')) W.push({ msg: 'No P&ID attached', step: 'prep' });
   const con = r.con || {};
   if (!con.fit) E.push({ msg: 'Conclusion: fitness for service not selected', step: 'conclusion' });
-  if (con.fit === 'fit' && fnd.length) W.push({ msg: 'Conclusion says "fit" with no remedial actions, but findings exist', step: 'conclusion' });
+  if (con.fit === 'fit' && fnd.length && !r.cairNA) W.push({ msg: 'Conclusion says "fit" with no remedial actions, but CAIR items exist', step: 'conclusion' });
   if (con.fit === 'notfit') W.push({ msg: 'Not fit for service – inform Operations, Area Inspector and Site Manager immediately (potential imminent danger)', step: 'conclusion' });
   if (!con.nextDue) E.push({ msg: 'Conclusion: next inspection due date missing', step: 'conclusion' });
   if (con.intervalChange === 'Yes' && !con.intervalReason) W.push({ msg: 'Change of interval = Yes but no justification', step: 'conclusion' });

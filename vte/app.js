@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -471,11 +471,12 @@ function prepState(r) {
   const pid = has('pid') ? 'ok' : r.noDrawing?.pid ? 'na' : '';
   const iso = has('iso') ? 'ok' : r.noDrawing?.iso ? 'na' : '';
   const ech = r.ech ? (r.ech.ai ? 'ai' : 'ok') : r.noEch ? 'na' : '';
-  return { pid, iso, ech, ready: !!(pid && iso && ech) };
+  const ep = r.h?.uniqueNo ? 'ok' : '';
+  return { pid, iso, ech, ep, ready: !!(pid && iso && ech && ep) };
 }
 function prepChips(r) {
   const p = prepState(r); const c = (v, l) => `<span class="pc ${v ? 'ok' : ''}">${v === 'na' ? '–' : v ? '✓' : '✗'} ${l}${v === 'na' ? ' n/a' : ''}${v === 'ai' ? ' +AI' : ''}</span>`;
-  return `<div class="prepchips">${c(p.pid, 'P&ID')}${c(p.iso, 'ISO')}${c(p.ech, 'ECH')}</div>`;
+  return `<div class="prepchips">${c(p.ep, 'EP no.')}${c(p.pid, 'P&ID')}${c(p.iso, 'ISO')}${c(p.ech, 'ECH')}</div>`;
 }
 function reportStatus(r) {
   if (r.issuedAt && r.updatedAt <= r.issuedAt + 2000) return ['Issued', 'ok'];
@@ -487,7 +488,7 @@ function reportStatus(r) {
 }
 function renderHome() {
   cur.system = null; cur.report = null;
-  setTop('VTE Piping Inspection', S.settings.inspectorName ? 'Inspector: ' + S.settings.inspectorName : 'Offline inspection reports');
+  setTop("IMSn't", S.settings.inspectorName ? 'Inspector: ' + S.settings.inspectorName : "When IMS isn't working");
   const sys = [...S.systems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $('#main').innerHTML = `
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Start by adding your name in <a href="#/settings">Settings</a> – it is used on every report.</div>` : ''}
@@ -509,7 +510,8 @@ function renderHome() {
       <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
     </div>
-    <p class="foot muted">All data is stored only on this device and works without signal. Back up regularly – clearing Chrome's site data deletes it.</p>`;
+    <p class="foot muted">All data is stored only on this device and works without signal. Back up regularly – clearing Chrome's site data deletes it.</p>
+    <div class="ver-row"><span>IMSn't v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
 }
 
 function renderSettings() {
@@ -536,7 +538,9 @@ function renderSettings() {
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
   <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
-  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
+  <div class="card"><h3>📷 Report logo</h3><p class="small muted">The report header uses the logo from the data pack. To use a different one, pick an image – it is stored on this phone only.</p>
+    <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
+  <div class="card"><h3>About</h3><p><b>IMSn't</b> – created by Chris Littlewood.</p><p class="muted">Temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
   return `<label class="field"><span>${esc(label)}</span><input type="${type}" data-bind="${bind}" data-path="${path}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
@@ -620,9 +624,9 @@ async function deleteReport(r) {
 /* ================= report wizard ================= */
 function stepsFor(r) {
   const st = [{ id: 'prep', label: '★ Line prep' }, { id: 'plot', label: 'Plot plan & FM' }, { id: 'header', label: 'Header' }, { id: 'pre', label: 'Pre-inspection' }, { id: 'photos', label: 'Overview photos' }];
-  STAGES.forEach(s2 => st.push({ id: 'st_' + s2.key, label: `${s2.no} ${s2.title}`, stage: s2, skipped: !stageVisible(r, s2) }));
+  STAGES.forEach(s2 => { st.push({ id: 'st_' + s2.key, label: `${s2.no} ${s2.title}`, stage: s2, skipped: !stageVisible(r, s2) }); if (s2.key === 'general') st.push({ id: 'dm', label: '🔎 What to look for' }); });
   st.push({ id: 'fmtemplate', label: 'IMS template (FM)' },
-    { id: 'findings', label: 'Findings' }, { id: 'text', label: 'Report text' }, { id: 'conclusion', label: 'Sign-off' }, { id: 'review', label: 'Check & AI' }, { id: 'export', label: 'Word / PDF' });
+    { id: 'findings', label: 'CAIR items' }, { id: 'text', label: 'Report text' }, { id: 'conclusion', label: 'Sign-off' }, { id: 'review', label: 'Check & AI' }, { id: 'export', label: 'Word / PDF' });
   return st;
 }
 function renderReport(id, step) {
@@ -826,6 +830,7 @@ function flangeSheetHTML(r, i) {
       <label class="field"><span>Rating</span><select data-path="${base}.rating" data-rerender>${[150, 300, 600, 900, 1500, 2500].map(x => `<option value="${x}" ${+fl.rating === x ? 'selected' : ''}>Class ${x}${cls?.r === x ? ' (pipe class)' : ''}</option>`).join('')}</select></label></div>
     ${!fl.bolt || f.studNom ? `<label class="field"><span>Nominal stud size <em>(inch)</em></span><select data-path="${base}.studNom" data-rerender><option value="">–</option>${STUD_SIZES.map(s2 => `<option ${f.studNom === s2 ? 'selected' : ''}>${s2}</option>`).join('')}</select><small>Taken from the piping class when available.</small></label>` : ''}
     <div class="flsvg" id="flSvg">${flangeSVG(fl)}</div>
+    ${gasketHTML(gasketFor(r, f.dn))}
     <h3>Measured (minimum, after removing loose corrosion product)</h3>
     <div class="grid3">
       <label class="field"><span>A Flange thk <em>(mm)</em></span><input type="text" inputmode="decimal" data-path="${base}.tf" data-flrow="${i}" value="${esc(f.tf)}"></label>
@@ -846,7 +851,11 @@ function updateFlange(i) {
 }
 function photoNumbers(r) {
   const order = PHOTO_GROUPS.map(gp => gp.key); const map = {}; let n = 0;
-  for (const gk of order) (r.att || []).filter(a => a.kind === 'photo' && a.group === gk).forEach(a => { map[a.id] = ++n; });
+  for (const gk of order) {
+    const ph = (r.att || []).filter(a => a.kind === 'photo' && a.group === gk);
+    stageObs(r, gk).forEach(o => ph.filter(a => a.obsId === o.id).forEach(a => { map[a.id] = ++n; }));
+    ph.filter(a => !a.obsId || !map[a.id]).forEach(a => { if (!map[a.id]) map[a.id] = ++n; });
+  }
   return map;
 }
 function thumbsHTML(r, list, opts = {}) {
@@ -858,11 +867,28 @@ function thumbsHTML(r, list, opts = {}) {
       <div class="thumb-acts">${a.isoDoc ? `<button class="btn ghost sm" data-action="isoEdit" data-id="${a.id}">✏️ Sketch</button>` : ''}<button class="btn ghost sm" data-action="annotate" data-id="${a.id}">✎ Annotate</button><button class="btn ghost sm" data-action="delAtt" data-id="${a.id}" aria-label="Delete">🗑</button></div>
     </figure>`).join('')}</div>`;
 }
+function obsBlockHTML(r, st) {
+  const list = stageObs(r, st.key);
+  return `<div class="obs-block">${list.map(o => {
+    const idx = r.obs.indexOf(o); const ph = (r.att || []).filter(a => a.kind === 'photo' && a.obsId === o.id);
+    return `<div class="obs"><div class="obs-head"><b>📷 ${esc(obsLabel(r, o))}</b><button class="btn ghost sm danger-t" data-action="delObs" data-id="${o.id}" aria-label="Delete observation">🗑</button></div>
+      <textarea rows="2" data-path="obs.${idx}.text" placeholder="What and where – e.g. coating breakdown at 2nd support from V-370, 6 o'clock">${esc(o.text)}</textarea>
+      <div class="grid2"><button class="btn primary sm" data-action="camera" data-group="${st.key}" data-obs="${o.id}">📷 Take photo</button><button class="btn ghost sm" data-action="gallery" data-group="${st.key}" data-obs="${o.id}">🖼 Gallery</button></div>
+      ${thumbsHTML(r, ph)}</div>`;
+  }).join('')}<button class="btn ghost block" data-action="addObs" data-stage="${st.key}">＋ Add photo observation</button></div>`;
+}
+function serviceHTML(r) {
+  const v = r.h?.service || ''; const known = FLUIDS.some(f => f[0] === v); const other = v === '__other' || (v && !known);
+  return `<label class="field"><span>Service / fluid</span><select data-path="h.service" data-rerender>
+      <option value="">–</option>${FLUIDS.map(([l]) => `<option ${v === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}<option value="__other" ${other ? 'selected' : ''}>Other…</option></select>
+    <small>Used with the pipe class for the "What to look for" hints.</small></label>
+    ${other ? `<label class="field"><span>Other service</span><input type="text" data-path="h.service" value="${esc(v === '__other' ? '' : v)}" placeholder="Describe the service"></label>` : ''}`;
+}
 function photoGroupHTML(r, gp) {
-  const list = (r.att || []).filter(a => a.kind === 'photo' && a.group === gp.key);
-  const none = !!r.noPhotos?.[gp.key];
+  const list = (r.att || []).filter(a => a.kind === 'photo' && a.group === gp.key && !a.obsId);
+  const none = !!r.noPhotos?.[gp.key] && !stageObs(r, gp.key).length;
   return `<section class="photos ${none ? 'none' : ''}">
-    <div class="ph-head"><h3>📷 Photos – ${esc(gp.title)}</h3>
+    <div class="ph-head"><h3>📷 ${gp.stage ? 'General photos' : 'Photos'} – ${esc(gp.title)}</h3>
       <label class="nophoto"><input type="checkbox" data-path="noPhotos.${gp.key}" data-rerender ${none ? 'checked' : ''}> No photos required</label></div>
     ${gp.hint ? `<p class="muted small">${esc(gp.hint)}</p>` : ''}
     ${none && !list.length ? '' : `<div class="grid2"><button class="btn primary" data-action="camera" data-group="${gp.key}">📷 Take photo</button><button class="btn ghost" data-action="gallery" data-group="${gp.key}">🖼 From gallery</button></div>`}
@@ -880,14 +906,15 @@ function stepHTML(r, step) {
       ${inputHTML('report', 'h.floc', h.floc, 'Functional location (F/Loc)')}
       ${pillsHTML('report', 'h.sce', h.sce, ['Yes', 'No', 'N/A'], 'Safety Critical Element')}
       ${inputHTML('report', 'h.equipDesc', h.equipDesc, 'Equipment description', 'e.g. 6" fuel gas line from AK-V-370 to AK-K-2300')}
-      <div class="grid2">${inputHTML('report', 'h.service', h.service, 'Service / fluid')}${inputHTML('report', 'h.size', h.size, 'Nominal size(s)', 'Filled from sizes ticked in stage 1')}</div>
+      ${serviceHTML(r)}
+      ${inputHTML('report', 'h.size', h.size, 'Nominal size(s)', 'Filled from sizes ticked in stage 1')}
       ${inputHTML('report', 'c.general.pidNumber', r.c?.general?.pidNumber, 'P&ID number', 'Shared with Line prep and stage 1')}
       ${inputHTML('report', 'h.perfStd', h.perfStd ?? 'Performance Standard (PC005) – Piping Systems', 'Performance standard')}
       <div class="field"><span>Pipe class</span><div>${classSummary(r) ? `<b>${esc(classSummary(r))}</b> ${selectedSizes(r).map(d => `<span class="pill-s">${sizeLabel(d)}</span>`).join(' ')}` : '<span class="muted">Not selected</span>'}</div><small>Selected in <a href="#/report/${r.id}/st_general">stage 1 General</a>.</small></div>
       ${inputHTML('report', 'h.dateConstruction', h.dateConstruction, 'Date of construction')}
       <label class="field"><span>Design code</span><select data-path="h.designCode"><option value="">–</option>${STAGES[0].fields[2].opts.map(o => `<option ${h.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
       <div class="grid2">${inputHTML('report', 'h.lastInspType', h.lastInspType, 'Type of last inspection')}${inputHTML('report', 'h.lastReportDate', h.lastReportDate, 'Date of last report', '', 'date')}</div>
-      ${inputHTML('report', 'h.uniqueNo', h.uniqueNo, 'Unique No.')}
+      <div class="grid2">${inputHTML('report', 'h.uniqueNo', h.uniqueNo, 'EP report number', 'Unique EP number issued for this report (shown top right of every page)', 'text', 'autocapitalize="characters"')}${inputHTML('report', 'h.rev', h.rev ?? '0', 'Report revision', 'rev. 0 unless re-issued', 'text', 'inputmode="numeric"')}</div>
       ${pillsHTML('report', 'h.inspType', h.inspType, ['VTE', 'VTI', 'NDT'], 'Type of inspection performed')}
       ${inputHTML('report', 'h.imsSchedule', h.imsSchedule, 'IMS schedule No. to credit')}
       <div class="grid2">${inputHTML('report', 'h.examDate', h.examDate, 'Date of examination', '', 'date')}${inputHTML('report', 'h.sapWO', h.sapWO, 'SAP work order No.', '', 'text', 'inputmode="numeric"')}</div>
@@ -901,7 +928,6 @@ function stepHTML(r, step) {
         ${inputHTML('report', 'con.inspector', r.con?.inspector, 'Inspection carried out by', 'Same name is used for the sign-off')}
         ${pillsHTML('report', 'pre.echReviewed', p.echReviewed, ['Yes', 'No'], 'Previous history (ECH) reviewed in IMS?', 'IBMS: the inspector should check the history of the equipment before inspecting', ynColor('good'))}
         <label class="field"><span>Previous findings / open CAIRs</span><textarea rows="2" data-path="pre.history">${esc(p.history)}</textarea></label>
-        ${inputHTML('report', 'pre.permit', p.permit, 'Permit to Work No.')}
         ${multi('pre.method', p.method, ['GVI (≤ 3 m)', 'CVI (≤ 60 cm)'], 'Inspection method')}
         ${multi('pre.access', p.access, ['Ground / deck level', 'Platform / walkway', 'Scaffold', 'MEWP', 'Rope access', 'Binoculars / remote'], 'Access')}
         ${multi('pre.tools', p.tools, ['Pit depth gauge', 'Ruler / tape', 'Magnifier (×4)', 'Torch', 'Mirror', 'Camera', 'Vernier / calipers', 'Vibration meter (PVM)', 'Gas detector'], 'Inspection tools used')}
@@ -932,7 +958,8 @@ function stepHTML(r, step) {
       };
       const e = r.ech;
       return `<div class="card"><h2>★ Line prep</h2><p class="muted small">Do this in the office before going out: add the P&ID (highlight the line), the isometric and the previous ECH. Drawings and the ECH summary are then one tap away during the inspection (📐 button).</p>
-          ${prepChips(r)}${ps.ready ? '<div class="calc ok">✓ Ready to inspect</div>' : ''}</div>
+          ${prepChips(r)}${ps.ready ? '<div class="calc ok">✓ Ready to inspect</div>' : ''}
+          <label class="field" style="margin-top:10px"><span>EP report number</span><input type="text" data-path="h.uniqueNo" value="${esc(h.uniqueNo)}" autocapitalize="characters" placeholder="Unique EP number issued for this report"><small>Printed top right of every report page and in the Unique No. box.</small></label></div>
         ${grp('pid', 'P&ID / PEFS', 'Highlight the line inspected – use the highlighter (▬ / 🖍).')}
         ${grp('iso', 'Isometric', 'Add the isometric, draw a sketch, or tick "No ISO available".')}
         <section class="photos ${r.noEch && !e ? 'none' : ''}"><div class="ph-head"><h3>Previous ECH</h3>
@@ -994,25 +1021,35 @@ function stepHTML(r, step) {
       </div>`;
     }
 
+    case 'dm': {
+      const c = dmContext(r); const dms = damageMechanisms(r); const tips = inspTips(r);
+      return `<div class="card"><h2>🔎 What to look for</h2>
+          <div class="chips"><span class="pill-s">${esc(MAT_LABEL[c.mat])}${c.cls ? ' – class ' + esc(c.cls.c) : ''}</span><span class="pill-s">${esc(c.svc || 'Service not set')}</span>${c.ins ? '<span class="pill-s warn">Insulated</span>' : ''}${c.sbc ? '<span class="pill-s">Small bore</span>' : ''}</div>
+          ${!c.cls || !c.svc ? `<div class="calc warn small">Set the ${!c.cls ? `pipe class (<a href="#/report/${r.id}/st_general">stage 1</a>)` : ''}${!c.cls && !c.svc ? ' and ' : ''}${!c.svc ? `service / fluid (<a href="#/report/${r.id}/header">Header</a>)` : ''} for better hints.</div>` : ''}
+          <p class="muted small">Quick hints from API RP 571 (damage mechanisms) and API RP 574 (piping inspection practice). They don't replace the site RBI / corrosion management strategy.</p></div>
+        <div class="card"><h3>Likely damage mechanisms</h3>${dms.map(d => `<div class="dm"><b>${esc(d.name)}</b> <span class="pill-s">${esc(d.ref)}</span><ul><li><b>Look for:</b> ${esc(d.look)}</li><li><b>Where:</b> ${esc(d.where)}</li></ul></div>`).join('')}</div>
+        <div class="card"><h3>Inspection best practice (API 574)</h3><ul class="tips">${tips.map(t => `<li><b>${esc(t.t)}</b> – ${esc(t.d)}</li>`).join('')}</ul></div>`;
+    }
     case 'findings': {
-      const fnd = allFindings(r); const nums = photoNumbers(r);
-      return `<div class="card"><h2>Findings & remedial actions</h2><p class="muted small">Anomalies are pulled in automatically from the checklist. Add a remedial action, CAIR decision and due date for each. If there is potential for imminent danger, inform the Site Manager and Inspection TL immediately.</p></div>
+      const fnd = allFindings(r); const nums = photoNumbers(r); const na = !!r.cairNA;
+      return `<div class="card"><h2>CAIR items</h2><p class="muted small">Items that fail the Performance Standard or need follow-up are pulled in from the checklist. Add a <b>suggested action</b> – remedial actions are decided by the Area Inspector after review. If there is potential for imminent danger, inform the Site Manager and Inspection TL immediately.</p>
+          <label class="na-toggle"><input type="checkbox" data-action="cairNA" ${na ? 'checked' : ''}> <b>Not required</b> – no CAIR items for this line</label></div>
+        <div class="${na ? 'greyed' : ''}">
         ${fnd.length ? fnd.map((f, i) => {
           const base = f.auto ? `fd.${fkey(f.src)}` : `mf.${r.mf.findIndex(m => 'm.' + m.id === f.src)}`;
           const st = STAGES.find(x => x.key === f.stage);
           const ph = (r.att || []).filter(a => a.kind === 'photo' && a.group === f.stage).map(a => nums[a.id]);
-          return `<div class="card finding"><div class="f-head"><b>Finding ${i + 1}</b><span class="pill-s ${f.auto ? '' : 'warn'}">${f.auto ? 'from checklist' : 'added manually'}</span>${st ? `<span class="pill-s">${st.no} ${esc(st.title)}</span>` : ''}</div>
-            <label class="field"><span>Finding</span><textarea rows="2" data-path="${base}.text">${esc(f.text)}</textarea>${f.auto && f.text !== f.autoText ? `<small>Edited – checklist text: “${esc(f.autoText)}”</small>` : ''}</label>
+          return `<div class="card finding"><div class="f-head"><b>CAIR item ${i + 1}</b><span class="pill-s ${f.auto ? '' : 'warn'}">${f.auto ? 'from checklist' : 'added manually'}</span>${st ? `<span class="pill-s">${st.no} ${esc(st.title)}</span>` : ''}</div>
+            <label class="field"><span>Item</span><textarea rows="2" data-path="${base}.text">${esc(f.text)}</textarea>${f.auto && f.text !== f.autoText ? `<small>Edited – checklist text: “${esc(f.autoText)}”</small>` : ''}</label>
             ${!f.auto ? `<label class="field"><span>Checklist stage (links photos)</span><select data-path="${base}.stage" data-rerender>${STAGES.map(x => `<option value="${x.key}" ${f.stage === x.key ? 'selected' : ''}>${x.no} ${x.title}</option>`).join('')}</select></label>` : ''}
             <label class="field"><span>Location</span><input type="text" data-path="${base}.location" value="${esc(f.location)}" placeholder="e.g. 2nd support from AK-V-370, 6 o'clock"></label>
-            <label class="field"><span>Remedial action required</span><textarea rows="2" data-path="${base}.action" placeholder="e.g. UT wall thickness survey; coating repair; replace studs">${esc(f.action)}</textarea></label>
-            ${pillsHTML('report', base + '.cair', f.cair, ['Yes', 'No'], 'CAIR required?', '', v => v === 'Yes' ? 'amber' : 'green')}
-            <div class="grid2">${inputHTML('report', base + '.sapNo', f.sapNo, 'SAP notification No.', '', 'text', 'inputmode="numeric"')}${inputHTML('report', base + '.due', f.due, 'Due date for completion', '', 'date')}</div>
+            <label class="field"><span>Suggested action <em>(for Area Inspector review)</em></span><textarea rows="2" data-path="${base}.action" placeholder="e.g. UT wall thickness survey; coating repair; replace studs">${esc(f.action)}</textarea></label>
+            ${inputHTML('report', base + '.sapNo', f.sapNo, 'SAP notification No. (if raised)', '', 'text', 'inputmode="numeric"')}
             <p class="small muted">Photos: ${ph.length ? ph.map(n => 'Photo ' + n).join(', ') : 'none in this stage'}</p>
-            ${!f.auto ? `<button class="btn ghost sm danger-t" data-action="delFinding" data-id="${f.src.slice(2)}">🗑 Remove finding</button>` : ''}
+            ${!f.auto ? `<button class="btn ghost sm danger-t" data-action="delFinding" data-id="${f.src.slice(2)}">🗑 Remove item</button>` : ''}
           </div>`;
-        }).join('') : '<div class="empty">✓ No anomalies recorded in the checklist.</div>'}
-        <button class="btn ghost block" data-action="addFinding">+ Add finding manually</button>`;
+        }).join('') : '<div class="empty">✓ Nothing from the checklist needs a CAIR.</div>'}
+        <button class="btn ghost block" data-action="addFinding">+ Add CAIR item manually</button></div>`;
     }
 
     case 'text': {
@@ -1101,6 +1138,7 @@ function stageHTML(r, st) {
       <button class="btn green sm" data-action="allAcc" data-stage="${st.key}">✓ All acceptable</button></div>
     ${st.draft ? '<div class="calc warn small">Draft stage – wording to be confirmed against IMS.</div>' : ''}
     ${st.hint ? `<p class="hint">${esc(st.hint)}</p>` : ''}
+    ${obsBlockHTML(r, st)}
     ${st.refImg ? refImgHTML(st.refImg) : ''}
     ${st.fields.filter(f => fieldVisible(r, f)).map(f => fieldHTML(f, 'c.' + st.key, vals)).join('')}
   </div>`;
@@ -1458,8 +1496,16 @@ const actions = {
     }
     persist('report'); rerender(); toast(`${n} item(s) set acceptable${skipped ? ` – ${skipped} still need an answer` : ''}`);
   },
-  camera: el => { pending = { group: el.dataset.group, kind: el.dataset.kind || 'photo', cap: el.dataset.cap || '' }; $('#fileCamera').click(); },
-  gallery: el => { pending = { group: el.dataset.group, kind: 'photo' }; $('#fileGallery').click(); },
+  camera: el => { pending = { group: el.dataset.group, kind: el.dataset.kind || 'photo', cap: el.dataset.cap || '', obsId: el.dataset.obs || '' }; $('#fileCamera').click(); },
+  gallery: el => { pending = { group: el.dataset.group, kind: 'photo', obsId: el.dataset.obs || '' }; $('#fileGallery').click(); },
+  addObs: el => { const r = cur.report; r.obs = r.obs || []; r.obs.push({ id: uid(), stage: el.dataset.stage, text: '' }); persist('report'); rerender(); setTimeout(() => { const t = $$('.obs textarea'); t[t.length - 1]?.focus(); }, 60); },
+  delObs: async el => { const r = cur.report; const o = (r.obs || []).find(x => x.id === el.dataset.id); if (!o) return; const ph = r.att.filter(a => a.obsId === o.id);
+    if (!await confirmBox('Delete observation', ph.length ? `Delete this observation? Its ${ph.length} photo(s) will move to the general photos for this stage.` : 'Delete this observation?', 'Delete')) return;
+    ph.forEach(a => { delete a.obsId; }); r.obs = r.obs.filter(x => x !== o); persist('report'); rerender(); },
+  pickLogo: () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*';
+    i.onchange = async () => { const f = i.files[0]; if (!f) return; const img = await importImage(f, 600); if (S.settings.logoId) await DB.del('blobs', S.settings.logoId); S.settings.logoId = await putBlob(img.blob); persist('settings'); toast('Logo saved'); renderSettings(); }; i.click(); },
+  clearLogo: async () => { if (S.settings.logoId) await DB.del('blobs', S.settings.logoId); delete S.settings.logoId; persist('settings'); renderSettings(); },
+  cairNA: () => { const r = cur.report; r.cairNA = !r.cairNA; persist('report'); rerender(); },
   addDrawing: el => { pending = { group: el.dataset.kind, kind: el.dataset.kind }; $('#fileDrawing').click(); },
   annotate: async el => { const a = cur.report.att.find(x => x.id === el.dataset.id); if (a && await openAnnotator(a)) rerender(); },
   delAtt: async el => {
@@ -1529,7 +1575,7 @@ const actions = {
     try {
       await flushSaves();
       const r = cur.report; const draft = el.dataset.draft === '1';
-      const blob = await buildDocx(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng });
+      const blob = await buildDocx(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng, settingsLogo: S.settings.logoId });
       const name = `VTE_${safeName(r.h?.tagNo)}_${(r.h?.examDate || todayISO()).replace(/-/g, '')}${draft ? '_DRAFT' : ''}.docx`;
       cur.docx = { blob, name };
       if (!draft) { r.issuedAt = Date.now(); r.updatedAt = r.issuedAt; await DB.put('reports', r); }
@@ -1543,7 +1589,7 @@ const actions = {
       await flushSaves();
       const r = cur.report; const draft = el.dataset.draft === '1';
       const name = `VTE_${safeName(r.h?.tagNo)}_${(r.h?.examDate || todayISO()).replace(/-/g, '')}${draft ? '_DRAFT' : ''}.pdf`;
-      const pv = await openPdfView(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng }, name);
+      const pv = await openPdfView(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng, settingsLogo: S.settings.logoId }, name);
       if (!draft) { r.issuedAt = Date.now(); r.updatedAt = r.issuedAt; await DB.put('reports', r); }
       setTimeout(pv.print, 300);
     } catch (e) { console.error(e); toast('PDF failed: ' + e.message, 4000); }
@@ -1554,6 +1600,18 @@ const actions = {
   exportReport: async () => { const r = cur.report; toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   forceUpdate: () => forceUpdate(),
+  checkUpdate: async el => {
+    if (!navigator.onLine) return toast('No signal – try again when online');
+    el.disabled = true; el.textContent = '⟳ Checking…';
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      if (!reg) { toast('Updates not available in this browser'); return; }
+      await reg.update();
+      const nw = reg.installing || reg.waiting;
+      if (nw) toast('Update found – installing…', 4000); else toast(`You're up to date (v${APP_VERSION})`);
+    } catch { toast('Could not check – try again later'); }
+    finally { el.disabled = false; el.textContent = '⟳ Check for updates'; }
+  },
   exportAll: async () => { if (!S.systems.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); shareBlob(await makeBackup(S.systems, S.reports), `VTE_backup_all_${todayISO()}.json`, 'VTE backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
@@ -1616,7 +1674,7 @@ document.addEventListener('click', e => {
 
 async function handleFiles(files) {
   if (!files.length || !pending || !cur.report) return;
-  const r = cur.report; const { group, kind, cap } = pending; let n = 0;
+  const r = cur.report; const { group, kind, cap, obsId } = pending; let n = 0;
   toast(`Processing ${files.length} file(s)…`, 10000);
   for (const f of files) {
     try {
@@ -1626,7 +1684,7 @@ async function handleFiles(files) {
         });
       } else {
         const img = await importImage(f, kind === 'photo' ? undefined : 2600);
-        r.att.push({ id: 'a_' + uid(), kind, group, caption: kind === 'photo' ? (cap || '') : f.name.replace(/\.[^.]+$/, ''), blobId: await putBlob(img.blob), w: img.w, h: img.h, ann: [], taken: new Date().toISOString() }); n++;
+        r.att.push({ id: 'a_' + uid(), kind, group, ...(obsId ? { obsId } : {}), caption: kind === 'photo' ? (cap || '') : f.name.replace(/\.[^.]+$/, ''), blobId: await putBlob(img.blob), w: img.w, h: img.h, ann: [], taken: new Date().toISOString() }); n++;
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
@@ -1659,5 +1717,6 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
     route();
+    try { showLaunch(APP_VERSION); } catch { }
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();
