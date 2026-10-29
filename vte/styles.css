@@ -357,3 +357,44 @@ canvas.pz{position:absolute;left:0;top:0;transform-origin:0 0;background:#fff}
 :root:not([data-theme="light"]) .chip2{background:#1d2935;color:var(--ink);border-color:#3a4b5d}
 :root:not([data-theme="light"]) .ech-ai{background:#16273a;border-color:#2c4a6b}
 }
+
+/* home + return-to-report */
+#resumeBar{position:sticky;top:56px;z-index:19;display:flex;align-items:center;gap:8px;width:100%;border:0;background:var(--yellow);color:#111;font:inherit;font-size:.88rem;padding:8px 12px;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+#resumeBar b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#resumeBar small{opacity:.7;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#resumeBar .rb-x{padding:2px 8px;font-size:1rem;opacity:.7}
+#homeBtn{font-size:1.6rem}
+.annot .tools{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;scrollbar-width:thin}
+.annot .tools .tbtn{flex:none}
+.annot-hint{color:#bbb;text-align:center;padding:2px 8px;min-height:1.2em}
+.annot.iso .row.colors .cbtn{width:30px;height:30px}
+/* print / PDF view */
+#printView{position:fixed;inset:0;z-index:95;background:#525659;display:flex;flex-direction:column}
+#printView .pv-top{display:flex;gap:8px;align-items:center;padding:8px;padding-top:max(8px,env(safe-area-inset-top));background:#000;color:#fff}
+#printView .pv-top span{flex:1;font-size:.82rem;opacity:.85}
+#printView .pv-scroll{flex:1;overflow:auto;padding:12px 0}
+.tsep{flex:none;align-self:center;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:#ffd400;padding:0 4px 0 10px;border-left:1px solid #444;margin-left:4px;writing-mode:vertical-rl;transform:rotate(180deg)}
+#printView .pv-pages{zoom:var(--pvz,1)}
+#printView .sheet{background:#fff;color:#000;width:210mm;min-height:297mm;box-sizing:border-box;padding:14mm 12.7mm;margin:0 auto 14px;box-shadow:0 2px 10px rgba(0,0,0,.4);font:9.5pt Arial,Helvetica,sans-serif;line-height:1.25}
+#printView .sheet.land{width:297mm;min-height:210mm}
+#printView .sheet table{border-collapse:collapse;table-layout:fixed;margin:0 0 4pt}
+#printView .sheet td{border:.75pt solid #000;padding:3pt 4.5pt;vertical-align:top;overflow-wrap:anywhere}
+#printView .sheet tr{break-inside:avoid}
+#printView .sheet p{orphans:2;widows:2}
+@media print{
+  body.pdfmode>*:not(#printView){display:none!important}
+  body.pdfmode{background:#fff!important}
+  #printView{position:static;display:block;background:#fff}
+  #printView .pv-top{display:none}
+  #printView .pv-scroll{overflow:visible;padding:0}
+  #printView .pv-pages{zoom:1!important}
+  #printView .sheet,#printView .sheet.land{width:auto;min-height:0;padding:0;margin:0;box-shadow:none;break-after:page}
+  #printView .sheet:last-child{break-after:auto}
+  #printView .sheet.land{page:land}
+}
+#printView .sheet.land img{max-height:140mm;object-fit:contain}
+#printView .sheet img{max-height:225mm;object-fit:contain}
+.annot .row.colors{flex-wrap:nowrap;gap:4px}
+.annot .row.colors .cbtn{width:31px;height:31px;flex:none;border-width:2px}
+.annot .row.colors .tbtn.sm{min-width:37px;padding:2px 3px;flex:none}
+.annot .row.colors .sep{width:4px;flex:none}

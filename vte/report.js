@@ -1,6 +1,6 @@
 /* Word (.docx) report builder – uses the bundled docx library (global `docx`). */
 async function buildDocx(r, sys, settings, H) {
-  const D = docx;
+  const D = H.D || docx;   // H.D = HTML stand-in (pdfview.js) when building the PDF version
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, AlignmentType, ImageRun,
     Header, Footer, PageNumber, PageOrientation, VerticalAlign, BorderStyle, HeadingLevel, TableLayoutType } = D;
 

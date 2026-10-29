@@ -107,7 +107,49 @@ const WIDTHS = [0.004, 0.008, 0.014];
 const TSIZES = [0.03, 0.045, 0.065];
 const HL_WIDTHS = [0.012, 0.022, 0.036];
 const isHl = t => t === 'hl' || t === 'hlpen';
+const isPts = t => t === 'pen' || t === 'hlpen' || t === 'cloudpen';
+// standard markup tools shared by every drawing tool (photo/drawing annotator + isometric sketch)
+const DRAW_TOOLS = [['arrow', '➚', 'Arrow'], ['darrow', '⟷', 'Double arrow'], ['line', '╱', 'Line'], ['box', '▭', 'Box'], ['circle', '◯', 'Circle'],
+  ['cloud', '☁', 'Cloud'], ['cloudpen', '☁✎', 'Cloud freehand'], ['pen', '✎', 'Freehand'], ['hl', '▬', 'Highlight line'], ['hlpen', '🖍', 'Highlight freehand'],
+  ['callout', '💬', 'Callout'], ['text', 'T', 'Text']];
 function haloFor(c) { return (c === '#ffffff' || c === '#ffd400') ? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)'; }
+function arrowHead(ctx, xf, yf, xt, yt, lw, W) {
+  const a = Math.atan2(yt - yf, xt - xf), L = Math.max(lw * 4, W * 0.025);
+  ctx.beginPath(); ctx.moveTo(xt, yt);
+  ctx.lineTo(xt - L * Math.cos(a - 0.45), yt - L * Math.sin(a - 0.45));
+  ctx.lineTo(xt - L * Math.cos(a + 0.45), yt - L * Math.sin(a + 0.45)); ctx.closePath(); ctx.fill();
+}
+// revision cloud: resample a closed outline at an even spacing, then join the points with outward-bulging arcs (Adobe-style)
+function cloudPath(ctx, poly, bump) {
+  if (poly.length < 3) return;
+  const segs = []; let per = 0;
+  for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]); segs.push([p, q, l]); per += l; }
+  if (per < bump * 2) return;
+  const n = Math.max(6, Math.round(per / bump)), step = per / n, pts = [];
+  let si = 0, acc = 0;
+  for (let k = 0; k < n; k++) {
+    const d = k * step; while (si < segs.length - 1 && acc + segs[si][2] < d) { acc += segs[si][2]; si++; }
+    const [p, q, l] = segs[si], t = l ? (d - acc) / l : 0; pts.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+  }
+  let area = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; area += p[0] * q[1] - q[0] * p[1]; }
+  const ccw = area < 0;
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, r = Math.hypot(q[0] - p[0], q[1] - p[1]) / 2;
+    if (r < 0.5) continue;
+    const a1 = Math.atan2(p[1] - my, p[0] - mx); ctx.arc(mx, my, r, a1, a1 + (ccw ? -Math.PI : Math.PI), ccw);
+  }
+  ctx.stroke();
+}
+function cloudBump(lw, W) { return Math.max(lw * 5, W * 0.03); }
+function calloutBox(ctx, sh, W, H) {
+  const fs = Math.max(10, (sh.s || TSIZES[0]) * W), pad = fs * 0.35;
+  ctx.save(); ctx.font = `bold ${fs}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+  const lines = String(sh.text || '').split('\n'); const tw = Math.max(fs, ...lines.map(l => ctx.measureText(l).width)); ctx.restore();
+  const bw = tw + pad * 2, bh = lines.length * fs * 1.15 + pad * 2;
+  const x2 = sh.x2 * W, y2 = sh.y2 * H, left = sh.x2 < sh.x1;
+  return { x: left ? x2 - bw : x2, y: y2 - bh / 2, w: bw, h: bh, fs, pad, lines };
+}
 function drawShape(ctx, sh, W, H) {
   ctx.save(); ctx.strokeStyle = sh.c; ctx.fillStyle = sh.c; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const lw = Math.max(1.5, (sh.w || WIDTHS[1]) * W); ctx.lineWidth = lw;
@@ -118,23 +160,33 @@ function drawShape(ctx, sh, W, H) {
     ctx.beginPath(); pts.forEach(([x, y], i) => { const [px, py] = P(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke();
     ctx.restore(); return;
   }
-  if (sh.t === 'line' || sh.t === 'arrow') {
+  if (sh.t === 'line' || sh.t === 'arrow' || sh.t === 'darrow') {
     const [x1, y1] = P(sh.x1, sh.y1), [x2, y2] = P(sh.x2, sh.y2);
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    if (sh.t === 'arrow') {
-      const a = Math.atan2(y2 - y1, x2 - x1), L = Math.max(lw * 4, W * 0.025);
-      ctx.beginPath(); ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45));
-      ctx.lineTo(x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45)); ctx.closePath(); ctx.fill();
-    }
+    if (sh.t !== 'line') arrowHead(ctx, x1, y1, x2, y2, lw, W);
+    if (sh.t === 'darrow') arrowHead(ctx, x2, y2, x1, y1, lw, W);
   } else if (sh.t === 'box') {
     const [x1, y1] = P(sh.x1, sh.y1), [x2, y2] = P(sh.x2, sh.y2);
     ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
   } else if (sh.t === 'circle') {
     const [x1, y1] = P(sh.x1, sh.y1), [x2, y2] = P(sh.x2, sh.y2);
     ctx.beginPath(); ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1) / 2 || 1, Math.abs(y2 - y1) / 2 || 1, 0, 0, Math.PI * 2); ctx.stroke();
+  } else if (sh.t === 'cloud') {
+    const [x1, y1] = P(sh.x1, sh.y1), [x2, y2] = P(sh.x2, sh.y2);
+    cloudPath(ctx, [[x1, y1], [x2, y1], [x2, y2], [x1, y2]], cloudBump(lw, W));
+  } else if (sh.t === 'cloudpen') {
+    if (sh.done) cloudPath(ctx, sh.pts.map(([x, y]) => P(x, y)), cloudBump(lw, W));
+    else { ctx.setLineDash([lw * 2, lw * 2]); ctx.beginPath(); sh.pts.forEach(([x, y], i) => { const [px, py] = P(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke(); }
   } else if (sh.t === 'pen') {
     ctx.beginPath(); sh.pts.forEach(([x, y], i) => { const [px, py] = P(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke();
+  } else if (sh.t === 'callout') {
+    const b = calloutBox(ctx, sh, W, H), [x1, y1] = P(sh.x1, sh.y1), ex = sh.x2 < sh.x1 ? b.x + b.w : b.x, ey = b.y + b.h / 2;
+    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(x1, y1); ctx.stroke(); arrowHead(ctx, ex, ey, x1, y1, lw, W);
+    if (sh.text) {
+      ctx.fillStyle = 'rgba(255,255,255,.93)'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = sh.c === '#ffffff' || sh.c === '#ffd400' ? '#000' : sh.c; ctx.font = `bold ${b.fs}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`; ctx.textBaseline = 'top';
+      b.lines.forEach((ln, i) => ctx.fillText(ln, b.x + b.pad, b.y + b.pad + i * b.fs * 1.15));
+    }
   } else if (sh.t === 'text') {
     const fs = Math.max(10, (sh.s || TSIZES[1]) * W);
     ctx.font = `bold ${fs}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`; ctx.textBaseline = 'top';
@@ -144,12 +196,13 @@ function drawShape(ctx, sh, W, H) {
   ctx.restore();
 }
 function shapeBBox(ctx, sh, W, H) {
-  if (sh.t === 'pen' || sh.t === 'hlpen') { const xs = sh.pts.map(p => p[0] * W), ys = sh.pts.map(p => p[1] * H); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
+  if (isPts(sh.t)) { const xs = sh.pts.map(p => p[0] * W), ys = sh.pts.map(p => p[1] * H); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
   if (sh.t === 'text') {
     const fs = Math.max(10, (sh.s || TSIZES[1]) * W); ctx.save(); ctx.font = `bold ${fs}px system-ui, sans-serif`;
     const lines = String(sh.text).split('\n'); const w = Math.max(...lines.map(l => ctx.measureText(l).width)); ctx.restore();
     return [sh.x * W, sh.y * H, sh.x * W + w, sh.y * H + lines.length * fs * 1.15];
   }
+  if (sh.t === 'callout') { const b = calloutBox(ctx, sh, W, H); return [Math.min(b.x, sh.x1 * W), Math.min(b.y, sh.y1 * H), Math.max(b.x + b.w, sh.x1 * W), Math.max(b.y + b.h, sh.y1 * H)]; }
   return [Math.min(sh.x1, sh.x2) * W, Math.min(sh.y1, sh.y2) * H, Math.max(sh.x1, sh.x2) * W, Math.max(sh.y1, sh.y2) * H];
 }
 function distSeg(px, py, x1, y1, x2, y2) {
@@ -157,19 +210,66 @@ function distSeg(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 function hitShape(ctx, sh, px, py, W, H, tol) {
-  if (sh.t === 'line' || sh.t === 'arrow' || sh.t === 'hl') return distSeg(px, py, sh.x1 * W, sh.y1 * H, sh.x2 * W, sh.y2 * H) < tol;
-  if (sh.t === 'pen' || sh.t === 'hlpen') { for (let i = 1; i < sh.pts.length; i++) if (distSeg(px, py, sh.pts[i - 1][0] * W, sh.pts[i - 1][1] * H, sh.pts[i][0] * W, sh.pts[i][1] * H) < tol) return true; return false; }
+  if (sh.t === 'line' || sh.t === 'arrow' || sh.t === 'darrow' || sh.t === 'hl') return distSeg(px, py, sh.x1 * W, sh.y1 * H, sh.x2 * W, sh.y2 * H) < tol;
+  if (isPts(sh.t)) {
+    const n = sh.pts.length, closed = sh.t === 'cloudpen', t2 = closed ? tol * 2 : tol;
+    for (let i = 1; i < n + (closed ? 1 : 0); i++) { const p = sh.pts[i - 1], q = sh.pts[i % n]; if (distSeg(px, py, p[0] * W, p[1] * H, q[0] * W, q[1] * H) < t2) return true; }
+    return false;
+  }
   const [a, b, c, d] = shapeBBox(ctx, sh, W, H);
   if (sh.t === 'text') return px > a - tol && px < c + tol && py > b - tol && py < d + tol;
+  if (sh.t === 'callout') { const bx = calloutBox(ctx, sh, W, H); return (px > bx.x - tol && px < bx.x + bx.w + tol && py > bx.y - tol && py < bx.y + bx.h + tol) || distSeg(px, py, sh.x1 * W, sh.y1 * H, sh.x2 * W, sh.y2 * H) < tol; }
   const inside = px > a - tol && px < c + tol && py > b - tol && py < d + tol;
-  const nearEdge = Math.min(Math.abs(px - a), Math.abs(px - c), Math.abs(py - b), Math.abs(py - d)) < tol * 1.5;
+  const nearEdge = Math.min(Math.abs(px - a), Math.abs(px - c), Math.abs(py - b), Math.abs(py - d)) < tol * (sh.t === 'cloud' ? 2.5 : 1.5);
   return inside && (nearEdge || (c - a) < tol * 4 || (d - b) < tol * 4 || sh.t === 'circle');
 }
 function moveShape(sh, dx, dy) {
-  if (sh.t === 'pen' || sh.t === 'hlpen') sh.pts = sh.pts.map(([x, y]) => [x + dx, y + dy]);
+  if (isPts(sh.t)) sh.pts = sh.pts.map(([x, y]) => [x + dx, y + dy]);
   else if (sh.t === 'text') { sh.x += dx; sh.y += dy; }
   else { sh.x1 += dx; sh.x2 += dx; sh.y1 += dy; sh.y2 += dy; }
 }
+// shared pointer helpers for the drawing tools
+function newShape(tool, x, y, color, wIdx) {
+  const wv = isHl(tool) ? HL_WIDTHS[wIdx] : WIDTHS[wIdx];
+  return isPts(tool) ? { t: tool, pts: [[x, y]], c: color, w: wv } : { t: tool, x1: x, y1: y, x2: x, y2: y, c: color, w: wv };
+}
+function extendShape(sh, x, y) { if (isPts(sh.t)) sh.pts.push([x, y]); else { sh.x2 = x; sh.y2 = y; } }
+function shapeTooSmall(sh, W, H, px) {
+  if (isPts(sh.t)) { if (sh.pts.length < 3) return true; const b = shapeBBox(null, sh, W, H); return sh.t === 'cloudpen' && Math.max(b[2] - b[0], b[3] - b[1]) < px * 3; }
+  return Math.hypot((sh.x2 - sh.x1) * W, (sh.y2 - sh.y1) * H) < px;
+}
+function finishShape(sh) {
+  if (sh.t !== 'cloudpen') return;
+  // thin the freehand loop a little and mark it closed so it renders as a cloud
+  const out = [sh.pts[0]]; for (const p of sh.pts) { const q = out[out.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.004) out.push(p); }
+  sh.pts = out.length >= 3 ? out : sh.pts; sh.done = true;
+}
+function drawToolBtns(prefix) {
+  return DRAW_TOOLS.map(([k, i, l]) => `<button class="tbtn" data-tool="${prefix}${k}" title="${l}" aria-label="${l}">${i}<small>${l.split(' ')[0] === 'Highlight' ? (k === 'hl' ? 'HL line' : 'HL free') : l.split(' ')[0] === 'Cloud' && k === 'cloudpen' ? 'Cloud ✎' : l.split(' ')[0] === 'Double' ? 'Dbl arrow' : l.split(' ')[0]}</small></button>`).join('');
+}
+function colorWidthRow() {
+  return `${COLORS.map(([c, n]) => `<button class="cbtn" data-color="${c}" title="${n}" aria-label="${n}" style="background:${c}"></button>`).join('')}
+    <span class="sep"></span>
+    <button class="tbtn sm" data-w="0" title="Thin">━<small>Thin</small></button><button class="tbtn sm" data-w="1" title="Medium"><b>━</b><small>Med</small></button><button class="tbtn sm" data-w="2" title="Thick"><b style="font-size:1.4em">━</b><small>Thick</small></button>`;
+}
+function askAnnText(host, initial, tIdx, title) {
+  return new Promise(res => {
+    const m = document.createElement('div'); m.className = 'modal-back';
+    m.innerHTML = `<div class="modal"><h3>${esc(title || 'Annotation text')}</h3><textarea rows="3" class="inp">${esc(initial || '')}</textarea>
+      <div class="row"><span>Size</span>${TSIZES.map((_, i) => `<button class="tbtn sm ${i === tIdx ? 'on' : ''}" data-ts="${i}">${['S', 'M', 'L'][i]}</button>`).join('')}</div>
+      <div class="modal-btns"><button class="btn ghost" data-v="0">Cancel</button><button class="btn primary" data-v="1">OK</button></div></div>`;
+    host.append(m); const ta = $('textarea', m); setTimeout(() => ta.focus(), 50); let ti = tIdx;
+    m.addEventListener('click', e => {
+      const ts = e.target.closest('[data-ts]'); if (ts) { ti = +ts.dataset.ts; $$('[data-ts]', m).forEach(b => b.classList.toggle('on', b === ts)); return; }
+      const b = e.target.closest('[data-v]'); if (!b) return; m.remove(); res(b.dataset.v === '1' ? { text: ta.value.trim(), tIdx: ti } : null);
+    });
+  });
+}
+const TOOL_HINTS = {
+  cloud: 'Drag a box – it is drawn as a revision cloud.', cloudpen: 'Draw a loop round the item – it closes into a revision cloud.',
+  callout: 'Drag from the item to where the note should sit, then type the note.', darrow: 'Drag to draw a double-headed arrow (e.g. a dimension).',
+  hl: 'Drag a straight see-through highlight.', hlpen: 'Freehand see-through highlight.', text: 'Tap where the text should go.'
+};
 async function compositeCanvas(att, maxW) {
   const im = await loadImg(att.blobId);
   const sc = Math.min(1, (maxW || im.naturalWidth) / im.naturalWidth);
@@ -194,16 +294,13 @@ function openAnnotator(att) {
     const im = await loadImg(att.blobId);
     let hlColorSet = false, shapes = clone(att.ann || []), isDrw = ['pid', 'iso', 'plot'].includes(att.kind), tool = isDrw ? 'hl' : 'arrow', color = isDrw ? '#ffd400' : COLORS[0][0], wIdx = 1, tIdx = 1, sel = -1, hist = [], drag = null;
     const ov = document.createElement('div'); ov.className = 'annot';
-    const toolBtns = [['select', '☝', 'Select / move'], ['arrow', '➚', 'Arrow'], ['line', '╱', 'Line'], ['box', '▭', 'Box'], ['circle', '◯', 'Circle'], ['pen', '✎', 'Freehand'], ['hl', '▬', 'Highlight line'], ['hlpen', '🖍', 'Highlight freehand'], ['text', 'T', 'Text']];
     ov.innerHTML = `
       <div class="annot-top"><button class="btn ghost" data-a="cancel">Cancel</button><span>${esc(att.caption || 'Annotate')}</span><button class="btn primary" data-a="save">Save</button></div>
       <div class="annot-stage"><canvas></canvas></div>
       <div class="annot-tools">
-        <div class="row tools">${toolBtns.map(([k, i, l]) => `<button class="tbtn" data-tool="${k}" title="${l}" aria-label="${l}">${i}<small>${l.split(' ')[0]}</small></button>`).join('')}</div>
-        <div class="row colors">${COLORS.map(([c, n]) => `<button class="cbtn" data-color="${c}" title="${n}" aria-label="${n}" style="background:${c}"></button>`).join('')}
-          <span class="sep"></span>
-          <button class="tbtn sm" data-w="0" title="Thin">━<small>Thin</small></button><button class="tbtn sm" data-w="1" title="Medium"><b>━</b><small>Med</small></button><button class="tbtn sm" data-w="2" title="Thick"><b style="font-size:1.4em">━</b><small>Thick</small></button>
-        </div>
+        <div class="row tools"><button class="tbtn" data-tool="select" title="Select / move" aria-label="Select / move">☝<small>Select</small></button>${drawToolBtns('')}</div>
+        <div class="row colors">${colorWidthRow()}</div>
+        <div class="annot-hint small"></div>
         <div class="row acts"><button class="btn ghost sm" data-a="undo">↶ Undo</button><button class="btn ghost sm" data-a="del">🗑 Delete</button><button class="btn ghost sm" data-a="edittext">✎ Edit text</button><button class="btn ghost sm" data-a="clear">Clear all</button></div>
       </div>`;
     document.body.append(ov); document.body.classList.add('noscroll');
@@ -226,23 +323,19 @@ function openAnnotator(att) {
       $$('[data-color]', ov).forEach(b => b.classList.toggle('on', b.dataset.color === color));
       $$('[data-w]', ov).forEach(b => b.classList.toggle('on', +b.dataset.w === wIdx));
       $('[data-a="del"]', ov).disabled = sel < 0; $('[data-a="undo"]', ov).disabled = !hist.length;
-      $('[data-a="edittext"]', ov).hidden = !(sel >= 0 && shapes[sel]?.t === 'text');
+      $('[data-a="edittext"]', ov).hidden = !(sel >= 0 && ['text', 'callout'].includes(shapes[sel]?.t));
+      $('.annot-hint', ov).textContent = TOOL_HINTS[tool] || (tool === 'select' ? 'Tap an annotation to select it, drag to move.' : '');
     }
     const snap = () => { hist.push(JSON.stringify(shapes)); if (hist.length > 60) hist.shift(); };
     const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
-    function askText(initial) {
-      return new Promise(res => {
-        const m = document.createElement('div'); m.className = 'modal-back';
-        m.innerHTML = `<div class="modal"><h3>Annotation text</h3><textarea rows="3" class="inp">${esc(initial || '')}</textarea>
-          <div class="row"><span>Size</span>${TSIZES.map((_, i) => `<button class="tbtn sm ${i === tIdx ? 'on' : ''}" data-ts="${i}">${['S', 'M', 'L'][i]}</button>`).join('')}</div>
-          <div class="modal-btns"><button class="btn ghost" data-v="0">Cancel</button><button class="btn primary" data-v="1">OK</button></div></div>`;
-        ov.append(m); const ta = $('textarea', m); setTimeout(() => ta.focus(), 50);
-        m.addEventListener('click', e => {
-          const ts = e.target.closest('[data-ts]'); if (ts) { tIdx = +ts.dataset.ts; $$('[data-ts]', m).forEach(b => b.classList.toggle('on', b === ts)); return; }
-          const b = e.target.closest('[data-v]'); if (!b) return; m.remove(); res(b.dataset.v === '1' ? ta.value.trim() : null);
-        });
-      });
+    // keep a callout's note box on the picture
+    function fitCallout(sh) {
+      const b = calloutBox(ctx, sh, cw, ch); let dx = 0, dy = 0;
+      if (b.x < 0) dx = -b.x; else if (b.x + b.w > cw) dx = cw - b.x - b.w;
+      if (b.y < 0) dy = -b.y; else if (b.y + b.h > ch) dy = ch - b.y - b.h;
+      sh.x2 += dx / cw; sh.y2 += dy / ch;
     }
+    async function askText(initial, title) { const r = await askAnnText(ov, initial, tIdx, title); if (!r) return null; tIdx = r.tIdx; return r.text; }
     cv.addEventListener('pointerdown', async e => {
       e.preventDefault(); const [x, y] = pos(e);
       if (tool === 'select') {
@@ -256,24 +349,26 @@ function openAnnotator(att) {
         draw(); return;
       }
       snap();
-      const wv = isHl(tool) ? HL_WIDTHS[wIdx] : WIDTHS[wIdx];
-      const sh = (tool === 'pen' || tool === 'hlpen') ? { t: tool, pts: [[x, y]], c: color, w: wv } : { t: tool, x1: x, y1: y, x2: x, y2: y, c: color, w: wv };
+      const sh = newShape(tool, x, y, color, wIdx);
       shapes.push(sh); sel = -1; drag = { mode: 'draw', sh }; cv.setPointerCapture(e.pointerId); draw();
     });
     cv.addEventListener('pointermove', e => {
       if (!drag) return; const [x, y] = pos(e);
       if (drag.mode === 'move') { moveShape(shapes[sel], x - drag.x, y - drag.y); drag.x = x; drag.y = y; drag.moved = true; }
-      else if (drag.sh.t === 'pen' || drag.sh.t === 'hlpen') drag.sh.pts.push([x, y]);
-      else { drag.sh.x2 = x; drag.sh.y2 = y; }
+      else extendShape(drag.sh, x, y);
       draw();
     });
-    const end = () => {
-      if (!drag) return;
-      if (drag.mode === 'draw') {
-        const sh = drag.sh; const tiny = (sh.t === 'pen' || sh.t === 'hlpen') ? sh.pts.length < 3 : Math.hypot((sh.x2 - sh.x1) * cw, (sh.y2 - sh.y1) * ch) < 8 * dpr;
-        if (tiny) { shapes.pop(); hist.pop(); }
-      } else if (!drag.moved) hist.pop();
-      drag = null; draw();
+    const end = async () => {
+      if (!drag) return; const d = drag; drag = null;
+      if (d.mode === 'draw') {
+        const sh = d.sh;
+        if (shapeTooSmall(sh, cw, ch, 8 * dpr)) { shapes.pop(); hist.pop(); }
+        else {
+          finishShape(sh);
+          if (sh.t === 'callout') { draw(); const t = await askText('', 'Callout note'); if (t) { sh.text = t; sh.s = TSIZES[Math.min(tIdx, 1)]; sel = shapes.indexOf(sh); fitCallout(sh); } else { shapes.splice(shapes.indexOf(sh), 1); hist.pop(); } }
+        }
+      } else if (!d.moved) hist.pop();
+      draw();
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
     ov.addEventListener('click', async e => {
@@ -285,7 +380,7 @@ function openAnnotator(att) {
       if (act === 'undo' && hist.length) { shapes = JSON.parse(hist.pop()); sel = -1; draw(); }
       if (act === 'del' && sel >= 0) { snap(); shapes.splice(sel, 1); sel = -1; draw(); }
       if (act === 'clear' && shapes.length) { snap(); shapes = []; sel = -1; draw(); }
-      if (act === 'edittext' && sel >= 0) { const t = await askText(shapes[sel].text); if (t) { snap(); shapes[sel].text = t; shapes[sel].s = TSIZES[tIdx]; } draw(); }
+      if (act === 'edittext' && sel >= 0) { const t = await askText(shapes[sel].text); if (t) { snap(); shapes[sel].text = t; shapes[sel].s = TSIZES[shapes[sel].t === 'callout' ? Math.min(tIdx, 1) : tIdx]; if (shapes[sel].t === 'callout') fitCallout(shapes[sel]); } draw(); }
       if (act === 'cancel' || act === 'save') {
         if (act === 'save') { att.ann = shapes; att.annV = (att.annV || 0) + 1; persist('report'); }
         window.removeEventListener('resize', layout); ov.remove(); document.body.classList.remove('noscroll'); resolve(act === 'save');
@@ -312,6 +407,20 @@ const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</
 function setTop(title, sub, back) {
   $('#title').textContent = title; $('#subtitle').textContent = sub || '';
   const b = $('#backBtn'); b.hidden = !back; b.onclick = () => { location.hash = back; };
+  const hm = $('#homeBtn'); hm.hidden = !location.hash || location.hash === '#/' || location.hash === '#'; hm.onclick = () => go('/');
+  updateResumeBar();
+}
+/* "Return to report" – remembers the report being worked on so you can jump back from anywhere */
+function lastWork() { try { return JSON.parse(localStorage.getItem('vte_lastReport') || 'null'); } catch { return null; } }
+function setLastWork(v) { try { v ? localStorage.setItem('vte_lastReport', JSON.stringify(v)) : localStorage.removeItem('vte_lastReport'); } catch { } }
+function updateResumeBar() {
+  const bar = $('#resumeBar'); const lw = lastWork(); const onReport = location.hash.startsWith('#/report/');
+  const r = lw && S.reports.find(x => x.id === lw.id);
+  if (!r || onReport || (r.issuedAt && r.updatedAt <= r.issuedAt + 2000)) { bar.hidden = true; return; }
+  const st = /^fl_/.test(lw.step || '') ? { label: 'Flange ' + (+lw.step.slice(3) + 1) } : stepsFor(r).find(x => x.id === lw.step);
+  bar.innerHTML = `<span>✎ Back to report</span><b>${esc(r.h?.tagNo || 'Untitled line')}</b><small>${esc(st ? st.label : '')}</small><span class="rb-x" data-x="1" aria-label="Dismiss">✕</span>`;
+  bar.hidden = false;
+  bar.onclick = e => { if (e.target.closest('[data-x]')) { setLastWork(null); bar.hidden = true; return; } go(`/report/${r.id}/${lw.step || 'header'}`); };
 }
 function go(h) { if (location.hash === '#' + h) route(); else location.hash = h; }
 async function route() {
@@ -485,7 +594,7 @@ function stepsFor(r) {
   const st = [{ id: 'prep', label: '★ Line prep' }, { id: 'plot', label: 'Plot plan & FM' }, { id: 'header', label: 'Header' }, { id: 'pre', label: 'Pre-inspection' }, { id: 'photos', label: 'Overview photos' }];
   STAGES.forEach(s2 => st.push({ id: 'st_' + s2.key, label: `${s2.no} ${s2.title}`, stage: s2, skipped: !stageVisible(r, s2) }));
   st.push({ id: 'fmtemplate', label: 'IMS template (FM)' },
-    { id: 'findings', label: 'Findings' }, { id: 'text', label: 'Report text' }, { id: 'conclusion', label: 'Sign-off' }, { id: 'review', label: 'Check & AI' }, { id: 'export', label: 'Word report' });
+    { id: 'findings', label: 'Findings' }, { id: 'text', label: 'Report text' }, { id: 'conclusion', label: 'Sign-off' }, { id: 'review', label: 'Check & AI' }, { id: 'export', label: 'Word / PDF' });
   return st;
 }
 function renderReport(id, step) {
@@ -493,6 +602,7 @@ function renderReport(id, step) {
   cur.report = r; cur.system = S.systems.find(x => x.id === r.systemId) || { id: r.systemId, name: '' }; cur.step = step;
   const steps = stepsFor(r); const isFl = /^fl_\d+$/.test(step);
   let idx = steps.findIndex(x => x.id === (isFl ? 'st_corrosion' : step)); if (idx < 0) idx = 0;
+  setLastWork({ id: r.id, step });
   setTop(r.h?.tagNo || 'New line report', cur.system.name || '', '/system/' + r.systemId);
   document.body.classList.add('wizard');
   const sp = $('#stepper'); sp.hidden = false;
@@ -941,11 +1051,13 @@ function stepHTML(r, step) {
 
     case 'export': {
       const v = validate(r); const nPh = (r.att || []).filter(a => a.kind === 'photo').length;
-      return `<div class="card"><h2>Word report</h2>
+      return `<div class="card"><h2>Word / PDF report</h2>
         <p>${esc(h.tagNo || 'Line')} – ${nPh} photo(s), ${(r.att || []).filter(a => a.kind !== 'photo').length} drawing page(s), ${allFindings(r).length} finding(s).</p>
         ${v.errors.length ? `<div class="calc bad">${v.errors.length} item(s) must be fixed first – see <a href="#/report/${r.id}/review">Check & AI</a>. You can still create a draft.</div>` : '<div class="calc ok">✓ Ready to issue</div>'}
         <button class="btn primary block big" data-action="makeDocx" data-draft="${v.errors.length ? 1 : 0}">📄 ${v.errors.length ? 'Create DRAFT report' : 'Create Word report'}</button>
-        <div id="docxOut"></div></div>
+        <div id="docxOut"></div>
+        <button class="btn ghost block big" data-action="makePdf" data-draft="${v.errors.length ? 1 : 0}">🖨 ${v.errors.length ? 'Save DRAFT as PDF' : 'Save as PDF'}</button>
+        <p class="small muted">PDF uses the phone's own "Save as PDF" print option – same layout as the Word report, works offline.</p></div>
       <div class="card"><h3>IMS history (ECH) text</h3><p class="small muted">For entering in IMS once it's back up.</p><button class="btn ghost block" data-action="copyEch">📋 Copy ECH summary</button></div>
       <div class="card"><h3>Backup</h3><p class="small muted">Saves this report incl. photos as a file – use it to move the report to another device or keep a safe copy.</p><button class="btn ghost block" data-action="exportReport">⬇ Backup this report (.json)</button></div>`;
     }
@@ -1396,6 +1508,18 @@ const actions = {
       out.innerHTML = `<div class="calc ok">✓ ${esc(name)} (${(blob.size / 1048576).toFixed(1)} MB)</div><div class="grid2"><button class="btn primary" data-action="shareDocx">📤 Share</button><button class="btn ghost" data-action="saveDocx">⬇ Save to phone</button></div>`;
     } catch (e) { console.error(e); out.innerHTML = `<div class="calc bad">Failed: ${esc(e.message)}</div>`; }
     el.disabled = false;
+  },
+  makePdf: async el => {
+    el.disabled = true; const old = el.innerHTML; el.innerHTML = '⏳ Building PDF view…';
+    try {
+      await flushSaves();
+      const r = cur.report; const draft = el.dataset.draft === '1';
+      const name = `VTE_${safeName(r.h?.tagNo)}_${(r.h?.examDate || todayISO()).replace(/-/g, '')}${draft ? '_DRAFT' : ''}.pdf`;
+      const pv = await openPdfView(r, cur.system, S.settings, { draft, compositeCanvas, loadImg, loadUrlImg, canvasToBlob, photoNumbers, getBlob, svgToPng }, name);
+      if (!draft) { r.issuedAt = Date.now(); r.updatedAt = r.issuedAt; await DB.put('reports', r); }
+      setTimeout(pv.print, 300);
+    } catch (e) { console.error(e); toast('PDF failed: ' + e.message, 4000); }
+    el.disabled = false; el.innerHTML = old;
   },
   shareDocx: () => shareBlob(cur.docx.blob, cur.docx.name, cur.docx.name),
   saveDocx: () => downloadBlob(cur.docx.blob, cur.docx.name),

@@ -10,14 +10,18 @@ const ISO_COMPS = [
 
 function openIsoTool(r, att) {
   return new Promise(resolve => {
-    let doc = clone(att?.isoDoc || { pipes: [], comps: [] });
+    let doc = clone(att?.isoDoc || { pipes: [], comps: [] }); if (!doc.marks) doc.marks = [];
+    const MK = 12;   // markup shapes are stored normalised to MK lattice units so they pan/zoom with the sketch
+    let color = COLORS[0][0], wIdx = 1, tIdx = 1, hlColorSet = false;
     let tool = 'pipe', sel = null, hist = [], s = 46, ox = 0, oy = 0, drag = null; const pts = new Map(); let pinch = null;
     const ov = document.createElement('div'); ov.className = 'annot iso';
     ov.innerHTML = `<div class="annot-top"><button class="btn ghost" data-a="cancel">Cancel</button><span>Isometric sketch – ${esc(r.h?.tagNo || '')}</span><button class="btn primary" data-a="save">Save</button></div>
       <div class="annot-stage"><canvas></canvas><div class="iso-zoom"><button class="tbtn sm" data-a="zin">＋</button><button class="tbtn sm" data-a="zout">－</button><button class="tbtn sm" data-a="fit">⤢</button></div></div>
       <div class="annot-tools">
         <div class="row tools"><button class="tbtn" data-tool="pipe">━<small>Pipe</small></button><button class="tbtn" data-tool="select">☝<small>Select</small></button>
-          ${ISO_COMPS.map(([k, i, l]) => `<button class="tbtn" data-tool="${k}" title="${l}">${i}<small>${l.split(' ')[0]}</small></button>`).join('')}</div>
+          ${ISO_COMPS.map(([k, i, l]) => `<button class="tbtn" data-tool="${k}" title="${l}">${i}<small>${l.split(' ')[0]}</small></button>`).join('')}
+          <span class="tsep">Markup</span>${drawToolBtns('m_')}</div>
+        <div class="row colors">${colorWidthRow()}</div>
         <div class="row acts"><button class="btn ghost sm" data-a="undo">↶ Undo</button><button class="btn ghost sm" data-a="del">🗑 Delete</button><button class="btn ghost sm" data-a="label">✎ Label</button><button class="btn ghost sm" data-a="clear">Clear all</button></div>
         <div class="iso-hint small"></div>
       </div>`;
@@ -32,7 +36,9 @@ function openIsoTool(r, att) {
     function layout() { const rc = stage.getBoundingClientRect(); dpr = window.devicePixelRatio || 1; W = rc.width; H = rc.height; cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; if (!ox && !oy) fitView(); draw(); }
     function bounds() {
       const ps = [...doc.pipes.flatMap(p => [p.a, p.b]), ...doc.comps.map(c => [c.i, c.j])];
-      if (!ps.length) return null; const sc = ps.map(([i, j]) => [i * ISO_C30, j - 0.5 * i]);
+      const sc = ps.map(([i, j]) => [i * ISO_C30, j - 0.5 * i]);
+      doc.marks.forEach(m => { const b = shapeBBox(ctx, m, s * MK, s * MK).map(v => v / s); sc.push([b[0], b[1]], [b[2], b[3]]); });
+      if (!sc.length) return null;
       return [Math.min(...sc.map(p => p[0])), Math.min(...sc.map(p => p[1])), Math.max(...sc.map(p => p[0])), Math.max(...sc.map(p => p[1]))];
     }
     function fitView() {
@@ -61,7 +67,13 @@ function openIsoTool(r, att) {
       Object.entries(cnt).filter(([, n]) => n >= 3).forEach(([k]) => { const [x, y] = scr(...k.split(',').map(Number)); g.beginPath(); g.arc(x, y, lw * 1.1, 0, 7); g.fillStyle = '#111'; g.fill(); });
       // components
       doc.comps.forEach((c, idx) => drawComp(g, c, scr, sz, selItem?.type === 'comp' && selItem.idx === idx));
-      // north arrow
+      // markup layer (arrows, clouds, highlights, text…) on top
+      const [x0, y0] = scr(0, 0); g.save(); g.translate(x0, y0);
+      doc.marks.forEach((m, idx) => {
+        drawShape(g, m, sz * MK, sz * MK);
+        if (selItem?.type === 'mark' && selItem.idx === idx) { const [a, b, c, d] = shapeBBox(g, m, sz * MK, sz * MK); g.save(); g.setLineDash([6, 4]); g.lineWidth = 2; g.strokeStyle = '#00aaff'; g.strokeRect(a - 6, b - 6, c - a + 12, d - b + 12); g.restore(); }
+      });
+      g.restore();
     }
     function drawComp(g, c, scr, sz, isSel) {
       const [x, y] = scr(c.i, c.j); const d = unit(dirScr(c.ax || 'U')); const n = perpOf(c.ax || 'U');
@@ -106,8 +118,12 @@ function openIsoTool(r, att) {
       ctx.save(); const nx = 34, ny = 50, nd = unit(dirScr('U')); ctx.strokeStyle = '#c00000'; ctx.fillStyle = '#c00000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(nx + nd[0] * 26, ny + nd[1] * 26); ctx.stroke();
       ctx.font = 'bold 14px Arial'; ctx.fillText('N', nx + nd[0] * 30, ny + nd[1] * 30); ctx.restore();
       $$('[data-tool]', ov).forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
-      hint.textContent = tool === 'pipe' ? 'Drag from a grid point to draw a pipe run – it snaps to the 3 isometric directions. Drag from an end to continue. Two fingers to pan / zoom.'
-        : tool === 'select' ? 'Tap a pipe or component to select it, then Delete or Label.' : 'Tap on a pipe to place – it lines up with the pipe direction.';
+      $$('[data-color]', ov).forEach(b => b.classList.toggle('on', b.dataset.color === color));
+      $$('[data-w]', ov).forEach(b => b.classList.toggle('on', +b.dataset.w === wIdx));
+      $('.row.colors', ov).hidden = !(tool.startsWith('m_') || sel?.type === 'mark');
+      $('[data-a="label"]', ov).innerHTML = sel?.type === 'mark' ? '✎ Edit text' : '✎ Label';
+      hint.textContent = tool.startsWith('m_') ? (TOOL_HINTS[tool.slice(2)] || 'Drag to draw. Pick a colour and thickness below.') + ' Two fingers to pan / zoom.' : tool === 'pipe' ? 'Drag from a grid point to draw a pipe run – it snaps to the 3 isometric directions. Drag from an end to continue. Two fingers to pan / zoom.'
+        : tool === 'select' ? 'Tap a pipe, component or markup to select it, then Delete or Label. Drag markup to move it.' : 'Tap on a pipe to place – it lines up with the pipe direction.';
     }
     const snapNode = (x, y) => { const [i, j] = toLat(x, y); return [Math.round(i), Math.round(j)]; };
     function snapEnd(start, x, y) {
@@ -133,13 +149,21 @@ function openIsoTool(r, att) {
       });
     }
     const pos = e => { const rc = cv.getBoundingClientRect(); return [e.clientX - rc.left, e.clientY - rc.top]; };
+    const toMk = (x, y) => [(x - ox) / (s * MK), (y - oy) / (s * MK)];
     cv.addEventListener('pointerdown', async e => {
       e.preventDefault(); cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, pos(e));
-      if (pts.size === 2) { drag = null; const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; draw(); return; }
+      if (pts.size === 2) { if (drag?.mode === 'mark') { doc.marks.pop(); hist.pop(); } drag = null; const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; draw(); return; }
       const [x, y] = pos(e);
       if (tool === 'pipe') { drag = { mode: 'pipe', start: snapNode(x, y), end: null }; draw(); return; }
+      const mp = toMk(x, y);
+      if (tool.startsWith('m_')) {
+        const mt = tool.slice(2);
+        if (mt === 'text') { const t = await askAnnText(ov, '', tIdx, 'Markup text'); if (t?.text) { tIdx = t.tIdx; snapState(); doc.marks.push({ t: 'text', x: mp[0], y: mp[1], text: t.text, c: color, s: TSIZES[tIdx] }); sel = { type: 'mark', idx: doc.marks.length - 1 }; } draw(); return; }
+        snapState(); const sh = newShape(mt, mp[0], mp[1], color, wIdx); doc.marks.push(sh); sel = null; drag = { mode: 'mark', sh }; draw(); return;
+      }
       if (tool === 'select') {
         sel = null; let bestC = null;
+        for (let k = doc.marks.length - 1; k >= 0; k--) if (hitShape(ctx, doc.marks[k], x - ox, y - oy, s * MK, s * MK, 14)) { sel = { type: 'mark', idx: k }; snapState(); drag = { mode: 'move', p: mp, moved: false }; draw(); return; }
         doc.comps.forEach((c, idx) => { const [cx, cy] = toScr(c.i, c.j); const dd = Math.hypot(cx - x, cy - y); if (dd < s * 0.5 && (!bestC || dd < bestC.d)) bestC = { idx, d: dd }; });
         if (bestC) sel = { type: 'comp', idx: bestC.idx }; else { const np = nearestPipe(x, y); if (np && np.d < 18) sel = { type: 'pipe', idx: np.idx }; }
         draw(); return;
@@ -165,9 +189,21 @@ function openIsoTool(r, att) {
         ox = m[0] - (m[0] - ox) * k + (m[0] - pinch.m[0]); oy = m[1] - (m[1] - oy) * k + (m[1] - pinch.m[1]); s = ns; pinch = { d, m }; draw(); return;
       }
       if (drag?.mode === 'pipe') { const [x, y] = pos(e); const c = snapEnd(drag.start, x, y); drag.end = [c[0], c[1]]; draw(); }
+      if (drag?.mode === 'mark') { extendShape(drag.sh, ...toMk(...pos(e))); draw(); }
+      if (drag?.mode === 'move' && sel?.type === 'mark') { const p = toMk(...pos(e)); moveShape(doc.marks[sel.idx], p[0] - drag.p[0], p[1] - drag.p[1]); drag.p = p; drag.moved = true; draw(); }
     });
-    const end = e => {
+    const end = async e => {
       pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+      if (drag?.mode === 'move') { if (!drag.moved) hist.pop(); drag = null; draw(); return; }
+      if (drag?.mode === 'mark') {
+        const sh = drag.sh; drag = null;
+        if (shapeTooSmall(sh, s * MK, s * MK, 8)) { doc.marks.pop(); hist.pop(); }
+        else {
+          finishShape(sh); sel = { type: 'mark', idx: doc.marks.length - 1 };
+          if (sh.t === 'callout') { draw(); const t = await askAnnText(ov, '', Math.min(tIdx, 1), 'Callout note'); if (t?.text) { sh.text = t.text; sh.s = TSIZES[Math.min(t.tIdx, 1)]; } else { doc.marks.pop(); hist.pop(); sel = null; } }
+        }
+        draw(); return;
+      }
       if (drag?.mode === 'pipe') { const { start, end: en } = drag; drag = null;
         if (en && (en[0] !== start[0] || en[1] !== start[1])) { snapState(); doc.pipes.push({ a: start, b: en }); }
         draw(); }
@@ -176,7 +212,7 @@ function openIsoTool(r, att) {
     cv.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = pos(e); const f = e.deltaY < 0 ? 1.15 : 1 / 1.15; const ns = Math.max(10, Math.min(140, s * f)); const k = ns / s; ox = x - (x - ox) * k; oy = y - (y - oy) * k; s = ns; draw(); }, { passive: false });
 
     async function renderPng() {
-      const b = bounds() || [0, 0, 4, 3]; const sz = 60, pad = 90;
+      const b = bounds() || [0, 0, 4, 3]; const sz = 60, pad = 110;
       const w = Math.round((b[2] - b[0]) * sz + pad * 2), hgt = Math.round((b[3] - b[1]) * sz + pad * 2 + 70);
       const c = document.createElement('canvas'); c.width = Math.max(900, w); c.height = Math.max(640, hgt); const g = c.getContext('2d');
       g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
@@ -189,14 +225,17 @@ function openIsoTool(r, att) {
       return { blob: await canvasToBlob(c, 'image/png'), w: c.width, h: c.height };
     }
     ov.addEventListener('click', async e => {
-      const t = e.target.closest('[data-tool]'); if (t) { tool = t.dataset.tool; if (tool !== 'select') sel = null; draw(); return; }
+      const t = e.target.closest('[data-tool]'); if (t) { tool = t.dataset.tool; if (tool !== 'select') sel = null; if (isHl(tool.slice(2)) && color === COLORS[0][0] && !hlColorSet) { color = '#ffd400'; hlColorSet = true; } draw(); return; }
+      const cb = e.target.closest('[data-color]'); if (cb) { color = cb.dataset.color; if (sel?.type === 'mark') { snapState(); doc.marks[sel.idx].c = color; } draw(); return; }
+      const wb = e.target.closest('[data-w]'); if (wb) { wIdx = +wb.dataset.w; const m = sel?.type === 'mark' && doc.marks[sel.idx]; if (m && m.t !== 'text') { snapState(); m.w = isHl(m.t) ? HL_WIDTHS[wIdx] : WIDTHS[wIdx]; } draw(); return; }
       const a = e.target.closest('[data-a]'); if (!a) return; const act = a.dataset.a;
       if (act === 'zin' || act === 'zout') { const f = act === 'zin' ? 1.25 : 0.8; const ns = Math.max(10, Math.min(140, s * f)); const k = ns / s; ox = W / 2 - (W / 2 - ox) * k; oy = H / 2 - (H / 2 - oy) * k; s = ns; draw(); }
       if (act === 'fit') { fitView(); draw(); }
       if (act === 'undo' && hist.length) { doc = JSON.parse(hist.pop()); sel = null; draw(); }
-      if (act === 'del' && sel) { snapState(); (sel.type === 'pipe' ? doc.pipes : doc.comps).splice(sel.idx, 1); sel = null; draw(); }
+      if (act === 'del' && sel) { snapState(); (sel.type === 'pipe' ? doc.pipes : sel.type === 'mark' ? doc.marks : doc.comps).splice(sel.idx, 1); sel = null; draw(); }
+      if (act === 'label' && sel?.type === 'mark') { const m = doc.marks[sel.idx]; if (['text', 'callout'].includes(m.t)) { const t = await askAnnText(ov, m.text, tIdx, 'Edit text'); if (t?.text) { snapState(); m.text = t.text; m.s = TSIZES[m.t === 'callout' ? Math.min(t.tIdx, 1) : t.tIdx]; draw(); } } else toast('Only text and callouts have text to edit'); }
       if (act === 'label' && sel?.type === 'comp') { const c = doc.comps[sel.idx]; const l = await askLabel(c.label, 'Label'); if (l != null) { snapState(); c.label = l; draw(); } }
-      if (act === 'clear' && (doc.pipes.length || doc.comps.length)) { snapState(); doc = { pipes: [], comps: [] }; sel = null; draw(); }
+      if (act === 'clear' && (doc.pipes.length || doc.comps.length || doc.marks.length)) { snapState(); doc = { pipes: [], comps: [], marks: [] }; sel = null; draw(); }
       if (act === 'cancel' || act === 'save') {
         let saved = false;
         if (act === 'save') {

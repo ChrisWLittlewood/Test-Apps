@@ -1,4 +1,4 @@
-VTE PIPING INSPECTION APP – v1.4 (trial)
+VTE PIPING INSPECTION APP – v1.5 (trial)
 =========================================
 
 Two parts:
@@ -23,3 +23,10 @@ Updating
 --------
 App: replace the hosted files and bump VERSION in sw.js; the phone updates next time it is
 opened with signal. Data pack: import the new pack file (Settings -> Replace data pack).
+
+New in v1.5
+-----------
+- Revision clouds (box and freehand), double arrow and callout in every drawing tool; the isometric
+  sketch tool now has the full markup set (arrows, lines, boxes, circles, clouds, highlighter, text) with colours.
+- Home button on every screen, plus a yellow "Back to report" bar to jump back to the line you were working on.
+- Save as PDF (Export step) – same layout as the Word report, uses the phone's "Save as PDF" print option, works offline.
