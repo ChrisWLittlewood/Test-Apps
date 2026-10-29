@@ -25,7 +25,7 @@ const STAGES = [
     fields: [
       { k: 'pipeClass', t: 'pipeclass', label: 'Pipe class & line size(s)' },
       { k: 'pidNumber', t: 'text', label: '(P&ID) drawing number' },
-      { k: 'designCode', t: 'sel', label: 'Design code', opts: ['ASME B31.3', 'ASME B31.1', 'ASME B31.4', 'ASME B31.8', 'BS EN 13480', 'Other'] },
+      { k: 'designCode', path: 'h.designCode', t: 'sel', label: 'Design code', opts: ['ASME B31.3', 'ASME B31.1', 'ASME B31.4', 'ASME B31.8', 'BS EN 13480', 'Other'] },
       { k: 'insulationPresent', t: 'yn', pol: 'neutral', label: 'Insulation present?', noNA: true },
       { k: 'coatingPresent', t: 'yn', pol: 'neutral', label: 'Coating present?', noNA: true },
       { k: 'reliefDevice', t: 'yn', pol: 'neutral', label: 'Relief device observed', hint: 'Relief device (i.e. relief valve, bursting disc, VPSV etc.) installed on line?', noNA: true },
@@ -52,7 +52,7 @@ const STAGES = [
     key: 'coating', no: 3, title: 'Coating', heading: 'Coating', photos: true,
     show: r => yes(g(r, 'c.general.coatingPresent')),
     skipText: 'No coating (stage 1)',
-    hint: 'Stainless/duplex: coating applied against chloride SCC shall have no damage, cracking, flaking or disbonding (PC005 1.3.2).',
+    hint: 'Stainless/duplex: coating applied against chloride SCC shall have no damage, cracking, flaking or disbonding (PS 1.3.2).',
     refImg: 'ref:coating',
     fields: [
       { k: 'coatingDamage', t: 'yn', pol: 'bad', label: 'Coating damage observed' },
@@ -94,7 +94,7 @@ const STAGES = [
   },
   {
     key: 'support', no: 6, title: 'Support', heading: 'Supporting', photos: true,
-    hint: 'PC005 1.6: supports perform intended function; spring supports within indicated limits; sliding supports operable and free of debris; local metal loss of support ≤ 20%. Check for CUPS (corrosion under pipe supports).',
+    hint: 'PS 1.6: supports perform intended function; spring supports within indicated limits; sliding supports operable and free of debris; local metal loss of support ≤ 20%. Check for CUPS (corrosion under pipe supports).',
     fields: [
       { k: 'supportsMissing', t: 'yn', pol: 'bad', label: 'Supports missing' },
       { k: 'anomalyPresent', t: 'yn', pol: 'bad', label: 'Anomaly present' },
@@ -107,7 +107,7 @@ const STAGES = [
   {
     key: 'other', no: 7, title: 'Other', heading: 'Other', photos: true,
     fields: [
-      { k: 'vibration', t: 'yn', pol: 'bad', label: 'Vibration observed', hint: 'PC005 1.7: RMS < 12.5 mm/s broadband, or PVM green.' },
+      { k: 'vibration', t: 'yn', pol: 'bad', label: 'Vibration observed', hint: 'PS 1.7: RMS < 12.5 mm/s broadband, or PVM green.' },
       { k: 'leaks', t: 'yn', pol: 'bad', label: 'Leaks observed', hint: 'If a leak is found, the leak checklist needs to be filled out. Leak = gas 20% LEL at 100 mm downwind; liquid 4 drips/min or 1 L/24 h. Below this = weep/seep.', alert: true },
       { k: 'leakClass', t: 'sel', label: 'Leak classification', opts: ['Leak', 'Weep', 'Seep'], show: r => yes(g(r, 'c.other.leaks')) },
       { k: 'leakMedium', t: 'sel', label: 'Medium', opts: ['Gas', 'Liquid', 'Two-phase'], show: r => yes(g(r, 'c.other.leaks')) },
@@ -118,7 +118,7 @@ const STAGES = [
       { k: 'deckPen', t: 'yn', pol: 'neutral', cond: true, label: 'Deck penetrations observed' },
       { k: 'bundPen', t: 'yn', pol: 'neutral', cond: true, label: 'Bund penetrations observed' },
       { k: 'threaded', t: 'yn', pol: 'neutral', cond: true, label: 'Threaded connections observed', hint: 'Max. 4 turns exposed; threads matching.' },
-      { k: 'mechDamage', t: 'yn', pol: 'bad', label: 'Mechanical damage observed', hint: 'No gouges, arc strikes, weld defects, dents or gross deformation (PC005 1.5).' },
+      { k: 'mechDamage', t: 'yn', pol: 'bad', label: 'Mechanical damage observed', hint: 'No gouges, arc strikes, weld defects, dents or gross deformation (PS 1.5).' },
       { k: 'insulationJoint', t: 'yn', pol: 'neutral', cond: true, label: 'Insulation joint observed' },
       { k: 'changeover', t: 'yn', pol: 'neutral', cond: true, label: 'Changeover valves observed', hint: 'Changeover valves, Locked Open/Locked Closed valves as marked on PEFS. These may be referred to as "Sensitive valves".' },
       { k: 'followUp', t: 'yn', pol: 'follow', label: 'Follow-up required' },
@@ -126,13 +126,13 @@ const STAGES = [
     ]
   },
   {
-    key: 'additional', no: 8, title: 'Additional', heading: 'Additional checks (PC005 / IBMS attention list)', photos: true, extra: true,
-    hint: 'Not part of the IMS checklist – optional checks from the PC005 performance standard and IBMS external attention list. Leave as "–" if not used.',
+    key: 'additional', no: 8, title: 'Additional', heading: 'Additional checks (Performance Standard (PC005) / IBMS attention list)', photos: true, extra: true,
+    hint: 'Not part of the IMS checklist – optional checks from Performance Standard (PC005) and IBMS external attention list. Leave as "–" if not used.',
     fields: [
       { k: 'flanges', t: 'acc', label: 'Flanges, clamp connectors & bolting', hint: 'Correct size, full engagement, none missing/loose. Reject studs/nuts < 90% nominal after scale removal. Flange thickness loss ≤ 3 mm (≥18" & ≤600#) else ≤ 3 mm or 10% (max 6 mm).' },
       { k: 'sbc', t: 'acc', label: 'Small bore connections', hint: 'Bracing, heavy loads, vibration/fretting.' },
-      { k: 'tubing', t: 'acc', label: 'Instrument tubing', hint: 'Not corroded/distorted, matching fittings, supported, not vibrating (PC005 1.10).' },
-      { k: 'hoses', t: 'acc', label: 'Flexible hoses', hint: 'Certificates in date; no cuts, blisters, kinks, corrosion; bend radius OK (PC005 1.11).' },
+      { k: 'tubing', t: 'acc', label: 'Instrument tubing', hint: 'Not corroded/distorted, matching fittings, supported, not vibrating (PS 1.10).' },
+      { k: 'hoses', t: 'acc', label: 'Flexible hoses', hint: 'Certificates in date; no cuts, blisters, kinks, corrosion; bend radius OK (PS 1.11).' },
       { k: 'welds', t: 'acc', label: 'Welds' },
       { k: 'valves', t: 'acc', label: 'Valves & fittings' },
       { k: 'marking', t: 'acc', label: 'Marking / line identification' },
@@ -151,6 +151,7 @@ const PHOTO_GROUPS = [
 ];
 
 /* ---------- helpers ---------- */
+function fval(r, st, f) { return f.path ? g(r, f.path) : g(r, 'c.' + st.key + '.' + f.k); }
 function fdef(stage, k) { return STAGES.find(s2 => s2.key === stage).fields.find(f => f.k === k); }
 function fkey(src) { return String(src).replace(/\./g, '__'); }
 function g(obj, path) { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); }
@@ -173,8 +174,8 @@ function measText(x) {
   const where = `Area ${x.n} (${sizeLabel(m.dn)}${m.where ? ', ' + m.where : ''}${m.loc === 'Bend intrados' ? ', bend intrados' : ''})`;
   if (x.visual) return `${where}: visual assessment only${m.notes ? ' – ' + m.notes : ''}`;
   if (!x.ok) return `${where}: measurement incomplete`;
-  const what = m.assess === 'pitut' ? `UT of adjacent steel ${x.ut} mm, max pit depth ${x.pit} mm (pit gauge, indicative) → estimated RWT ${x.rwt} mm` : `UT minimum wall ${x.rwt} mm`;
-  return `${where}: ${what}; NWT ${L.nwt} mm, CA ${L.ca} mm, PC005 min. ${x.psMin} mm – CA remaining ${x.caLeft} mm, margin to PC005 ${x.margin} mm${m.notes ? ' – ' + m.notes : ''}`;
+  const what = m.assess === 'pitut' ? `UT of adjacent steel ${x.ut} mm, max pit depth ${x.pit} mm (pit gauge, indicative) → estimated MRWT ${x.rwt} mm` : `UT minimum wall ${x.rwt} mm`;
+  return `${where}: ${what}; NWT ${L.nwt} mm, CA ${L.ca} mm, PS min. wall ${x.psMin} mm – CA remaining ${x.caLeft} mm, margin to PS ${x.margin} mm${m.notes ? ' – ' + m.notes : ''}`;
 }
 function flangeText(fl) {
   const f = fl.f; const bits = fl.rows.filter(x => x.meas != null).map(x => `${x.label.toLowerCase()} ${x.meas} mm${x.loss != null ? ` (nom. ${x.nom}, loss ${x.loss} mm / ${x.pct}%${x.fail ? ' – EXCEEDS LIMIT' : ''})` : ''}`);
@@ -213,8 +214,8 @@ function autoFindings(r) {
     if (st.key === 'corrosion' && yes(vals.externalCorrosion)) {
       for (const x of allMeas(r).filter(x => x.ok)) {
         const id = x.m.id, at = `Area ${x.n}, ${sizeLabel(x.m.dn)}${x.m.where ? ' at ' + x.m.where : ''}`;
-        if (x.status === 'red') out.push({ src: 'corrosion.ps_' + id, stage: 'corrosion', text: `Wall thickness below PC005 minimum: RWT ${x.rwt} mm vs ${x.psMin} mm min. (${at}) – FFS by Mechanical Static TA required` });
-        else if (x.caLeft != null && x.caLeft < 0) out.push({ src: 'corrosion.ca_' + id, stage: 'corrosion', text: `Corrosion allowance consumed: RWT ${x.rwt} mm (NWT ${x.L.nwt}, CA ${x.L.ca} mm) at ${at} – ${x.margin} mm margin to PC005 minimum` });
+        if (x.status === 'red') out.push({ src: 'corrosion.ps_' + id, stage: 'corrosion', text: `Wall thickness below PS minimum: MRWT ${x.rwt} mm vs ${x.psMin} mm min. (${at}) – FFS by Mechanical Static TA required` });
+        else if (x.caLeft != null && x.caLeft < 0) out.push({ src: 'corrosion.ca_' + id, stage: 'corrosion', text: `Corrosion allowance consumed: MRWT ${x.rwt} mm (NWT ${x.L.nwt}, CA ${x.L.ca} mm) at ${at} – ${x.margin} mm margin to PS minimum` });
       }
     }
     if (st.key === 'corrosion' && yes(vals.flangeCorr)) {
@@ -223,7 +224,7 @@ function autoFindings(r) {
         const bad = fl.rows.filter(x => x.fail).map(x => `${x.label.toLowerCase()} loss ${x.loss} mm (${x.pct}%)`);
         if (fl.f.missing === 'Yes') bad.push('bolting missing/loose');
         if (fl.f.engagement === 'No') bad.push('incomplete nut engagement');
-        if (bad.length) out.push({ src: 'corrosion.fl_' + fl.f.id, stage: 'corrosion', text: `${at}: ${bad.join('; ')} – exceeds PC005 1.8 criteria` });
+        if (bad.length) out.push({ src: 'corrosion.fl_' + fl.f.id, stage: 'corrosion', text: `${at}: ${bad.join('; ')} – exceeds PS 1.8 criteria` });
       }
     }
     if (vals.followUp === 'Yes' && out.length === before) out.push({ src: st.key + '.followUp', stage: st.key, text: `${st.title}: follow-up required (see comments)` });
@@ -276,7 +277,7 @@ function genText(r) {
     const b = [K.corrCategory && optLabel(fdef('corrosion', 'corrCategory'), K.corrCategory), K.corrGrade && lc(K.corrGrade), K.corrType && lc(K.corrType)].filter(Boolean);
     let t = `External corrosion observed${b.length ? ': ' + b.join(', ') : ''}${K.corrLocation ? ', at ' + K.corrLocation : ''}.`;
     const ms = allMeas(r);
-    if (ms.length) t += ' ' + ms.map(x => measText(x) + (x.status === 'red' ? ' – BELOW PC005 MINIMUM' : '')).join('. ') + '.' + (ms.some(x => x.m.assess === 'pitut') ? ' ' + PIT_DISCLAIMER : '');
+    if (ms.length) t += ' ' + ms.map(x => measText(x) + (x.status === 'red' ? ' – BELOW PS MINIMUM' : '')).join('. ') + '.' + (ms.some(x => x.m.assess === 'pitut') ? ' ' + PIT_DISCLAIMER : '');
     ext.push(t);
   }
   const oth = [];
@@ -323,7 +324,7 @@ function genText(r) {
   const fnd = allFindings(r);
   const ech = [
     `VTE carried out ${h.examDate ? fmtDate(h.examDate) : ''} on ${tag}${h.equipDesc ? ' (' + h.equipDesc + ')' : ''} against IMS schedule ${h.imsSchedule || '[schedule]'}.`,
-    fnd.length ? `Findings: ${fnd.map((f, i) => (i + 1) + ') ' + (f.text || f.finding)).join('; ')}.` : 'No anomalies found; line meets the PC005 acceptance criteria within the extent inspected.',
+    fnd.length ? `Findings: ${fnd.map((f, i) => (i + 1) + ') ' + (f.text || f.finding)).join('; ')}.` : 'No anomalies found; line meets the Performance Standard (PC005) acceptance criteria within the extent inspected.',
     `Conclusion: ${conclusionSentence(r)}`,
     r.con?.nextDue ? `Next inspection due on or before ${fmtDate(r.con.nextDue)}.` : ''
   ].filter(Boolean).join(' ');
@@ -365,7 +366,7 @@ function validate(r) {
   for (const st of STAGES) {
     if (!stageVisible(r, st)) continue;
     const vals = g(r, 'c.' + st.key) || {};
-    const unanswered = st.fields.filter(f => fieldVisible(r, f) && ['yn', 'sel', 'acc'].includes(f.t) && !vals[f.k] && !st.extra);
+    const unanswered = st.fields.filter(f => fieldVisible(r, f) && ['yn', 'sel', 'acc'].includes(f.t) && !fval(r, st, f) && !st.extra);
     if (unanswered.length) E.push({ msg: `Stage ${st.no} ${st.title}: ${unanswered.length} item(s) not answered`, step: 'st_' + st.key });
     const condMissing = st.fields.filter(f => f.cond && vals[f.k] === 'Yes' && !vals[f.k + '_cond']);
     if (condMissing.length) W.push({ msg: `Stage ${st.no} ${st.title}: condition not stated for ${condMissing.map(f => lc(f.label)).join(', ')}`, step: 'st_' + st.key });
@@ -389,7 +390,7 @@ function validate(r) {
     fls.filter(x => !x.measured).forEach(x => W.push({ msg: `Flange ${x.n}: no measurements recorded`, step: 'st_corrosion' }));
     fls.filter(x => !x.fd).forEach(x => W.push({ msg: `Flange ${x.n}: no B16.5 nominal for this size/rating – check size and class`, step: 'st_corrosion' }));
   }
-  if ((r.att || []).some(a => a.kind === 'pid' && !a.revOk)) W.push({ msg: 'P&ID: latest revision not confirmed', step: 'drawings' });
+  if ((r.att || []).some(a => a.kind === 'pid' && !a.revOk)) W.push({ msg: 'P&ID: latest revision not confirmed', step: 'prep' });
   if (yes(g(r, 'c.other.leaks')) && g(r, 'c.other.leakReported') !== 'Yes') E.push({ msg: 'Leak observed – confirm it has been reported to Operations', step: 'st_other' });
 
   // photos
@@ -419,8 +420,8 @@ function validate(r) {
   } else W.push({ msg: 'IMS template (FM): RE values not entered', step: 'fmtemplate' });
   for (const [k, l] of [['linear', 'estimated linear meterage'], ['valvesFlanges', 'valves & flanges'], ['supports', 'pipe supports No.'], ['supportsIntervention', 'pipe supports @ intervention RE condition']])
     if (fm[k] == null || fm[k] === '') W.push({ msg: `IMS template (FM): ${l} not entered`, step: 'fmtemplate' });
-  if (!(r.att || []).some(a => a.kind === 'iso')) W.push({ msg: 'No isometric attached', step: 'drawings' });
-  if (!(r.att || []).some(a => a.kind === 'pid')) W.push({ msg: 'No P&ID attached', step: 'drawings' });
+  if (!(r.att || []).some(a => a.kind === 'iso')) W.push({ msg: 'No isometric attached', step: 'prep' });
+  if (!(r.att || []).some(a => a.kind === 'pid')) W.push({ msg: 'No P&ID attached', step: 'prep' });
   const con = r.con || {};
   if (!con.fit) E.push({ msg: 'Conclusion: fitness for service not selected', step: 'conclusion' });
   if (con.fit === 'fit' && fnd.length) W.push({ msg: 'Conclusion says "fit" with no remedial actions, but findings exist', step: 'conclusion' });

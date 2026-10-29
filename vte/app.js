@@ -84,8 +84,9 @@ async function importImage(file, maxDim) {
   return { blob, w: c.width, h: c.height };
 }
 let pdfjs = null;
+async function getPdfjs() { if (!pdfjs) { pdfjs = await import('./vendor/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs'; } return pdfjs; }
 async function importPdf(file, onPage) {
-  if (!pdfjs) { pdfjs = await import('./vendor/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs'; }
+  await getPdfjs();
   const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   const n = Math.min(doc.numPages, 12);
   for (let i = 1; i <= n; i++) {
@@ -104,11 +105,19 @@ async function importPdf(file, onPage) {
 const COLORS = [['#ff1a1a', 'Red'], ['#ffd400', 'Yellow'], ['#00c853', 'Green'], ['#2979ff', 'Blue'], ['#ff8c00', 'Orange'], ['#ffffff', 'White'], ['#000000', 'Black']];
 const WIDTHS = [0.004, 0.008, 0.014];
 const TSIZES = [0.03, 0.045, 0.065];
+const HL_WIDTHS = [0.012, 0.022, 0.036];
+const isHl = t => t === 'hl' || t === 'hlpen';
 function haloFor(c) { return (c === '#ffffff' || c === '#ffd400') ? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)'; }
 function drawShape(ctx, sh, W, H) {
   ctx.save(); ctx.strokeStyle = sh.c; ctx.fillStyle = sh.c; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const lw = Math.max(1.5, (sh.w || WIDTHS[1]) * W); ctx.lineWidth = lw;
   const P = (x, y) => [x * W, y * H];
+  if (isHl(sh.t)) {
+    ctx.globalAlpha = 0.42; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const pts = sh.t === 'hl' ? [[sh.x1, sh.y1], [sh.x2, sh.y2]] : sh.pts;
+    ctx.beginPath(); pts.forEach(([x, y], i) => { const [px, py] = P(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke();
+    ctx.restore(); return;
+  }
   if (sh.t === 'line' || sh.t === 'arrow') {
     const [x1, y1] = P(sh.x1, sh.y1), [x2, y2] = P(sh.x2, sh.y2);
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
@@ -135,7 +144,7 @@ function drawShape(ctx, sh, W, H) {
   ctx.restore();
 }
 function shapeBBox(ctx, sh, W, H) {
-  if (sh.t === 'pen') { const xs = sh.pts.map(p => p[0] * W), ys = sh.pts.map(p => p[1] * H); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
+  if (sh.t === 'pen' || sh.t === 'hlpen') { const xs = sh.pts.map(p => p[0] * W), ys = sh.pts.map(p => p[1] * H); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
   if (sh.t === 'text') {
     const fs = Math.max(10, (sh.s || TSIZES[1]) * W); ctx.save(); ctx.font = `bold ${fs}px system-ui, sans-serif`;
     const lines = String(sh.text).split('\n'); const w = Math.max(...lines.map(l => ctx.measureText(l).width)); ctx.restore();
@@ -148,8 +157,8 @@ function distSeg(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 function hitShape(ctx, sh, px, py, W, H, tol) {
-  if (sh.t === 'line' || sh.t === 'arrow') return distSeg(px, py, sh.x1 * W, sh.y1 * H, sh.x2 * W, sh.y2 * H) < tol;
-  if (sh.t === 'pen') { for (let i = 1; i < sh.pts.length; i++) if (distSeg(px, py, sh.pts[i - 1][0] * W, sh.pts[i - 1][1] * H, sh.pts[i][0] * W, sh.pts[i][1] * H) < tol) return true; return false; }
+  if (sh.t === 'line' || sh.t === 'arrow' || sh.t === 'hl') return distSeg(px, py, sh.x1 * W, sh.y1 * H, sh.x2 * W, sh.y2 * H) < tol;
+  if (sh.t === 'pen' || sh.t === 'hlpen') { for (let i = 1; i < sh.pts.length; i++) if (distSeg(px, py, sh.pts[i - 1][0] * W, sh.pts[i - 1][1] * H, sh.pts[i][0] * W, sh.pts[i][1] * H) < tol) return true; return false; }
   const [a, b, c, d] = shapeBBox(ctx, sh, W, H);
   if (sh.t === 'text') return px > a - tol && px < c + tol && py > b - tol && py < d + tol;
   const inside = px > a - tol && px < c + tol && py > b - tol && py < d + tol;
@@ -157,7 +166,7 @@ function hitShape(ctx, sh, px, py, W, H, tol) {
   return inside && (nearEdge || (c - a) < tol * 4 || (d - b) < tol * 4 || sh.t === 'circle');
 }
 function moveShape(sh, dx, dy) {
-  if (sh.t === 'pen') sh.pts = sh.pts.map(([x, y]) => [x + dx, y + dy]);
+  if (sh.t === 'pen' || sh.t === 'hlpen') sh.pts = sh.pts.map(([x, y]) => [x + dx, y + dy]);
   else if (sh.t === 'text') { sh.x += dx; sh.y += dy; }
   else { sh.x1 += dx; sh.x2 += dx; sh.y1 += dy; sh.y2 += dy; }
 }
@@ -183,9 +192,9 @@ async function drawThumbs() {
 function openAnnotator(att) {
   return new Promise(async resolve => {
     const im = await loadImg(att.blobId);
-    let shapes = clone(att.ann || []), tool = 'arrow', color = COLORS[0][0], wIdx = 1, tIdx = 1, sel = -1, hist = [], drag = null;
+    let hlColorSet = false, shapes = clone(att.ann || []), isDrw = ['pid', 'iso', 'plot'].includes(att.kind), tool = isDrw ? 'hl' : 'arrow', color = isDrw ? '#ffd400' : COLORS[0][0], wIdx = 1, tIdx = 1, sel = -1, hist = [], drag = null;
     const ov = document.createElement('div'); ov.className = 'annot';
-    const toolBtns = [['select', '☝', 'Select / move'], ['arrow', '➚', 'Arrow'], ['line', '╱', 'Line'], ['box', '▭', 'Box'], ['circle', '◯', 'Circle'], ['pen', '✎', 'Freehand'], ['text', 'T', 'Text']];
+    const toolBtns = [['select', '☝', 'Select / move'], ['arrow', '➚', 'Arrow'], ['line', '╱', 'Line'], ['box', '▭', 'Box'], ['circle', '◯', 'Circle'], ['pen', '✎', 'Freehand'], ['hl', '▬', 'Highlight line'], ['hlpen', '🖍', 'Highlight freehand'], ['text', 'T', 'Text']];
     ov.innerHTML = `
       <div class="annot-top"><button class="btn ghost" data-a="cancel">Cancel</button><span>${esc(att.caption || 'Annotate')}</span><button class="btn primary" data-a="save">Save</button></div>
       <div class="annot-stage"><canvas></canvas></div>
@@ -247,29 +256,30 @@ function openAnnotator(att) {
         draw(); return;
       }
       snap();
-      const sh = tool === 'pen' ? { t: 'pen', pts: [[x, y]], c: color, w: WIDTHS[wIdx] } : { t: tool, x1: x, y1: y, x2: x, y2: y, c: color, w: WIDTHS[wIdx] };
+      const wv = isHl(tool) ? HL_WIDTHS[wIdx] : WIDTHS[wIdx];
+      const sh = (tool === 'pen' || tool === 'hlpen') ? { t: tool, pts: [[x, y]], c: color, w: wv } : { t: tool, x1: x, y1: y, x2: x, y2: y, c: color, w: wv };
       shapes.push(sh); sel = -1; drag = { mode: 'draw', sh }; cv.setPointerCapture(e.pointerId); draw();
     });
     cv.addEventListener('pointermove', e => {
       if (!drag) return; const [x, y] = pos(e);
       if (drag.mode === 'move') { moveShape(shapes[sel], x - drag.x, y - drag.y); drag.x = x; drag.y = y; drag.moved = true; }
-      else if (drag.sh.t === 'pen') drag.sh.pts.push([x, y]);
+      else if (drag.sh.t === 'pen' || drag.sh.t === 'hlpen') drag.sh.pts.push([x, y]);
       else { drag.sh.x2 = x; drag.sh.y2 = y; }
       draw();
     });
     const end = () => {
       if (!drag) return;
       if (drag.mode === 'draw') {
-        const sh = drag.sh; const tiny = sh.t === 'pen' ? sh.pts.length < 3 : Math.hypot((sh.x2 - sh.x1) * cw, (sh.y2 - sh.y1) * ch) < 8 * dpr;
+        const sh = drag.sh; const tiny = (sh.t === 'pen' || sh.t === 'hlpen') ? sh.pts.length < 3 : Math.hypot((sh.x2 - sh.x1) * cw, (sh.y2 - sh.y1) * ch) < 8 * dpr;
         if (tiny) { shapes.pop(); hist.pop(); }
       } else if (!drag.moved) hist.pop();
       drag = null; draw();
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
     ov.addEventListener('click', async e => {
-      const t = e.target.closest('[data-tool]'); if (t) { tool = t.dataset.tool; if (tool !== 'select') sel = -1; draw(); return; }
+      const t = e.target.closest('[data-tool]'); if (t) { tool = t.dataset.tool; if (tool !== 'select') sel = -1; if (isHl(tool) && color === COLORS[0][0] && !hlColorSet) { color = '#ffd400'; hlColorSet = true; } draw(); return; }
       const c = e.target.closest('[data-color]'); if (c) { color = c.dataset.color; if (sel >= 0) { snap(); shapes[sel].c = color; } draw(); return; }
-      const w = e.target.closest('[data-w]'); if (w) { wIdx = +w.dataset.w; if (sel >= 0 && shapes[sel].t !== 'text') { snap(); shapes[sel].w = WIDTHS[wIdx]; } draw(); return; }
+      const w = e.target.closest('[data-w]'); if (w) { wIdx = +w.dataset.w; if (sel >= 0 && shapes[sel].t !== 'text') { snap(); shapes[sel].w = isHl(shapes[sel].t) ? HL_WIDTHS[wIdx] : WIDTHS[wIdx]; } draw(); return; }
       const a = e.target.closest('[data-a]'); if (!a) return;
       const act = a.dataset.a;
       if (act === 'undo' && hist.length) { shapes = JSON.parse(hist.pop()); sel = -1; draw(); }
@@ -307,7 +317,7 @@ function go(h) { if (location.hash === '#' + h) route(); else location.hash = h;
 async function route() {
   await flushSaves().catch(() => { });
   const p = (location.hash.slice(1) || '/').split('/').filter(Boolean);
-  $('#stepper').hidden = true; $('#bottombar').hidden = true; document.body.classList.remove('wizard');
+  $('#stepper').hidden = true; $('#bottombar').hidden = true; document.body.classList.remove('wizard'); $('#drwFab').hidden = true;
   window.scrollTo(0, 0);
   if (!p.length) return renderHome();
   if (p[0] === 'settings') return renderSettings();
@@ -321,11 +331,24 @@ async function route() {
 let installPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!location.hash || location.hash === '#/') renderHome(); });
 
+function prepState(r) {
+  const has = k => (r.att || []).some(a => a.kind === k);
+  const pid = has('pid') ? 'ok' : r.noDrawing?.pid ? 'na' : '';
+  const iso = has('iso') ? 'ok' : r.noDrawing?.iso ? 'na' : '';
+  const ech = r.ech ? (r.ech.ai ? 'ai' : 'ok') : r.noEch ? 'na' : '';
+  return { pid, iso, ech, ready: !!(pid && iso && ech) };
+}
+function prepChips(r) {
+  const p = prepState(r); const c = (v, l) => `<span class="pc ${v ? 'ok' : ''}">${v === 'na' ? '–' : v ? '✓' : '✗'} ${l}${v === 'na' ? ' n/a' : ''}${v === 'ai' ? ' +AI' : ''}</span>`;
+  return `<div class="prepchips">${c(p.pid, 'P&ID')}${c(p.iso, 'ISO')}${c(p.ech, 'ECH')}</div>`;
+}
 function reportStatus(r) {
   if (r.issuedAt && r.updatedAt <= r.issuedAt + 2000) return ['Issued', 'ok'];
   if (r.issuedAt) return ['Edited after issue', 'warn'];
-  const v = validate(r); if (!v.errors.length) return ['Ready', 'ok2'];
-  const started = r.c && Object.keys(r.c).length; return [started ? 'In progress' : 'Not started', started ? 'warn' : 'muted'];
+  const v = validate(r); if (!v.errors.length) return ['Report ready', 'ok2'];
+  const started = ['insulation', 'coating', 'corrosion', 'support', 'other'].some(k => r.c?.[k] && Object.keys(r.c[k]).length);
+  if (started) return ['In progress', 'warn'];
+  return prepState(r).ready ? ['Ready to inspect', 'ok'] : ['Needs prep', 'muted'];
 }
 function renderHome() {
   cur.system = null; cur.report = null;
@@ -365,6 +388,10 @@ function renderSettings() {
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this phone.</p><a class="btn primary block" href="#/pids">Open P&ID library</a></div>
+  <div class="card"><h3>🤖 AI (optional)</h3>
+    <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
+    <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules.</small></label>
+    <label class="field"><span>Model</span><select data-bind="settings" data-path="aiModel">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommended)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (faster, cheaper)'], ['claude-opus-5-5', 'Claude Opus 5.5 (most thorough)']].map(([v, l]) => `<option value="${v}" ${(st.aiModel || 'claude-sonnet-5-5') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
   <div class="card"><h3>📦 Data pack</h3>
     ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
@@ -372,7 +399,7 @@ function renderSettings() {
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
     <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack</button>${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
-  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection v1.3 – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from PC005/PC007.</p></div>`;
+  <div class="card"><h3>About</h3><p class="muted">VTE Piping Inspection v1.4 – temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
   return `<label class="field"><span>${esc(label)}</span><input type="${type}" data-bind="${bind}" data-path="${path}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
@@ -380,7 +407,7 @@ function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
 
 /* ================= system screen ================= */
 async function newSystem() {
-  const s2 = { id: 's_' + uid(), name: '', site: S.settings.defaultSite, floc: '', sce: '', designCode: 'ASME B31.3', description: '', createdAt: Date.now() };
+  const s2 = { id: 's_' + uid(), name: '', site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: '', createdAt: Date.now() };
   S.systems.push(s2); await DB.put('systems', s2); go('/system/' + s2.id);
 }
 function renderSystem(id) {
@@ -395,17 +422,30 @@ function renderSystem(id) {
       ${inputHTML('sys', 'site', s2.site, 'Installation / Site')}
       ${inputHTML('sys', 'floc', s2.floc, 'Functional location (F/Loc)')}
       ${pillsHTML('sys', 'sce', s2.sce, ['Yes', 'No', 'N/A'], 'Safety Critical Element')}
-      <label class="field"><span>Design code</span><select data-bind="sys" data-path="designCode">${STAGES[0].fields[2].opts.map(o => `<option ${s2.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
+      <label class="field"><span>Design code</span><select data-bind="sys" data-path="designCode"><option value="">– (per line / from ECH)</option>${STAGES[0].fields[2].opts.map(o => `<option ${s2.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
       <label class="field"><span>Description / notes</span><textarea data-bind="sys" data-path="description" rows="2">${esc(s2.description)}</textarea></label>
     </div>
     <div class="section-title"><h2>Line reports</h2><button class="btn primary" data-action="newLine">+ Add line</button></div>
-    ${lines.length ? lines.map(r => {
-      const [st, cls] = reportStatus(r);
-      return `<div class="card line"><a class="line-main" href="#/report/${r.id}/header"><div class="card-title">${esc(r.h?.tagNo || 'Line – no tag yet')}</div>
-        <div class="muted">${esc(r.h?.equipDesc || '')}${r.h?.examDate ? ' · ' + fmtDate(r.h.examDate) : ''}${(r.fm?.areas || []).length ? ' · FM ' + esc(r.fm.areas.join(', ')) : ''}</div>
-        <span class="pill-s ${cls}">${st}</span></a>
-        <div class="line-acts"><button class="btn ghost sm" data-action="dupLine" data-id="${r.id}">⧉ Copy</button><button class="btn ghost sm" data-action="delLine" data-id="${r.id}">🗑</button></div></div>`;
-    }).join('') : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
+    ${lines.length ? (() => {
+      const groups = { prep: [], ready: [], prog: [], done: [] };
+      lines.forEach(r => { const st = reportStatus(r)[0]; (st === 'Needs prep' ? groups.prep : st === 'Ready to inspect' ? groups.ready : st === 'Issued' ? groups.done : groups.prog).push(r); });
+      const f = cur.sysFilter || 'all';
+      const tab = (k, l, n) => `<button class="chip2 ${f === k ? 'on' : ''}" data-action="sysFilter" data-f="${k}">${l} <b>${n}</b></button>`;
+      const show = f === 'all' ? lines : groups[f];
+      return `<div class="card setup"><h3>Inspection setup</h3><div class="setbar">
+          <div><b>${groups.prep.length}</b><span>Needs prep</span></div><div class="ok"><b>${groups.ready.length}</b><span>Ready to inspect</span></div>
+          <div><b>${groups.prog.length}</b><span>In progress</span></div><div><b>${groups.done.length}</b><span>Issued</span></div></div>
+          <p class="small muted">A line is ready when its P&ID, isometric (or "none available") and previous ECH (or "no previous ECH") are added in ★ Line prep – best done in the office with signal.</p></div>
+        <div class="chips2">${tab('all', 'All', lines.length)}${tab('prep', 'Needs prep', groups.prep.length)}${tab('ready', 'Ready', groups.ready.length)}${tab('prog', 'In progress', groups.prog.length)}${tab('done', 'Issued', groups.done.length)}</div>
+        ${show.map(r => {
+          const [st, cls] = reportStatus(r);
+          return `<div class="card line ${st === 'Ready to inspect' ? 'readyline' : ''}"><div class="line-main"><a href="#/report/${r.id}/${st === 'Needs prep' ? 'prep' : 'header'}" class="plain"><div class="card-title">${esc(r.h?.tagNo || 'Line – no tag yet')}</div>
+            <div class="muted">${esc(r.h?.equipDesc || '')}${r.h?.examDate && st !== 'Needs prep' ? ' · ' + fmtDate(r.h.examDate) : ''}${(r.fm?.areas || []).length ? ' · FM ' + esc(r.fm.areas.join(', ')) : ''}</div></a>
+            ${prepChips(r)}<span class="pill-s ${cls}">${st}</span>
+            <div class="grid2" style="margin-top:6px"><a class="btn ghost sm" href="#/report/${r.id}/prep">★ Prep</a><a class="btn primary sm" href="#/report/${r.id}/header">Inspect ›</a></div></div>
+            <div class="line-acts"><button class="btn ghost sm" data-action="dupLine" data-id="${r.id}" aria-label="Copy line">⧉</button><button class="btn ghost sm" data-action="delLine" data-id="${r.id}" aria-label="Delete line">🗑</button></div></div>`;
+        }).join('') || '<div class="empty">Nothing here.</div>'}`;
+    })() : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
     <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
@@ -436,14 +476,15 @@ async function dupLine(id) {
 async function deleteReport(r) {
   for (const a of r.att || []) { await DB.del('blobs', a.blobId); if (a.origId) await DB.del('blobs', a.origId); }
   if (r.sigId) await DB.del('blobs', r.sigId);
+  if (r.ech) await removeEchBlobs(r.ech);
   await DB.del('reports', r.id); S.reports = S.reports.filter(x => x.id !== r.id);
 }
 
 /* ================= report wizard ================= */
 function stepsFor(r) {
-  const st = [{ id: 'header', label: 'Header' }, { id: 'pre', label: 'Pre-inspection' }, { id: 'photos', label: 'Overview photos' }];
+  const st = [{ id: 'prep', label: '★ Line prep' }, { id: 'plot', label: 'Plot plan & FM' }, { id: 'header', label: 'Header' }, { id: 'pre', label: 'Pre-inspection' }, { id: 'photos', label: 'Overview photos' }];
   STAGES.forEach(s2 => st.push({ id: 'st_' + s2.key, label: `${s2.no} ${s2.title}`, stage: s2, skipped: !stageVisible(r, s2) }));
-  st.push({ id: 'drawings', label: 'Iso & P&ID' }, { id: 'plot', label: 'Plot plan & FM' }, { id: 'fmtemplate', label: 'IMS template (FM)' },
+  st.push({ id: 'fmtemplate', label: 'IMS template (FM)' },
     { id: 'findings', label: 'Findings' }, { id: 'text', label: 'Report text' }, { id: 'conclusion', label: 'Sign-off' }, { id: 'review', label: 'Check & AI' }, { id: 'export', label: 'Word report' });
   return st;
 }
@@ -472,10 +513,11 @@ function renderReport(id, step) {
   $('#nextBtn').textContent = next ? 'Next ›' : 'Done'; $('#nextBtn').onclick = () => next ? go(`/report/${r.id}/${next.id}`) : go('/system/' + r.systemId);
   $('#stepCount').textContent = `${idx + 1}/${steps.length}`;
   afterRender(r, steps[idx]);
+  const n = viewerItems(r).length; $('#drwFab').hidden = !n || step === 'prep'; $('#drwFab').querySelector('b').textContent = n;
 }
 function rerender(keepScroll = true) { const y = window.scrollY; renderReport(cur.report.id, cur.step); if (keepScroll) window.scrollTo(0, y); }
 function afterRender(r, step) {
-  drawThumbs();
+  drawThumbs(); fillBlobImgs($('#main'));
   if (step.id === 'conclusion') initSignature();}
 
 /* ---------- field renderers ---------- */
@@ -488,7 +530,7 @@ function pillsHTML(bind, path, val, opts, label, hint, colorFn, extraCls = '') {
 function ynColor(pol) { return v => v === 'N/A' ? 'grey' : pol === 'bad' ? (v === 'Yes' ? 'red' : 'green') : pol === 'good' ? (v === 'Yes' ? 'green' : 'red') : pol === 'follow' ? (v === 'Yes' ? 'amber' : 'green') : 'blue'; }
 function refImgHTML(src, label = 'Reference chart') { const u = resolveImg(src); if (!u) return ''; return `<details class="ref"><summary>📖 ${esc(label)}</summary><img src="${u}" alt="${esc(label)}" loading="lazy"></details>`; }
 function fieldHTML(f, base, vals) {
-  const path = base + '.' + f.k, v = vals[f.k];
+  const path = f.path || base + '.' + f.k, v = f.path ? g(cur.report, f.path) : vals[f.k];
   const hint = f.hint ? `<small>${esc(f.hint)}</small>` : '';
   switch (f.t) {
     case 'text': return `<label class="field"><span>${esc(f.label)}</span><input type="text" data-path="${path}" value="${esc(v)}">${hint}</label>`;
@@ -566,9 +608,9 @@ function lineTableHTML(r) {
     return `<tr><td><b>${sizeLabel(dn)}</b>${L.od ? `<br><small>OD ${L.od}</small>` : ''}</td><td>${esc(L.sch || '–')}</td><td>${nwtCell}</td><td>${L.ca ?? '–'}</td>
       <td class="ps">${L.ps ?? '–'}${L.psIntrados != null ? `<br><small>intrados ${L.psIntrados}</small>` : ''}${L.psSmallBore ? '<br><small>min 2.5</small>' : ''}</td></tr>`;
   }).join('');
-  return `<div class="field"><span>Line data & PC005 minimum wall <em>(mm)</em></span><div class="tbl-wrap"><table class="mini data">
-    <tr><th>Size</th><th>Sch</th><th>NWT</th><th>CA</th><th>PC005 min RWT</th></tr>${rows}</table></div>
-    <small>PC005 1.4: MRWT = (NWT − CA) × 0.67; bend intrados × 0.9; DN25/DN40 not less than 2.5 mm. NWT from ASME B36.10/B36.19 for the class schedule (mill tolerance not deducted).</small></div>`;
+  return `<div class="field"><span>Line data & PS minimum wall <em>(mm)</em></span><div class="tbl-wrap"><table class="mini data">
+    <tr><th>Size</th><th>Sch</th><th>NWT</th><th>CA</th><th>PS min. wall</th></tr>${rows}</table></div>
+    <small>Performance Standard (PC005) 1.4: PS minimum wall = (NWT − CA) × 0.67; bend intrados × 0.9; DN25/DN40 not less than 2.5 mm. NWT from ASME B36.10/B36.19 for the class schedule (mill tolerance not deducted).</small></div>`;
 }
 function boltingHTML(r, compact) {
   const G = r.c?.general || {}; const cls = G.classManual ? null : findClass(G.pipeClassId);
@@ -577,7 +619,7 @@ function boltingHTML(r, compact) {
   return `<details class="ref bolt" ${compact ? '' : 'open'}><summary>🔩 Flange bolting – ${esc(cls.c)} (${cls.r}#)</summary>
     <div class="tbl-wrap"><table class="mini data"><tr><th>Size</th><th>Studs</th><th>Stud Ø</th><th>Nut A/F</th><th>Reject stud &lt;</th><th>Reject nut A/F &lt;</th></tr>
     ${sizes.map(L => { const b = L.bolt; return `<tr><td><b>${sizeLabel(L.dn)}</b></td><td>${b.n} × ${esc(b.dia)}" × ${b.len} mm</td><td>${b.diaMm} mm<br><small>${b.thread}</small></td><td>${b.afIn}<br><small>${b.afMm} mm</small></td><td>${b.dia90} mm</td><td>${b.af90} mm</td></tr>`; }).join('')}
-    </table></div><small>Studs/sets from the class bolting table (standard flanged joint). Nut A/F for ASME B18.2.2 heavy hex (1.5D + 1/8"). PC005 1.8: reject studs/nuts &lt; 90% of nominal after removal of corrosion product; no missing/loose bolts, full engagement. Flange thickness loss ≤ 3 mm (DN ≥ 450, ≤ 600#) else 3 mm or 10% (max 6 mm).${cls.studs[0] ? ' Material: ' + esc(cls.studs.join(' / ')) : ''}</small></details>`;
+    </table></div><small>Studs/sets from the class bolting table (standard flanged joint). Nut A/F for ASME B18.2.2 heavy hex (1.5D + 1/8"). PS 1.8: reject studs/nuts &lt; 90% of nominal after removal of corrosion product; no missing/loose bolts, full engagement. Flange thickness loss ≤ 3 mm (DN ≥ 450, ≤ 600#) else 3 mm or 10% (max 6 mm).${cls.studs[0] ? ' Material: ' + esc(cls.studs.join(' / ')) : ''}</small></details>`;
 }
 
 /* ---------- corrosion measurements ---------- */
@@ -588,10 +630,10 @@ function measResultHTML(x) {
   return `<div class="calc ${x.status === 'red' ? 'bad' : x.status === 'amber' ? 'warn' : 'ok'}">
     <div class="mgrid"><span>NWT</span><b>${L.nwt} mm</b><span>Corrosion allowance</span><b>${L.ca} mm</b>
       ${x.pit != null ? `<span>UT adjacent steel</span><b>${x.ut} mm</b><span>Max pit depth (gauge)</span><b>${x.pit} mm</b>` : ''}
-      <span>${x.pit != null ? 'Estimated RWT' : 'Remaining wall (RWT)'}</span><b>${x.rwt} mm</b><span>Metal loss</span><b>${x.loss} mm</b>
-      <span>CA remaining</span><b>${x.caLeft} mm</b><span>PC005 min. RWT${x.m.loc === 'Bend intrados' ? ' (intrados)' : ''}</span><b>${x.psMin} mm</b>
-      <span>Remaining to PC005</span><b>${x.margin} mm</b></div>
-    <div class="bar"><i style="width:${pct}%"></i></div><small>${pct}% of the allowable loss to PC005 used</small>
+      <span>${x.pit != null ? 'Estimated MRWT' : 'MRWT (measured)'}</span><b>${x.rwt} mm</b><span>Metal loss</span><b>${x.loss} mm</b>
+      <span>CA remaining</span><b>${x.caLeft} mm</b><span>PS min. wall${x.m.loc === 'Bend intrados' ? ' (intrados)' : ''}</span><b>${x.psMin} mm</b>
+      <span>Remaining to PS</span><b>${x.margin} mm</b></div>
+    <div class="bar"><i style="width:${pct}%"></i></div><small>${pct}% of the allowable loss to PS used</small>
     ${x.rwt > L.nwt ? '<div><b>⚠ Reading is greater than NWT – check the size / schedule selected.</b></div>' : ''}
     <div><b>${esc(x.verdict)}</b></div>${x.pit != null ? `<div class="disc">ⓘ ${esc(PIT_DISCLAIMER)}</div>` : ''}</div>`;
 }
@@ -600,7 +642,7 @@ function areasHTML(r) {
   const sizes = selectedSizes(r);
   const sizeOpts = sizes.length ? sizes : Object.keys(findClass(r.c.general?.pipeClassId)?.sch || {});
   return `<div class="field"><span>Corrosion areas on pipe</span>
-    ${!sizes.length ? '<div class="calc warn small">Select pipe class and line size(s) in stage 1 to get NWT, CA and PC005 limits.</div>' : ''}
+    ${!sizes.length ? '<div class="calc warn small">Select pipe class and line size(s) in stage 1 to get NWT, CA and PS limits.</div>' : ''}
     ${list.map((m, i) => {
       const base = `c.corrosion.areas.${i}`;
       return `<div class="meas"><div class="f-head"><b>Area ${i + 1}</b><button class="btn ghost sm danger-t" data-action="delArea" data-i="${i}" aria-label="Remove area">🗑</button></div>
@@ -656,7 +698,7 @@ function flangeSheetHTML(r, i) {
     ${pillsHTML('report', base + '.missing', f.missing, ['Yes', 'No'], 'Missing or loose bolting?', '', ynColor('bad'))}
     ${pillsHTML('report', base + '.engagement', f.engagement, ['Yes', 'No'], 'Full nut engagement (threads through nut)?', '', ynColor('good'))}
     <label class="field"><span>Notes</span><textarea rows="2" data-path="${base}.notes">${esc(f.notes)}</textarea></label>
-    <small class="muted">Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes the 1.6 mm raised face; Class 400+ excludes the 6.4 mm raised face). Stud/nut per class bolting table and ASME B18.2.2. PC005 1.8: reject studs/nuts &lt; 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).</small>
+    <small class="muted">Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes the 1.6 mm raised face; Class 400+ excludes the 6.4 mm raised face). Stud/nut per class bolting table and ASME B18.2.2. PS 1.8: reject studs/nuts &lt; 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).</small>
     <div style="margin-top:10px"><button class="btn ghost" data-action="camera" data-group="corrosion" data-cap="Flange ${i + 1}${f.where ? ' – ' + esc(f.where) : ''}">📷 Photo of Flange ${i + 1}</button></div>
   </div>`;
 }
@@ -675,7 +717,7 @@ function thumbsHTML(r, list, opts = {}) {
       <div class="thumb-img" data-action="annotate" data-id="${a.id}"><canvas data-thumb="${a.id}"></canvas>${nums[a.id] ? `<b class="num">Photo ${nums[a.id]}</b>` : ''}${(a.ann || []).length ? '<b class="annb">✎</b>' : ''}</div>
       <input class="cap" data-attcap="${a.id}" value="${esc(a.caption)}" placeholder="${opts.capPh || 'Caption (what / where)'}">
       ${opts.rev ? `<label class="revok"><input type="checkbox" data-attrev="${a.id}" ${a.revOk ? 'checked' : ''}> Latest revision confirmed</label>` : ''}
-      <div class="thumb-acts"><button class="btn ghost sm" data-action="annotate" data-id="${a.id}">✎ Annotate</button><button class="btn ghost sm" data-action="delAtt" data-id="${a.id}" aria-label="Delete">🗑</button></div>
+      <div class="thumb-acts">${a.isoDoc ? `<button class="btn ghost sm" data-action="isoEdit" data-id="${a.id}">✏️ Sketch</button>` : ''}<button class="btn ghost sm" data-action="annotate" data-id="${a.id}">✎ Annotate</button><button class="btn ghost sm" data-action="delAtt" data-id="${a.id}" aria-label="Delete">🗑</button></div>
     </figure>`).join('')}</div>`;
 }
 function photoGroupHTML(r, gp) {
@@ -701,7 +743,8 @@ function stepHTML(r, step) {
       ${pillsHTML('report', 'h.sce', h.sce, ['Yes', 'No', 'N/A'], 'Safety Critical Element')}
       ${inputHTML('report', 'h.equipDesc', h.equipDesc, 'Equipment description', 'e.g. 6" fuel gas line from AK-V-370 to AK-K-2300')}
       <div class="grid2">${inputHTML('report', 'h.service', h.service, 'Service / fluid')}${inputHTML('report', 'h.size', h.size, 'Nominal size(s)', 'Filled from sizes ticked in stage 1')}</div>
-      ${inputHTML('report', 'h.perfStd', h.perfStd ?? 'PC005 – Piping Systems', 'Performance standard')}
+      ${inputHTML('report', 'c.general.pidNumber', r.c?.general?.pidNumber, 'P&ID number', 'Shared with Line prep and stage 1')}
+      ${inputHTML('report', 'h.perfStd', h.perfStd ?? 'Performance Standard (PC005) – Piping Systems', 'Performance standard')}
       <div class="field"><span>Pipe class</span><div>${classSummary(r) ? `<b>${esc(classSummary(r))}</b> ${selectedSizes(r).map(d => `<span class="pill-s">${sizeLabel(d)}</span>`).join(' ')}` : '<span class="muted">Not selected</span>'}</div><small>Selected in <a href="#/report/${r.id}/st_general">stage 1 General</a>.</small></div>
       ${inputHTML('report', 'h.dateConstruction', h.dateConstruction, 'Date of construction')}
       <label class="field"><span>Design code</span><select data-path="h.designCode"><option value="">–</option>${STAGES[0].fields[2].opts.map(o => `<option ${h.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
@@ -717,7 +760,7 @@ function stepHTML(r, step) {
       const p = r.pre || (r.pre = {});
       const multi = (path, val, opts, label) => `<div class="field"><span>${esc(label)}</span><div class="pills wrap">${opts.map(o => `<button type="button" class="pill ${(val || []).includes(o) ? 'on blue' : ''}" data-action="multi" data-path="${path}" data-val="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
       return `<div class="card"><h2>Pre-inspection</h2>
-        ${inputHTML('report', 'pre.inspector', p.inspector, 'Inspection carried out by')}
+        ${inputHTML('report', 'con.inspector', r.con?.inspector, 'Inspection carried out by', 'Same name is used for the sign-off')}
         ${pillsHTML('report', 'pre.echReviewed', p.echReviewed, ['Yes', 'No'], 'Previous history (ECH) reviewed in IMS?', 'IBMS: the inspector should check the history of the equipment before inspecting', ynColor('good'))}
         <label class="field"><span>Previous findings / open CAIRs</span><textarea rows="2" data-path="pre.history">${esc(p.history)}</textarea></label>
         ${inputHTML('report', 'pre.permit', p.permit, 'Permit to Work No.')}
@@ -734,24 +777,41 @@ function stepHTML(r, step) {
     case 'photos': return `<div class="card"><h2>Overview & stand-off photos</h2><p class="muted small">Photos are numbered automatically in report order. Tap a photo to annotate it.</p></div>
       ${photoGroupHTML(r, PHOTO_GROUPS[0])}${photoGroupHTML(r, PHOTO_GROUPS[1])}`;
 
-    case 'drawings': {
+    case 'prep': {
+      const ps = prepState(r);
       const grp = (kind, title, hint) => {
-        const list = (r.att || []).filter(a => a.kind === kind);
+        const list = (r.att || []).filter(a2 => a2.kind === kind);
         const none = !!r.noDrawing?.[kind];
         return `<section class="photos ${none ? 'none' : ''}"><div class="ph-head"><h3>${esc(title)}</h3>
-          ${kind !== 'other' ? `<label class="nophoto"><input type="checkbox" data-path="noDrawing.${kind}" data-rerender ${none ? 'checked' : ''}> Not available</label>` : ''}</div>
+          ${kind !== 'other' ? `<label class="nophoto"><input type="checkbox" data-path="noDrawing.${kind}" data-rerender ${none ? 'checked' : ''}> ${kind === 'iso' ? 'No ISO available' : 'Not available'}</label>` : ''}</div>
           <p class="muted small">${esc(hint)}</p>
           ${kind === 'pid' ? `<div class="revnote">⚠ Check each P&ID is the <b>latest revision</b> (document control / FMC) before marking it up, then tick "Latest revision confirmed".</div>` : ''}
           ${none && !list.length ? '' : `${kind === 'pid' ? `<button class="btn primary block" data-action="pidPickToggle">📚 Choose from P&ID library (${S.pidlib.items.length})</button>${cur.pidPick ? pidPickerHTML() : ''}` : ''}
-            <div class="grid2"><button class="btn ${kind === 'pid' ? 'ghost' : 'primary'}" data-action="addDrawing" data-kind="${kind}">📄 Add file (PDF / image)</button><button class="btn ghost" data-action="camera" data-group="${kind}" data-kind="${kind}">📷 Photo of drawing</button></div>`}
+            ${kind === 'iso' ? `<button class="btn primary block" data-action="isoNew">✏️ Draw isometric sketch</button>` : ''}
+            <div class="grid2"><button class="btn ghost" data-action="addDrawing" data-kind="${kind}">📄 Add file (PDF / image)</button><button class="btn ghost" data-action="camera" data-group="${kind}" data-kind="${kind}">📷 Photo of drawing</button></div>`}
+          ${kind === 'pid' ? `<label class="field" style="margin-top:10px"><span>P&ID number</span><input type="text" data-path="c.general.pidNumber" value="${esc(r.c?.general?.pidNumber)}" autocapitalize="characters"><small>Shared with stage 1 and the report front page.</small></label>` : ''}
           ${thumbsHTML(r, list, { capPh: 'Drawing number / title', rev: kind === 'pid' })}</section>`;
       };
-      return `<div class="card"><h2>Isometric & P&ID</h2><p class="muted small">PDF pages are converted to images so you can mark them up (inspection extent, anomaly locations, photo positions).</p></div>
-        ${grp('iso', 'Isometric', 'Mark the inspected extent and anomaly locations.')}
-        ${grp('pid', 'P&ID / PEFS', 'Highlight the line inspected.')}
+      const e = r.ech;
+      return `<div class="card"><h2>★ Line prep</h2><p class="muted small">Do this in the office before going out: add the P&ID (highlight the line), the isometric and the previous ECH. Drawings and the ECH summary are then one tap away during the inspection (📐 button).</p>
+          ${prepChips(r)}${ps.ready ? '<div class="calc ok">✓ Ready to inspect</div>' : ''}</div>
+        ${grp('pid', 'P&ID / PEFS', 'Highlight the line inspected – use the highlighter (▬ / 🖍).')}
+        ${grp('iso', 'Isometric', 'Add the isometric, draw a sketch, or tick "No ISO available".')}
+        <section class="photos ${r.noEch && !e ? 'none' : ''}"><div class="ph-head"><h3>Previous ECH</h3>
+          ${!e ? `<label class="nophoto"><input type="checkbox" data-path="noEch" data-rerender ${r.noEch ? 'checked' : ''}> No previous ECH</label>` : ''}</div>
+          <p class="muted small">Reference only – not printed in the report. Import the last Condition History (R405 PDF) from IMS.</p>
+          ${e ? `${echCardHTML(r)}
+            <div class="ech-ai-box"><h4>🤖 AI summary ${e.ai ? '(done – run again to refresh)' : ''}</h4>
+              ${S.settings.aiKey ? `<button class="btn primary block" data-action="echAiApi">🤖 Summarise with AI now (needs signal)</button>` : ''}
+              <button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'} block" data-action="echAiCopy">📋 Copy ECH for your AI tool</button>
+              <label class="field"><span>Paste AI reply</span><textarea id="echAiReply" rows="3" placeholder='{"overview": ...}'></textarea></label>
+              <button class="btn ghost block" data-action="echAiPaste">Apply AI summary</button>
+              ${!S.settings.aiKey ? '<small class="muted">Tip: add an AI key in Settings to summarise with one tap.</small>' : ''}</div>
+            <div class="grid2"><button class="btn ghost sm" data-action="echImport">↺ Replace ECH</button><button class="btn ghost sm danger-t" data-action="echRemove">🗑 Remove ECH</button></div>`
+          : (r.noEch ? '' : `<button class="btn primary block" data-action="echImport">📄 Import previous ECH (PDF)</button>`)}
+        </section>
         ${grp('other', 'Other documents / sketches', 'Optional – NDT reports, sketches, previous reports.')}`;
     }
-
     case 'plot': {
       const plots = (r.att || []).filter(a => a.kind === 'plot');
       const areas = r.fm?.areas || [];
@@ -929,8 +989,8 @@ function aiPack(r) {
   for (const st of STAGES) {
     if (!stageVisible(r, st)) continue;
     const vals = g(r, 'c.' + st.key) || {};
-    checklist[`${st.no} ${st.title}`] = st.fields.filter(f => fieldVisible(r, f) && vals[f.k] != null && vals[f.k] !== '')
-      .map(f => `${f.label}: ${optLabel(f, vals[f.k])}${vals[f.k + '_cond'] ? ' (' + vals[f.k + '_cond'] + ')' : ''}`);
+    checklist[`${st.no} ${st.title}`] = st.fields.filter(f => fieldVisible(r, f) && !['areas', 'flanges', 'pipeclass'].includes(f.t) && fval(r, st, f) != null && fval(r, st, f) !== '')
+      .map(f => `${f.label}: ${optLabel(f, fval(r, st, f))}${vals[f.k + '_cond'] ? ' (' + vals[f.k + '_cond'] + ')' : ''}`);
   }
   const data = {
     header: r.h, preInspection: r.pre, fmAreas: r.fm?.areas, checklist,
@@ -943,13 +1003,13 @@ function aiPack(r) {
 RULES
 - Do NOT change, add or remove any finding, measurement, date, tag number or the fitness-for-service conclusion. Do not invent facts.
 - Improve clarity, grammar and professional technical tone (UK English), concise and factual, suitable for an inspection report and IMS history entry.
-- Flag (in "issues") anything inconsistent, missing or not aligned with the acceptance criteria below – e.g. a finding without a sensible remedial action or due date, text contradicting the checklist, or a wall thickness below the PC005 minimum without an FFS action.
+- Flag (in "issues") anything inconsistent, missing or not aligned with the acceptance criteria below – e.g. a finding without a sensible remedial action or due date, text contradicting the checklist, or a wall thickness below the PS minimum without an FFS action.
 
-ACCEPTANCE CRITERIA (PC005 Piping Systems performance standard / IBMS visual inspection)
+ACCEPTANCE CRITERIA (Performance Standard (PC005) Piping Systems – 'PS' – / IBMS visual inspection)
 - No leaks (gas 20% LEL at 100 mm downwind; liquid 4 drips/min or 1 L/24 h; below = weep/seep).
 - No cracks, gouges, arc strikes, weld defects, dents or gross deformation.
 - Pit gauge / visual measurements are indicative only.
-- MRWT = (NWT − DCA) × 0.67 (× 0.9 at bend intrados); DN25/DN40 not less than 2.5 mm; below → FFS by Mechanical Static TA.
+- MRWT means MEASURED remaining wall thickness. PS minimum wall = (NWT − DCA) × 0.67 (× 0.9 at bend intrados); DN25/DN40 not less than 2.5 mm; below → FFS by Mechanical Static TA.
 - Supports perform intended function; spring supports within limits; sliding supports free; support metal loss ≤ 20%.
 - Vibration RMS < 12.5 mm/s or PVM green.
 - Bolting: correct size, full engagement, none missing/loose; reject studs/nuts < 90% nominal. Flange thickness loss ≤ 3 mm (or 10%, max 6 mm, see PS).
@@ -1026,7 +1086,7 @@ const safeName = s2 => String(s2 || 'report').replace(/[^\w\-]+/g, '_').replace(
 const b64 = { enc: blob => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); }), dec: async d => (await fetch(d)).blob() };
 async function makeBackup(systems, reports) {
   const blobs = [];
-  for (const r of reports) for (const id of [...(r.att || []).flatMap(a => [a.blobId, a.origId]), r.sigId].filter(Boolean)) {
+  for (const r of reports) for (const id of [...(r.att || []).flatMap(a => [a.blobId, a.origId]), r.sigId, r.ech?.pdfId, ...(r.ech?.photos || []).map(p => p.blobId)].filter(Boolean)) {
     const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) });
   }
   return new Blob([JSON.stringify({ format: 'vte-backup', version: 1, exported: new Date().toISOString(), systems, reports, blobs })], { type: 'application/json' });
@@ -1151,7 +1211,7 @@ async function importLineList(file, systemId) {
   }));
   if (!res || !res.picked.length) return;
   let target = sys;
-  if (!target) { target = { id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: 'ASME B31.3', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
+  if (!target) { target = { id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
   for (const x of res.picked) {
     const r = blankReport(target); r.h.tagNo = x.tag; r.h.equipDesc = x.desc; S.reports.push(r); await DB.put('reports', r);
   }
@@ -1343,6 +1403,27 @@ const actions = {
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   exportAll: async () => { if (!S.systems.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); shareBlob(await makeBackup(S.systems, S.reports), `VTE_backup_all_${todayISO()}.json`, 'VTE backup'); },
   importBackup: () => $('#fileBackup').click(),
+  sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
+  echImport: () => $('#fileEch').click(),
+  echRemove: async () => { const r = cur.report; if (!r.ech || !await confirmBox('Remove previous ECH', 'Remove the imported ECH and its photos from this line?', 'Remove')) return; await removeEchBlobs(r.ech); r.ech = null; persist('report'); rerender(); },
+  echAiCopy: () => copyText(echAiPrompt(cur.report.ech, true)),
+  echAiPaste: () => {
+    const r = cur.report; try { const j = parseAiJson($('#echAiReply').value); j._via = 'pasted'; j._at = new Date().toISOString(); r.ech.ai = j;
+      const done = prefillFromEch(r); persist('report'); rerender(); toast('AI summary added' + (done.length ? ' – filled: ' + done.join(', ') : ''), 4000); }
+    catch (e) { toast('Could not read the reply: ' + e.message, 4000); }
+  },
+  echAiApi: async el => {
+    const r = cur.report; if (!navigator.onLine) return toast('No signal – try again when online');
+    el.disabled = true; el.textContent = '⏳ Summarising…';
+    try { const j = await echAiViaApi(r.ech); j._via = S.settings.aiModel || 'AI'; j._at = new Date().toISOString(); r.ech.ai = j;
+      const done = prefillFromEch(r); persist('report'); rerender(); toast('AI summary added' + (done.length ? ' – filled: ' + done.join(', ') : ''), 4000); }
+    catch (e) { toast('⚠ ' + e.message, 6000); el.disabled = false; el.textContent = '🤖 Summarise with AI now (needs signal)'; }
+  },
+  echPhoto: el => openViewer(cur.report, 'echph:' + el.dataset.i),
+  echOriginal: () => openViewer(cur.report, 'echorig'),
+  isoNew: async () => { if (await openIsoTool(cur.report, null)) rerender(); },
+  isoEdit: async el => { const a = cur.report.att.find(x => x.id === el.dataset.id); if (a && await openIsoTool(cur.report, a)) rerender(); },
+  openViewer: () => cur.report && openViewer(cur.report),
   importLines: el => { pending = { lineSys: el.dataset.sys || null }; $('#fileLines').click(); },
   importPids: () => $('#filePids').click(),
   pidPickToggle: () => { cur.pidPick = !cur.pidPick; rerender(); },
@@ -1399,6 +1480,12 @@ async function handleFiles(files) {
   persist('report'); rerender(); toast(`${n} added`);
 }
 ['fileCamera', 'fileGallery', 'fileDrawing'].forEach(id => $('#' + id).addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; await handleFiles(files); }));
+$('#fileEch').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !cur.report) return;
+  try { const done = await importEch(f, cur.report); persist('report'); rerender(); toast('Previous ECH imported' + (done.length ? ' – filled: ' + done.join(', ') : ''), 5000); }
+  catch (err) { console.error(err); toast('⚠ Could not read ECH: ' + err.message, 5000); }
+});
+document.getElementById('drwFab').addEventListener('click', () => cur.report && openViewer(cur.report));
 $('#fileLines').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) importLineList(f, pending?.lineSys).catch(err => toast('⚠ ' + err.message, 5000)); });
 $('#filePids').addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; if (files.length) { await importPidFiles(files); if (location.hash.startsWith('#/pids')) renderPidLib(); else route(); } });
 document.getElementById('themeBtn').addEventListener('click', () => actions.toggleTheme());

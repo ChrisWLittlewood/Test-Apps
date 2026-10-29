@@ -24,12 +24,14 @@
   <span id="stepCount"></span>
   <button id="nextBtn" class="btn primary">Next &#8250;</button>
 </footer>
+<button id="drwFab" hidden aria-label="Drawings and previous ECH">📐<b></b></button>
 <div id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileGallery" accept="image/*" multiple hidden>
 <input type="file" id="fileDrawing" accept="image/*,application/pdf" multiple hidden>
 <input type="file" id="fileLines" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
 <input type="file" id="filePids" accept="image/*,application/pdf" multiple hidden>
+<input type="file" id="fileEch" accept="application/pdf,.pdf" hidden>
 <input type="file" id="filePack" accept="application/json,.json" hidden>
 <input type="file" id="fileBackup" accept="application/json,.json" hidden>
 <script src="vendor/docx.js"></script>
@@ -38,6 +40,9 @@
 <script src="pipeclasses.js"></script>
 <script src="checklist.js"></script>
 <script src="report.js"></script>
+<script src="ech.js"></script>
+<script src="viewer.js"></script>
+<script src="isotool.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* Piping class helpers: line data per size, PC005 minimum wall, corrosion assessment, bolting limits.
+/* Piping class helpers: line data per size, PS minimum wall, corrosion assessment, bolting limits.
    Piping classes, plot plans and reference charts come from an imported data pack (see app.js loadPack). */
 let PIPE_CLASSES = [], PIPE_SOURCES = {}, PLOT_LIBRARY = { asset: '', drawings: [] }, PACK = null;
 const PACK_URLS = {};
@@ -78,8 +78,8 @@ function assessMeas(r, a, idx) {
   res.margin = res.psMin != null ? r2(res.rwt - res.psMin) : null;  // remaining to performance standard
   res.usedPct = res.psMin != null ? Math.round(100 * res.loss / Math.max(0.01, L.nwt - res.psMin)) : null;
   res.status = res.margin != null && res.margin < 0 ? 'red' : (res.caLeft != null && res.caLeft < 0) ? 'amber' : 'green';
-  res.verdict = res.status === 'red' ? 'BELOW PC005 minimum – integrity not guaranteed, FFS by Mechanical Static TA required'
-    : res.caLeft != null && res.caLeft < 0 ? 'Corrosion allowance consumed – within PC005 minimum'
+  res.verdict = res.status === 'red' ? 'BELOW PS minimum – integrity not guaranteed, FFS by Mechanical Static TA required'
+    : res.caLeft != null && res.caLeft < 0 ? 'Corrosion allowance consumed – within PS minimum'
       : 'Within corrosion allowance';
   return res;
 }
@@ -109,7 +109,7 @@ function flangeData(r, f, idx) {
   };
   if (fd) {
     const allow = (+dn >= 450 && rating <= 600) ? 3 : r2(Math.max(3, Math.min(0.1 * fd.tf, 6)));
-    row('tf', 'Flange thickness', fd.tf, f.tf, allow, `PC005: loss ≤ ${allow} mm`);
+    row('tf', 'Flange thickness', fd.tf, f.tf, allow, `PS: loss ≤ ${allow} mm`);
   } else row('tf', 'Flange thickness', null, f.tf, null, 'Nominal not available for this size/rating');
   if (bolt) {
     row('stud', 'Stud diameter', bolt.diaMm, f.stud, r2(bolt.diaMm * 0.1), 'Reject if < 90% nominal');
