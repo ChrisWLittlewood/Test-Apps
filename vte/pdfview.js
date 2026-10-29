@@ -58,13 +58,13 @@ function docTreeToHtml(doc, urls) {
 
 async function openPdfView(r, sys, settings, H, fileName) {
   const urls = [];
-  const doc = await buildDocx(r, sys, settings, { ...H, D: HTMLDOCX });
-  const h = r.h || {};
+  const doc = H.build ? await H.build({ ...H, D: HTMLDOCX }) : await buildDocx(r, sys, settings, { ...H, D: HTMLDOCX });
+  const h = r?.h || {};
   const cssStr = v => '"' + String(v || '').replace(/["\\]/g, '\\$&').replace(/\n/g, ' ') + '"';
   const pv = document.createElement('div'); pv.id = 'printView';
   pv.innerHTML = `<style>
     @page { size: A4 portrait; margin: 10mm 12.7mm 16mm;
-      @bottom-left { content: ${cssStr(PACK?.report?.formRef || '')}; font: 7.5pt Arial, sans-serif; border-top: .75pt solid #000; padding-top: 2mm; vertical-align: top; }
+      @bottom-left { content: ${cssStr(H.footer ?? (PACK?.report?.formRef || ''))}; font: 7.5pt Arial, sans-serif; border-top: .75pt solid #000; padding-top: 2mm; vertical-align: top; }
       @bottom-right { content: "Page " counter(page) " of " counter(pages); font: bold 7.5pt Arial, sans-serif; border-top: .75pt solid #000; padding-top: 2mm; vertical-align: top; } }
     @page land { size: A4 landscape; }
   </style>

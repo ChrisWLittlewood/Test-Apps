@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -454,17 +454,20 @@ async function route() {
   const p = (location.hash.slice(1) || '/').split('/').filter(Boolean);
   $('#stepper').hidden = true; $('#bottombar').hidden = true; document.body.classList.remove('wizard'); $('#drwFab').hidden = true;
   window.scrollTo(0, 0);
-  if (!p.length) return renderHome();
+  if (!p.length) return renderToolbox();
+  if (p[0] === 'imsnt') return renderHome();
+  if (p[0] === 'iso') return renderIsoLib();
+  if (p[0] === 'flange') return p[1] ? renderFlange(p[1]) : renderFlangeLib();
   if (p[0] === 'settings') return renderSettings();
   if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
   if (p[0] === 'report') return renderReport(p[1], p[2] || 'header');
-  renderHome();
+  renderToolbox();
 }
 
 /* ================= home ================= */
 let installPrompt = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!location.hash || location.hash === '#/') renderHome(); });
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!location.hash || location.hash === '#/') renderToolbox(); });
 
 function prepState(r) {
   const has = k => (r.att || []).some(a => a.kind === k);
@@ -488,7 +491,8 @@ function reportStatus(r) {
 }
 function renderHome() {
   cur.system = null; cur.report = null;
-  setTop("IMSn't", S.settings.inspectorName ? 'Inspector: ' + S.settings.inspectorName : "When IMS isn't working");
+  setTop("IMSn't", 'Pipework Visual Inspection Tool', '/');
+  try { showLaunch(APP_VERSION); } catch { }
   const sys = [...S.systems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $('#main').innerHTML = `
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Start by adding your name in <a href="#/settings">Settings</a> – it is used on every report.</div>` : ''}
@@ -552,9 +556,9 @@ async function newSystem() {
   S.systems.push(s2); await DB.put('systems', s2); go('/system/' + s2.id);
 }
 function renderSystem(id) {
-  const s2 = S.systems.find(x => x.id === id); if (!s2) return go('/');
+  const s2 = S.systems.find(x => x.id === id); if (!s2) return go('/imsnt');
   cur.system = s2; cur.report = null;
-  setTop(s2.name || 'New piping system', 'Piping system', '/');
+  setTop(s2.name || 'New piping system', 'Piping system', '/imsnt');
   const lines = S.reports.filter(r => r.systemId === id).sort((a, b) => (a.h?.tagNo || '').localeCompare(b.h?.tagNo || ''));
   $('#main').innerHTML = `
     <div class="card">
@@ -630,7 +634,7 @@ function stepsFor(r) {
   return st;
 }
 function renderReport(id, step) {
-  const r = S.reports.find(x => x.id === id); if (!r) return go('/');
+  const r = S.reports.find(x => x.id === id); if (!r) return go('/imsnt');
   cur.report = r; cur.system = S.systems.find(x => x.id === r.systemId) || { id: r.systemId, name: '' }; cur.step = step;
   const steps = stepsFor(r); const isFl = /^fl_\d+$/.test(step);
   let idx = steps.findIndex(x => x.id === (isFl ? 'st_corrosion' : step)); if (idx < 0) idx = 0;
@@ -1262,12 +1266,13 @@ const safeName = s2 => String(s2 || 'report').replace(/[^\w\-]+/g, '_').replace(
 
 /* ---------- backups ---------- */
 const b64 = { enc: blob => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); }), dec: async d => (await fetch(d)).blob() };
-async function makeBackup(systems, reports) {
+async function makeBackup(systems, reports, withTools) {
   const blobs = [];
+  if (withTools) for (const id of [...TB.iso.items.map(i => i.blobId), ...TB.fl.items.flatMap(i => (i.photos || []).map(p => p.blobId))]) { const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) }); }
   for (const r of reports) for (const id of [...(r.att || []).flatMap(a => [a.blobId, a.origId]), r.sigId, r.ech?.pdfId, ...(r.ech?.photos || []).map(p => p.blobId)].filter(Boolean)) {
     const b = await getBlob(id); if (b) blobs.push({ id, data: await b64.enc(b) });
   }
-  return new Blob([JSON.stringify({ format: 'vte-backup', version: 1, exported: new Date().toISOString(), systems, reports, blobs })], { type: 'application/json' });
+  return new Blob([JSON.stringify({ format: 'vte-backup', version: 1, exported: new Date().toISOString(), systems, reports, blobs, ...(withTools ? { isolib: TB.iso.items, flangelib: TB.fl.items } : {}) })], { type: 'application/json' });
 }
 async function importBackup(file) {
   const j = JSON.parse(await file.text());
@@ -1277,6 +1282,8 @@ async function importBackup(file) {
   for (const b of j.blobs) await DB.put('blobs', { id: b.id, blob: await b64.dec(b.data) });
   for (const s2 of j.systems) { await DB.put('systems', s2); S.systems = S.systems.filter(x => x.id !== s2.id).concat(s2); }
   for (const r of j.reports) { await DB.put('reports', r); S.reports = S.reports.filter(x => x.id !== r.id).concat(r); }
+  for (const [k, key] of [['iso', 'isolib'], ['fl', 'flangelib']]) for (const it of j[key] || []) TB[k].items = TB[k].items.filter(x => x.id !== it.id).concat(it);
+  if (j.isolib || j.flangelib) await flushTB();
   imgCache.clear(); toast('Backup imported'); route();
 }
 
@@ -1474,7 +1481,7 @@ const actions = {
   delSystem: async () => {
     const lines = S.reports.filter(r => r.systemId === cur.system.id);
     if (!await confirmBox('Delete piping system', `Delete "${cur.system.name || 'this system'}" and its ${lines.length} line report(s)? This cannot be undone.`)) return;
-    for (const r of lines) await deleteReport(r); await DB.del('systems', cur.system.id); S.systems = S.systems.filter(x => x.id !== cur.system.id); go('/');
+    for (const r of lines) await deleteReport(r); await DB.del('systems', cur.system.id); S.systems = S.systems.filter(x => x.id !== cur.system.id); go('/imsnt');
   },
   goto: el => go(`/report/${cur.report.id}/${el.dataset.step}`),
   pill: el => {
@@ -1612,7 +1619,7 @@ const actions = {
     } catch { toast('Could not check – try again later'); }
     finally { el.disabled = false; el.textContent = '⟳ Check for updates'; }
   },
-  exportAll: async () => { if (!S.systems.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); shareBlob(await makeBackup(S.systems, S.reports), `VTE_backup_all_${todayISO()}.json`, 'VTE backup'); },
+  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup(S.systems, S.reports, true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
   echImport: () => $('#fileEch').click(),
@@ -1716,7 +1723,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await loadPack(); await loadPidLib();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
+    await loadTools();
     route();
-    try { showLaunch(APP_VERSION); } catch { }
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

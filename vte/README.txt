@@ -1,4 +1,5 @@
-IMSn't – v1.6 (trial)  ·  When IMS isn't working
+INSPECTION TOOLBOX – v1.7 (trial)
+IMSn't · Isometricks · Gasket Case
 =========================================
 
 Two parts:
@@ -41,3 +42,11 @@ New in v1.6
 - Photo observations: "+ Add photo observation" under each stage heading, each with its own photos; general photos at the bottom.
 - Findings renamed CAIR items with a suggested action for the Area Inspector; "Not required" option.
 - Report text in bullet points; permit to work removed.
+
+New in v1.7
+-----------
+- Landing screen is now the Inspection Toolbox with three apps:
+  IMSn't (pipework visual inspection reports), Isometricks (stand-alone iso sketches) and Gasket Case (flange sheets).
+- Gasket Case: line no., flange no., pipe class and size -> nominal flange/bolting/gasket data, numbered bolt circle,
+  stud-by-stud table with front and base A/F for each nut (sides A and B), PS 1.8 checks, photos, Word / PDF sheet.
+- "Backup everything" now includes sketches and flange sheets.

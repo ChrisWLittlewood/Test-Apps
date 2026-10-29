@@ -1,7 +1,7 @@
 {
-  "name": "IMSn't – When IMS isn't working",
-  "short_name": "IMSn't",
-  "description": "Offline visual external inspection (VTE) reports for piping systems – when IMS isn't working.",
+  "name": "Inspection Toolbox",
+  "short_name": "Toolbox",
+  "description": "Offline inspection tools – IMSn't (pipework VTE reports), Isometricks (iso sketches) and Gasket Case (flange sheets).",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
