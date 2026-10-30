@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -460,6 +460,7 @@ async function route() {
   if (p[0] === 'flange') return p[1] ? renderFlange(p[1]) : renderFlangeLib();
   if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
   if (p[0] === 'face-limits') return renderFaceLimits();
+  if (p[0] === 'refs') return renderRefs(p[1]);
   if (p[0] === 'settings') return renderSettings();
   if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
@@ -516,6 +517,7 @@ function renderHome() {
       <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
     </div>
+    ${refsChipHTML('imsnt')}
     <p class="foot muted">All data is stored only on this device and works without signal. Back up regularly – clearing Chrome's site data deletes it.</p>
     <div class="ver-row"><span>IMSn't v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
 }
@@ -569,6 +571,7 @@ function renderSystem(id) {
       ${inputHTML('sys', 'site', s2.site, 'Installation / Site')}
       ${inputHTML('sys', 'floc', s2.floc, 'Functional location (F/Loc)')}
       ${pillsHTML('sys', 'sce', s2.sce, ['Yes', 'No', 'N/A'], 'Safety Critical Element')}
+      <div class="grid2">${inputHTML('sys', 'imsSchedule', s2.imsSchedule, 'IMS schedule No. to credit', 'Fills every line report')}${inputHTML('sys', 'sapWO', s2.sapWO, 'SAP work order No.', 'Fills every line report', 'text', 'inputmode="numeric"')}</div>
       <label class="field"><span>Design code</span><select data-bind="sys" data-path="designCode"><option value="">– (per line / from ECH)</option>${STAGES[0].fields[2].opts.map(o => `<option ${s2.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
       <label class="field"><span>Description / notes</span><textarea data-bind="sys" data-path="description" rows="2">${esc(s2.description)}</textarea></label>
     </div>
@@ -599,7 +602,7 @@ function renderSystem(id) {
 function blankReport(sys) {
   return {
     id: 'r_' + uid(), systemId: sys.id, createdAt: Date.now(),
-    h: { site: sys.site, floc: sys.floc, sce: sys.sce, designCode: sys.designCode, inspType: 'VTE', examDate: todayISO() },
+    h: { site: sys.site, floc: sys.floc, sce: sys.sce, designCode: sys.designCode, imsSchedule: sys.imsSchedule || '', sapWO: sys.sapWO || '', inspType: 'VTE', examDate: todayISO() },
     pre: { inspector: S.settings.inspectorName, method: ['GVI (≤ 3 m)'] },
     c: { general: { designCode: sys.designCode } }, fd: {}, mf: [], att: [], noPhotos: {}, noDrawing: {}, fm: { areas: [] }, text: {},
     con: { inspector: S.settings.inspectorName, position: S.settings.position, signDate: todayISO(), wsoe: 'No' }
@@ -612,7 +615,7 @@ async function copyBlobAtt(a) { const b = await getBlob(a.blobId); const nb = aw
 async function dupLine(id) {
   const src = S.reports.find(r => r.id === id); if (!src) return;
   const r = blankReport(cur.system);
-  r.h = { ...clone(src.h), tagNo: '', uniqueNo: '', imsSchedule: '', sapWO: '', equipDesc: '', dateConstruction: '', lastInspType: '', lastReportDate: '', examDate: todayISO() };
+  r.h = { ...clone(src.h), tagNo: '', uniqueNo: '', imsSchedule: cur.system?.imsSchedule || S.systems.find(x => x.id === src.systemId)?.imsSchedule || '', sapWO: cur.system?.sapWO || S.systems.find(x => x.id === src.systemId)?.sapWO || '', equipDesc: '', dateConstruction: '', lastInspType: '', lastReportDate: '', examDate: todayISO() };
   r.pre = { ...clone(src.pre), extent: '', restrictions: '', scopeChanges: '' };
   const sg = src.c?.general || {};
   r.c = { general: clone({ designCode: sg.designCode, pipeClass: sg.pipeClass, pipeClassId: sg.pipeClassId, classManual: sg.classManual, manualCa: sg.manualCa, sizes: sg.sizes || [], ovr: sg.ovr || {}, pidNumber: sg.pidNumber }) };
@@ -922,7 +925,7 @@ function stepHTML(r, step) {
       <div class="grid2">${inputHTML('report', 'h.lastInspType', h.lastInspType, 'Type of last inspection')}${inputHTML('report', 'h.lastReportDate', h.lastReportDate, 'Date of last report', '', 'date')}</div>
       <div class="grid2">${inputHTML('report', 'h.uniqueNo', h.uniqueNo, 'EP report number', 'Unique EP number issued for this report (shown top right of every page)', 'text', 'autocapitalize="characters"')}${inputHTML('report', 'h.rev', h.rev ?? '0', 'Report revision', 'rev. 0 unless re-issued', 'text', 'inputmode="numeric"')}</div>
       ${pillsHTML('report', 'h.inspType', h.inspType, ['VTE', 'VTI', 'NDT'], 'Type of inspection performed')}
-      ${inputHTML('report', 'h.imsSchedule', h.imsSchedule, 'IMS schedule No. to credit')}
+      ${inputHTML('report', 'h.imsSchedule', h.imsSchedule, 'IMS schedule No. to credit', cur.system?.imsSchedule ? 'From the piping system – change here only if this line differs' : '')}
       <div class="grid2">${inputHTML('report', 'h.examDate', h.examDate, 'Date of examination', '', 'date')}${inputHTML('report', 'h.sapWO', h.sapWO, 'SAP work order No.', '', 'text', 'inputmode="numeric"')}</div>
       <div class="field"><span>FM area(s)</span><div class="chips">${(r.fm?.areas || []).map(a => `<span class="pill-s">${esc(a)}</span>`).join('') || '<span class="muted">None selected</span>'}</div><small>Set on the <a href="#/report/${r.id}/plot">Plot plan & FM</a> step – shown on the report front page.</small></div>
     </div>`;
@@ -1034,7 +1037,8 @@ function stepHTML(r, step) {
           ${!c.cls || !c.svc ? `<div class="calc warn small">Set the ${!c.cls ? `pipe class (<a href="#/report/${r.id}/st_general">stage 1</a>)` : ''}${!c.cls && !c.svc ? ' and ' : ''}${!c.svc ? `service / fluid (<a href="#/report/${r.id}/header">Header</a>)` : ''} for better hints.</div>` : ''}
           <p class="muted small">Quick hints from API RP 571 (damage mechanisms) and API RP 574 (piping inspection practice). They don't replace the site RBI / corrosion management strategy.</p></div>
         <div class="card"><h3>Likely damage mechanisms</h3>${dms.map(d => `<div class="dm"><b>${esc(d.name)}</b> <span class="pill-s">${esc(d.ref)}</span><ul><li><b>Look for:</b> ${esc(d.look)}</li><li><b>Where:</b> ${esc(d.where)}</li></ul></div>`).join('')}</div>
-        <div class="card"><h3>Inspection best practice (API 574)</h3><ul class="tips">${tips.map(t => `<li><b>${esc(t.t)}</b> – ${esc(t.d)}</li>`).join('')}</ul></div>`;
+        <div class="card"><h3>Inspection best practice (API 574)</h3><ul class="tips">${tips.map(t => `<li><b>${esc(t.t)}</b> – ${esc(t.d)}</li>`).join('')}</ul></div>
+        <div class="card">${refInlineHTML('api571', 'imsnt', 'add it to read the full mechanism descriptions.')}${refInlineHTML('api574', 'imsnt', 'add it for the full inspection practice guidance.')}${refInlineHTML('aviff', 'imsnt', 'useful for small-bore / vibration assessment.')}</div>`;
     }
     case 'findings': {
       const fnd = allFindings(r); const nums = photoNumbers(r); const na = !!r.cairNA;
@@ -1440,7 +1444,7 @@ async function importPack(file) {
 
 /* ================= event handling ================= */
 function propagateSys(path, oldV, newV) {
-  if (!['site', 'floc', 'sce', 'designCode'].includes(path) || !cur.system) return;
+  if (!['site', 'floc', 'sce', 'designCode', 'imsSchedule', 'sapWO'].includes(path) || !cur.system) return;
   for (const r of S.reports.filter(x => x.systemId === cur.system.id)) {
     r.h = r.h || {}; if (!r.h[path] || r.h[path] === oldV) { r.h[path] = newV; persist('report', r); }
   }
@@ -1725,7 +1729,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await loadPack(); await loadPidLib();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
-    await loadTools(); await loadFace();
+    await loadTools(); await loadFace(); await loadRefs();
     route();
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

@@ -17,12 +17,15 @@ function faceCtx(it) {
   const fd = FLANGE_DIMS[rating]?.[dn] || null; const rf = RF_DIA[dn] || null;
   const sch = cls?.sch?.[dn]; const pd = PIPE_DIMS[dn]; const wt = pd?.wt?.[sch] ?? (sch && /mm/.test(sch) ? parseFloat(sch) : null);
   const bore = pd ? r2(pd.od - 2 * (wt || pd.od * 0.05)) : null;
-  const gk = gasketFor({ c: { general: { pipeClassId: it.classId } } }, dn);
+  const clsGk = classGasket({ c: { general: { pipeClassId: it.classId } } }, dn);
+  const gk = it.gasketMan?.kind ? manualGasket(it.gasketMan) : clsGk;
+  const pipeMat = cls ? matCat(cls.m) : (it.pipeMat || 'other');
+  const gkWarn = gasketChecks(gk, pipeMat, rating, dn, clsGk);
   const cat = it.gasketCat || gasketCat(gk?.type);
   // sealing face from the gasket specified: spiral wound -> B16.20 sealing element; sheet / tanged insert -> B16.21 ID to raised-face OD
   let gd = null, bandSrc = 'bore → raised face (no gasket data)';
   const swt = SWG_DIMS[rating >= 900 && +dn <= 65 ? 1500 : rating]?.[dn], flt = FLAT_GK[dn];
-  if (/spiral/i.test(gk?.type || '') && swt) { gd = { kind: 'sw', d1: /inner ring/i.test(gk.mat) ? swt[0] : null, d2: swt[1], d3: swt[2], d4: swt[3], t: 4.45 }; bandSrc = 'ASME B16.20 sealing element'; }
+  if (/spiral/i.test(gk?.type || '') && swt) { gd = { kind: 'sw', d1: /inner ring/i.test(gk.mat) && !/no inner ring/i.test(gk.mat) ? swt[0] : null, d2: swt[1], d3: swt[2], d4: swt[3], t: 4.45 }; bandSrc = 'ASME B16.20 sealing element'; }
   else if (/tanged|raised face|sheet|synthetic|full face/i.test(gk?.type || '') && flt) { const od = flt.od[rating] ?? flt.od[900]; gd = { kind: 'flat', id: flt.id, od, t: /1\.5/.test(gk.mat) ? 1.5 : 3.2 }; bandSrc = 'ASME B16.21 gasket ID → raised-face OD'; }
   const gID = gd ? (gd.kind === 'sw' ? gd.d2 : gd.id) : bore, gOD = gd ? (gd.kind === 'sw' ? gd.d3 : Math.min(gd.od, rf || gd.od)) : rf;
   const bandID = num(it.bandID) ?? gID, bandOD = num(it.bandOD) ?? gOD; if (num(it.bandID) != null || num(it.bandOD) != null) bandSrc = 'entered';
@@ -30,7 +33,7 @@ function faceCtx(it) {
   const rfH = rating && rating <= 300 ? 1.6 : rating ? 6.4 : null;
   const L = TB.face.limits[cat] || TB.face.limits.soft;
   const maxShallow = w ? r2(L.shallow * w) : null, maxDeep = w ? r2(L.deep * w) : null;
-  return { cls, rating, dn, fd, rf, bore, gk, gd, bandSrc, maxShallow, maxDeep, cat, bandID, bandOD, w, rfH, n: fd?.n || 8, od: fd?.od || (rf ? rf * 1.6 : 200), bc: fd?.bc || (rf ? rf * 1.3 : 150) };
+  return { cls, rating, dn, fd, rf, bore, gk, clsGk, pipeMat, gkWarn, gd, bandSrc, maxShallow, maxDeep, cat, bandID, bandOD, w, rfH, n: fd?.n || 8, od: fd?.od || (rf ? rf * 1.6 : 200), bc: fd?.bc || (rf ? rf * 1.3 : 150) };
 }
 function faceEvalDefect(d, c) {
   const L = TB.face.limits, lim = L[c.cat] || L.soft;
@@ -103,7 +106,8 @@ function renderFaceLib() {
       return `<a class="card link" href="#/face/${it.id}"><div class="card-title">${esc(it.line || 'No line number')}${it.flangeNo ? ' – Flange ' + esc(it.flangeNo) : ''}</div>
         <div class="muted small">${[c.cls ? 'Class ' + c.cls.c : '', c.dn ? sizeLabel(c.dn) : '', c.rating ? c.rating + '#' : '', fmtDate(it.date)].filter(Boolean).join(' · ')}</div>
         <div class="chips"><span class="pill-s">${nd} defect${nd === 1 ? '' : 's'}</span>${nd ? `<span class="pill-s ${ev.reject ? 'warn' : 'ok'}">${ev.reject ? 'Re-machine / replace' : 'Acceptable'}</span>` : ''}</div></a>`; }).join('') : '<div class="empty">No face inspections yet.</div>'}
-    <a class="btn ghost block" href="#/face-limits">⚙ Acceptance limits</a>`;
+    <a class="btn ghost block" href="#/face-limits">⚙ Acceptance limits</a>
+    ${refsChipHTML('face')}`;
 }
 function renderFaceLimits() {
   setTop('Face Off limits', 'Acceptance criteria', '/face');
@@ -114,6 +118,7 @@ function renderFaceLimits() {
       <tr><th>Soft-faced gaskets<br><small>(graphite, PTFE, fibre, tanged insert)</small></th><td>${inp('soft', 'shallow')} × w</td><td>${inp('soft', 'deep')} × w</td></tr>
       <tr><th>Hard-faced gaskets<br><small>(spiral wound, camprofile, metal)</small></th><td>${inp('hard', 'shallow')} × w</td><td>${inp('hard', 'deep')} × w</td></tr></table>
     <div class="calc ${L.confirmed ? 'ok' : 'warn'} small">${L.confirmed ? '✓ Limits confirmed against the governing procedure.' : '⚠ These are starting defaults, not copied from the standard. Check them against ASME PCC-1 Appendix D (Tables D-1 / D-2) or your site flange management procedure, then confirm below.'}</div>
+    ${refInlineHTML('pcc1', 'face', 'Appendix D (Tables D-1 / D-2) gives the limits – add your copy to check them.')}${refInlineHTML('flangeproc', 'face', 'if your site procedure has its own table it governs.')}
     <label class="na-toggle"><input type="checkbox" data-fl="confirmed" ${L.confirmed ? 'checked' : ''}> I have checked these limits against our procedure</label>
     <button class="btn ghost block" data-fc="limReset" style="margin-top:10px">Reset to defaults</button></div>`;
 }
@@ -130,7 +135,7 @@ function renderFace(id) {
   const fi = (k, label, extra = '') => `<label class="field"><span>${label}</span><input type="text" data-ff="${k}" value="${esc(it[k] ?? '')}" ${extra}></label>`;
   const pill = (path, val, opts, label) => `<div class="field"><span>${label}</span><div class="pills">${opts.map(o => `<button type="button" class="pill ${val === o ? 'on blue' : ''}" data-fc="pill" data-p="${path}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
   $('#main').innerHTML = `
-    ${c.dn && c.w ? faceLimitCardHTML(c) : `<div class="card notice small">Enter the pipe class and size to see the gasket, sealing face and the maximum acceptable defect size.</div>`}
+    ${c.dn && c.w ? faceLimitCardHTML(c) : `<div class="card notice small">Enter the pipe class (or rating) and size to see the gasket, sealing face and the maximum acceptable defect size.${c.dn ? ' <button class="btn primary sm" data-fc="gasket">🔘 Choose gasket</button>' : ''}</div>`}
     <div class="card"><h2>Flange</h2>
       <div class="grid2">${fi('line', 'Line number', 'autocapitalize="characters"')}${fi('flangeNo', 'Flange number / ID')}</div>
       ${fi('location', 'Location / description')}
@@ -167,9 +172,12 @@ function faceLimitCardHTML(c) {
   return `<div class="card limcard"><h2>Max acceptable defect</h2>
     <div class="limgrid"><div><span>Not below serration root</span><b>${c.maxShallow} mm</b></div><div><span>Below serration root</span><b>${c.maxDeep} mm</b></div></div>
     <p class="small">Maximum <b>radial projection</b> across the sealing face (<b>w = ${c.w} mm</b>, ${c.bandID}–${c.bandOD} mm). Anything that runs right across the sealing face is rejected whatever its depth. Length along the circumference and pit diameter don't matter – only how far the defect reaches across the face.</p>
-    <div class="gasket"><b>Gasket for class ${esc(c.cls?.c || '')}:</b> ${c.gk ? esc(c.gk.type) + ' – ' + esc(c.gk.mat) : 'not in data pack'}
+    <div class="gasket"><b>${c.gk?.manual ? 'Gasket (selected)' : 'Gasket for class ' + esc(c.cls?.c || '')}:</b> ${c.gk ? esc(c.gk.type) + ' – ' + esc(c.gk.mat) : '<b class="bad-t">not specified – choose the gasket</b>'}
       ${c.gk?.swatches?.length ? `<div class="swatches">${c.gk.swatches.map(s2 => `<span class="sw"><i style="background:${s2.c}${s2.stripe ? ';height:6px;margin:5px 0' : ''}"></i>${esc(s2.l)}</span>`).join('')}</div>` : ''}
-      ${c.gd?.kind === 'sw' ? `<div class="small">Sealing element ${c.gd.d2}–${c.gd.d3} mm${c.gd.d1 ? `, inner ring ID ${c.gd.d1}` : ''}, centring ring OD ${c.gd.d4} mm (ASME B16.20)</div>` : c.gd?.kind === 'flat' ? `<div class="small">Ring gasket ID ${c.gd.id} / OD ${c.gd.od} mm, ${c.gd.t} mm (ASME B16.21)</div>` : ''}</div>
+      ${c.gd?.kind === 'sw' ? `<div class="small">Sealing element ${c.gd.d2}–${c.gd.d3} mm${c.gd.d1 ? `, inner ring ID ${c.gd.d1}` : ''}, centring ring OD ${c.gd.d4} mm (ASME B16.20)</div>` : c.gd?.kind === 'flat' ? `<div class="small">Ring gasket ID ${c.gd.id} / OD ${c.gd.od} mm, ${c.gd.t} mm (ASME B16.21)</div>` : ''}
+      ${gasketWarnHTML(c.gkWarn)}
+      <button class="btn ${c.gk ? 'ghost' : 'primary'} sm" data-fc="gasket" style="margin-top:8px">🔘 ${c.gk ? (c.gk.manual ? 'Change gasket' : 'Different gasket fitted?') : 'Choose gasket'}</button></div>
+    ${!TB.face.limits.confirmed ? refInlineHTML('pcc1', 'face', 'needed to confirm these limits.') : ''}
     <small class="muted">${c.cat === 'hard' ? 'Hard-faced' : 'Soft-faced'} gasket limits (${TB.face.limits[c.cat].shallow}·w / ${TB.face.limits[c.cat].deep}·w)${TB.face.limits.confirmed ? '' : ' – <b>defaults, not yet confirmed</b> (<a href="#/face-limits">check</a>)'}.</small></div>`;
 }
 function faceDefsHTML(it, c, sd, ev) {
@@ -296,6 +304,11 @@ document.addEventListener('click', async e => {
     if (a === 'new') return newFace();
     if (a === 'limReset') { TB.face.limits = clone(FACE_LIMIT_DEFAULTS); saveFace(); return renderFaceLimits(); }
     if (!it) return; const sd = cur.faceSide;
+    if (a === 'gasket') {
+      const c0 = faceCtx(it); const r = await pickGasket(it.gasketMan, { clsGk: c0.clsGk, pipeMat: c0.pipeMat, askPipe: !c0.cls });
+      if (!r) return; if (r.clear) delete it.gasketMan; else { it.gasketMan = r; if (r.pipeMat) it.pipeMat = r.pipeMat; }
+      delete it.gasketCat; delete it.bandID; delete it.bandOD; saveFace(); refreshFace(); return senseCheckPopup(faceCtx(it).gkWarn);
+    }
     if (a === 'side') { cur.faceSide = b.dataset.v; return refreshFace(); }
     if (a === 'pill') { const cv = g(it, b.dataset.p); s(it, b.dataset.p, cv === b.dataset.v ? '' : b.dataset.v); saveFace(); return refreshFace(); }
     if (a === 'edit') { const d = it.sides[sd].defects[+b.dataset.i]; if (d && await editDefect(d, false)) { saveFace(); refreshFace(); } return; }

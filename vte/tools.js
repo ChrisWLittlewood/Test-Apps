@@ -29,6 +29,7 @@ function renderToolbox() {
       <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
     </div>
+    <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Reference library <span class="pill-s">${Object.keys(TB.refs.items).length}/${REF_DOCS.length} on this phone</span></a>
     ${!PACK ? `<p class="small muted">📦 No data pack loaded – pipe classes, gaskets and plot plans need one (<a href="#/settings">Settings</a>).</p>` : `<p class="small muted">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="ver-row"><span>Inspection Toolbox v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
 }
@@ -54,7 +55,8 @@ function renderIsoLib() {
         <div class="iso-thumb" data-tb="isoEdit" data-id="${it.id}"><img data-blobimg="${it.blobId}" alt=""></div>
         <div class="iso-meta"><b>${esc(it.title || 'Untitled sketch')}</b><span class="muted small">${esc(it.line || '')}${it.line ? ' · ' : ''}${fmtDate((it.date || '').slice(0, 10)) || ''}</span></div>
         <div class="grid3"><button class="btn ghost sm" data-tb="isoEdit" data-id="${it.id}">✏️ Edit</button><button class="btn ghost sm" data-tb="isoShare" data-id="${it.id}">📤 Share</button><button class="btn ghost sm" data-tb="isoMore" data-id="${it.id}">⋯ More</button></div></div>`).join('')
-      : '<div class="empty">No sketches yet.</div>'}`;
+      : '<div class="empty">No sketches yet.</div>'}
+    ${refsChipHTML('iso')}`;
   fillTbImgs();
 }
 async function fillTbImgs() { for (const im of $$('img[data-blobimg]')) { const b = await getBlob(im.dataset.blobimg); if (b) { im.src = URL.createObjectURL(b); im.onload = () => URL.revokeObjectURL(im.src); } } }
@@ -98,8 +100,10 @@ function flCtx(it) {
   const bolt = studNom ? boltData(b?.[0] ?? fd?.n ?? 0, studNom, b?.[2] ?? '') : null;
   const n = +(it.nStuds || bolt?.n || fd?.n || 8);
   const allow = fd ? ((+dn >= 450 && rating <= 600) ? 3 : r2(Math.max(3, Math.min(0.1 * fd.tf, 6)))) : null;
-  const gk = gasketFor({ c: { general: { pipeClassId: it.classId } } }, dn);
-  return { cls, rating, dn, fd, bolt, n, allow, gk };
+  const clsGk = classGasket({ c: { general: { pipeClassId: it.classId } } }, dn);
+  const gk = it.gasketMan?.kind ? manualGasket(it.gasketMan) : clsGk;
+  const pipeMat = cls ? matCat(cls.m) : (it.pipeMat || 'other');
+  return { cls, rating, dn, fd, bolt, n, allow, gk, clsGk, pipeMat, gkWarn: gasketChecks(gk, pipeMat, rating, dn, clsGk) };
 }
 function flEval(it, c = flCtx(it)) {
   const studLim = c.bolt?.dia90, nutLim = c.bolt?.af90, out = { cells: {}, fails: [], measured: 0, worst: {} };
@@ -150,7 +154,8 @@ function renderFlangeLib() {
     ${items.length ? items.map(it => { const c = flCtx(it), ev = flEval(it, c); return `<a class="card link" href="#/flange/${it.id}"><div class="card-title">${esc(it.line || 'No line number')}${it.flangeNo ? ' – Flange ' + esc(it.flangeNo) : ''}</div>
         <div class="muted small">${[c.cls ? 'Class ' + c.cls.c : '', c.dn ? sizeLabel(c.dn) : '', c.rating ? c.rating + '#' : '', fmtDate(it.date)].filter(Boolean).join(' · ')}</div>
         <div class="chips">${ev.measured ? `<span class="pill-s ${ev.reject ? 'warn' : 'ok'}">${ev.reject ? 'Reject / action' : 'Within limits'}</span>` : '<span class="pill-s">Not measured</span>'}</div></a>`; }).join('')
-      : '<div class="empty">No flange sheets yet.</div>'}`;
+      : '<div class="empty">No flange sheets yet.</div>'}
+    ${refsChipHTML('flange')}`;
 }
 function flInput(path, label, val, opts = '') { return `<label class="field"><span>${label}</span><input type="text" data-fp="${path}" value="${esc(val ?? '')}" ${opts}></label>`; }
 function renderFlange(id) {
@@ -181,7 +186,9 @@ function renderFlange(id) {
         <tr><th>Stud Ø nominal / reject</th><td>${c.bolt ? `${c.bolt.diaMm} mm / &lt; ${c.bolt.dia90} mm` : '–'}</td></tr>
         <tr><th>Nut A/F nominal / reject</th><td>${c.bolt ? `${c.bolt.afIn} (${c.bolt.afMm} mm) / &lt; ${c.bolt.af90} mm` : '–'}</td></tr>
         ${c.cls?.studs?.length ? `<tr><th>Stud / nut material</th><td>${esc(c.cls.studs.join('; '))}</td></tr>` : ''}</table>
-      ${gasketHTML(c.gk)}
+      ${gasketHTML(c.gk)}${gasketWarnHTML(c.gkWarn)}
+      <button class="btn ${c.gk ? 'ghost' : 'primary'} sm" data-tb="flGasket">🔘 ${c.gk ? (c.gk.manual ? 'Change gasket' : 'Different gasket fitted?') : 'Choose gasket'}</button>
+      ${refInlineHTML('pc005', 'flange', 'the PS 1.8 limits come from it.')}
       <small class="muted">ASME B16.5 flange dims (Class 150/300 tf incl. 1.6 mm RF; 400+ excl. 6.4 mm RF). Heavy hex nut A/F per ASME B18.2.2. PS 1.8: reject studs / nuts &lt; 90% nominal after removing loose corrosion product.</small></div>` : ''}
 
     <div class="card"><h2>Measurements</h2>
@@ -331,7 +338,12 @@ document.addEventListener('click', async e => {
     }
     if (a === 'flAnn') { const p = it.photos[+b.dataset.i]; if (p && await openAnnotator(p)) { saveTB('fl'); const y = scrollY; renderFlange(it.id); scrollTo(0, y); } return; }
     if (a === 'flDelPh') { if (!await confirmBox('Delete photo', 'Delete this photo?')) return; const [p] = it.photos.splice(+b.dataset.i, 1); if (p) await DB.del('blobs', p.blobId); saveTB('fl'); renderFlange(it.id); return; }
-    if (a === 'flFace') { const ex = TB.face.items.find(x => x.fromFl === it.id); if (ex) return go('/face/' + ex.id); return newFace({ fromFl: it.id, line: it.line, flangeNo: it.flangeNo, location: it.location, classId: it.classId, dn: it.dn, rating: it.rating }); }
+    if (a === 'flGasket') {
+      const c0 = flCtx(it); const r = await pickGasket(it.gasketMan, { clsGk: c0.clsGk, pipeMat: c0.pipeMat, askPipe: !c0.cls });
+      if (!r) return; if (r.clear) delete it.gasketMan; else { it.gasketMan = r; if (r.pipeMat) it.pipeMat = r.pipeMat; }
+      saveTB('fl'); const y = scrollY; renderFlange(it.id); scrollTo(0, y); return senseCheckPopup(flCtx(it).gkWarn);
+    }
+    if (a === 'flFace') { const ex = TB.face.items.find(x => x.fromFl === it.id); if (ex) return go('/face/' + ex.id); return newFace({ fromFl: it.id, line: it.line, flangeNo: it.flangeNo, location: it.location, classId: it.classId, dn: it.dn, rating: it.rating, ...(it.gasketMan ? { gasketMan: clone(it.gasketMan), pipeMat: it.pipeMat } : {}) }); }
     if (a === 'flDel') { if (!await confirmBox('Delete flange sheet', 'Delete this flange sheet and its photos?')) return; for (const p of it.photos || []) await DB.del('blobs', p.blobId); TB.fl.items = TB.fl.items.filter(x => x !== it); await flushTB(); go('/flange'); return; }
     const H = { compositeCanvas, loadImg, loadUrlImg, canvasToBlob, getBlob, svgToPng, settingsLogo: S.settings.logoId };
     const name = `Flange_${safeName(it.line || 'line')}_F${safeName(it.flangeNo || '')}_${(it.date || todayISO()).replace(/-/g, '')}`;

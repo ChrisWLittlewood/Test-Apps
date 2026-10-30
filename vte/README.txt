@@ -1,4 +1,4 @@
-INSPECTION TOOLBOX – v1.8 (trial)
+INSPECTION TOOLBOX – v1.9 (trial)
 IMSn't · Isometricks · Gasket Case · Face Off
 =========================================
 
@@ -58,3 +58,12 @@ New in v1.8
   confirmed against the governing procedure), side A / B with aligned-defect warning, photos, Word / PDF.
 - Iso tool: elbows / pulled bends / sharp corners, 45° offsets with hatched plane triangle, line-number tool,
   valve tags, labels sit beside the pipe and read along it; drag to move (leader arrow appears), rotate button.
+
+New in v1.9
+-----------
+- Reference library: each user adds their own licensed copies of the standards / company documents the apps use
+  (PCC-1, B16.5, B16.20, B16.21, B18.2.2, B36.10M, API 571/574, EI guidance, PC005 …) with why each is needed and
+  where to get it. Stored on the phone only, not in backups.
+- Gasket picker in Face Off and Gasket Case when the class has no gasket (or a different one is fitted), with a
+  compatibility sense check (gasket metal vs pipe material, RTJ hardness, inner rings, class rating, class spec).
+- IMSn't: IMS schedule No. and SAP work order No. set once at piping-system level and filled into every line report.
