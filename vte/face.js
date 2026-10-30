@@ -112,7 +112,7 @@ function renderFaceLib() {
 function renderFaceLimits() {
   setTop('Face Off limits', 'Acceptance criteria', '/face');
   const L = TB.face.limits; const inp = (k1, k2) => `<input type="text" inputmode="decimal" data-fl="${k1}.${k2}" value="${L[k1][k2]}" style="width:80px">`;
-  $('#main').innerHTML = `<div class="card"><h2>Acceptance limits</h2>
+  $('#main').innerHTML = `<div class="card"><h2>Acceptance limits ${iBtn('facelim')}</h2>
     <p class="small">A defect is assessed by its <b>radial projection</b> across the gasket sealing face (width <i>w</i>). It is acceptable if the projection is no more than the fraction of <i>w</i> below. Anything that bridges the band is always rejected.</p>
     <table class="nomtbl"><tr><th></th><th>Within serrations</th><th>Deeper than serrations</th></tr>
       <tr><th>Soft-faced gaskets<br><small>(graphite, PTFE, fibre, tanged insert)</small></th><td>${inp('soft', 'shallow')} × w</td><td>${inp('soft', 'deep')} × w</td></tr>
@@ -143,7 +143,7 @@ function renderFace(id) {
       <div class="grid2"><label class="field"><span>Size</span><select data-ff="dn" data-ffre><option value="">–</option>${sizes.map(d => `<option value="${d}" ${String(it.dn) === String(d) ? 'selected' : ''}>${sizeLabel(d)}</option>`).join('')}</select></label>
         <label class="field"><span>Rating</span><select data-ff="rating" data-ffre><option value="">${c.cls ? 'From class (' + c.cls.r + ')' : '–'}</option>${[150, 300, 600, 900, 1500, 2500].map(x => `<option value="${x}" ${+it.rating === x ? 'selected' : ''}>Class ${x}</option>`).join('')}</select></label></div>
       <div class="grid2">${fi('inspector', 'Inspector')}<label class="field"><span>Date</span><input type="date" data-ff="date" value="${esc(it.date)}"></label></div></div>
-    ${c.dn ? `<div class="card"><h2>Face & gasket data</h2>
+    ${c.dn ? `<div class="card"><h2>Face & gasket data ${iBtn('facegk')}</h2>
       <table class="nomtbl"><tr><th>Raised face Ø / height <small>(B16.5)</small></th><td>${c.rf ?? '–'} mm / ${c.rfH ?? '–'} mm</td></tr><tr><th>Flange OD / bolt circle</th><td>${c.fd?.od ?? '–'} / ${c.fd?.bc ?? '–'} mm (${c.n} holes)</td></tr><tr><th>Bore (from class schedule)</th><td>${c.bore ?? '–'} mm</td></tr>
         ${c.gd?.kind === 'sw' ? `<tr><th>Spiral wound (B16.20)</th><td>${c.gd.d1 ? `inner ring ID ${c.gd.d1} · ` : ''}sealing element ${c.gd.d2}–${c.gd.d3} · centring ring OD ${c.gd.d4} mm · winding ${c.gd.t} mm thick</td></tr>` : ''}
         ${c.gd?.kind === 'flat' ? `<tr><th>Flat ring gasket (B16.21)</th><td>ID ${c.gd.id} · OD ${c.gd.od} mm · ${c.gd.t} mm thick</td></tr>` : ''}</table>
@@ -152,7 +152,7 @@ function renderFace(id) {
       ${pill('gasketCat', it.gasketCat || c.cat, ['soft', 'hard'], 'Assess as')}</div>` : ''}
     <div class="card"><div class="side-tabs">${['A', 'B'].map(k => `<button class="pill ${sd === k ? 'on blue' : ''}" data-fc="side" data-v="${k}">Side ${k}${ev['reject' + k] ? ' ⚠' : ''}</button>`).join('')}</div>
       ${pill('sides.' + sd + '.what', S2.what, ['Flange', 'Valve', 'Nozzle', 'Blind'], 'Side ' + sd + ' is')}
-      <p class="small muted">Look straight at the face, 12 o'clock at the top. <b>Drag</b> across the face to record a scratch, <b>tap</b> to record a pit / dent.</p>
+      <p class="small muted">${iBtn('facemap')} Look straight at the face, 12 o'clock at the top. <b>Drag</b> across the face to record a scratch, <b>tap</b> to record a pit / dent.</p>
       <div class="facemap-wrap" id="faceMap">${faceMapSVG(it, c, sd, ev)}</div>
       <div id="faceDefs">${faceDefsHTML(it, c, sd, ev)}</div>
       ${pill('sides.' + sd + '.serr', S2.serr, ['Good', 'Worn', 'Flattened / missing', 'Smooth finish'], 'Serrations (gasket seating area)')}
@@ -169,7 +169,7 @@ function renderFace(id) {
   bindFaceMap(); faceThumbs(it);
 }
 function faceLimitCardHTML(c) {
-  return `<div class="card limcard"><h2>Max acceptable defect</h2>
+  return `<div class="card limcard"><h2>Max acceptable defect ${iBtn('maxdef')}</h2>
     <div class="limgrid"><div><span>Not below serration root</span><b>${c.maxShallow} mm</b></div><div><span>Below serration root</span><b>${c.maxDeep} mm</b></div></div>
     <p class="small">Maximum <b>radial projection</b> across the sealing face (<b>w = ${c.w} mm</b>, ${c.bandID}–${c.bandOD} mm). Anything that runs right across the sealing face is rejected whatever its depth. Length along the circumference and pit diameter don't matter – only how far the defect reaches across the face.</p>
     <div class="gasket"><b>${c.gk?.manual ? 'Gasket (selected)' : 'Gasket for class ' + esc(c.cls?.c || '')}:</b> ${c.gk ? esc(c.gk.type) + ' – ' + esc(c.gk.mat) : '<b class="bad-t">not specified – choose the gasket</b>'}
@@ -219,7 +219,7 @@ function bindFaceMap() {
 async function editDefect(d, isNew) {
   const c = faceCtx(cur.face); const geo = faceEvalDefect({ ...d, rp: undefined }, c);
   const res = await modal(isNew ? 'New defect' : 'Edit defect', `<label class="field"><span>Type</span><select name="t" class="inp">${FACE_DEFECTS.filter(([k]) => d.kind === 'line' ? !['pit', 'dent'].includes(k) : !['scratch', 'circ'].includes(k)).map(([k, l]) => `<option value="${k}" ${d.t === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span><b>Radial projection</b> across the sealing face (mm)</span><input name="rp" class="inp" inputmode="decimal" value="${esc(d.rp ?? '')}" placeholder="${geo.proj != null ? 'from sketch ≈ ' + geo.proj : ''}"><small>How far the defect reaches across the face from bore towards OD – not its length or diameter. Leave blank to use the sketch.${c.w ? ` Limits: ${c.maxShallow} mm / ${c.maxDeep} mm (not below / below serrations).` : ''}</small></label>
+    <label class="field"><span><b>Radial projection</b> across the sealing face (mm) ${iBtn('rp')}</span><input name="rp" class="inp" inputmode="decimal" value="${esc(d.rp ?? '')}" placeholder="${geo.proj != null ? 'from sketch ≈ ' + geo.proj : ''}"><small>How far the defect reaches across the face from bore towards OD – not its length or diameter. Leave blank to use the sketch.${c.w ? ` Limits: ${c.maxShallow} mm / ${c.maxDeep} mm (not below / below serrations).` : ''}</small></label>
     <label class="field"><span><b>Depth below serration root</b> (mm)</span><input name="dBelow" class="inp" inputmode="decimal" value="${esc(d.dBelow ?? (d.depth === 'shallow' && isNew ? '0' : ''))}"><small>0 = not below the serrations. Leave blank if not measured – it is then assessed as below.</small></label>
     <label class="field"><span>Notes</span><input name="notes" class="inp" value="${esc(d.notes || '')}"></label>`, [['Cancel', ''], ['Save', 'ok', 'primary']]);
   if (!res) return false;

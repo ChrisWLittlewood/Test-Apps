@@ -1,0 +1,121 @@
+/* Help & manual (works offline) and the little ⓘ info buttons that link into it. */
+const HELP = [
+  { id: 'overview', t: 'What\'s in the toolbox', b: `
+    <p>The <b>Inspection Toolbox</b> is a set of offline inspection apps on your phone. Everything works with no signal, everything stays on the device, and reports come out as Word or PDF.</p>
+    <ul><li><b>IMSn't</b> – the Pipework Visual Inspection Tool. Full VTE line reports, one per line number, following the IMS NAM piping checklist, in the EPE examination report format. For when IMS isn't working.</li>
+    <li><b>Isometricks</b> – quick isometric sketches that snap to the iso grid, with elbows, pulled bends, 45° offsets, valves, labels and markup.</li>
+    <li><b>Gasket Case</b> – flange &amp; bolting sheets: stud-by-stud, front and base A/F for every nut, PS 1.8 limits checked as you type.</li>
+    <li><b>Face Off</b> – flange face inspection: defects assessed by radial projection across the gasket sealing face.</li>
+    <li><b>Totally RAD</b> – an experimental feature. Read its disclaimer. All of it.</li></ul>
+    <p>They share one <a href="#/help/packs">data pack</a>, one <a href="#/help/refs">reference library</a> and one backup.</p>` },
+  { id: 'setup', t: 'Getting started', b: `
+    <ol><li><b>Open the link</b> on the phone you'll use on site, with signal: <code>chriswlittlewood.github.io/Test-Apps/vte/</code></li>
+    <li><b>Install it.</b> Android: Chrome ⋮ → <i>Install app</i> / <i>Add to Home screen</i>. iPhone: Safari Share → <i>Add to Home Screen</i>. Locked-down work tablet: just bookmark it.</li>
+    <li><b>Open it once with signal</b> – it quietly downloads everything it needs to work offline.</li>
+    <li><b>Settings</b> → your name and position (they go on every report).</li>
+    <li><b>Settings → Data pack → Import</b> your asset's data pack file (piping classes, gaskets, plot plans, logos).</li>
+    <li>Optional: add your copies of the standards in the <a href="#/help/refs">reference library</a>, and an <a href="#/help/ai">AI key</a> if authorised.</li>
+    <li><b>Back up</b> regularly (Toolbox → ⬇ Backup everything). Everything lives on the phone.</li></ol>
+    <p><b>Updates</b> install themselves when you open the app with signal. To check by hand use <i>⟳ Check for updates</i> on the toolbox. If the installed name or icon looks out of date, remove the app from the home screen and install it again – your data is kept.</p>` },
+  { id: 'imsnt', t: 'IMSn\'t – line reports', b: `
+    <ol><li><b>Create a piping system</b> – fastest is <i>📥 Import line list from Excel</i> (one report per line, system name from the file name). Fill in site, F/Loc, SCE, <b>IMS schedule No.</b> and <b>SAP WO</b> once – they fill every line.</li>
+    <li><b>★ Line prep</b> (in the office): the <b>EP report number</b>, the P&amp;ID (pick from the P&amp;ID library and highlight the line – check it's the latest revision), the isometric (or <i>No ISO available</i>) and the previous ECH. The system page shows which lines are ready.</li>
+    <li><b>On site</b>: work through Header, Pre-inspection, Overview photos and the checklist stages. <i>✓ All acceptable</i> fills a stage in one tap; answer the exceptions.</li>
+    <li><b>Photo observations</b>: under each stage heading tap <i>＋ Add photo observation</i>, describe it and add its photos. General photos go at the bottom of the page.</li>
+    <li><b>CAIR items</b> collect everything that fails the Performance Standard or needs follow-up. Add a suggested action – the Area Inspector decides the remedial action. Tick <i>Not required</i> if there are none.</li>
+    <li><b>Report text</b> is written for you in bullet points from your answers. Edit as you like.</li>
+    <li><b>Sign-off</b>, <b>Check &amp; AI</b> (lists anything missing), then <b>Word / PDF</b>.</li></ol>
+    <p>The 📐 button opens the drawings and previous ECH at any time during the inspection.</p>` },
+  { id: 'classes', t: 'Pipe classes & the sums', b: `
+    <p>In stage 1, pick the <b>pipe class</b> and tick every <b>line size</b>. The app then knows:</p>
+    <ul><li>Schedule and nominal wall thickness (NWT, ASME B36.10M / B36.19M) and the corrosion allowance (CA).</li>
+    <li><b>Performance Standard (PC005) minimum wall</b> = (NWT − CA) × 0.67, × 0.9 at a bend intrados, never less than 2.5 mm for DN25 / DN40.</li>
+    <li>Bolting from the class: stud count, diameter, length, nut A/F (heavy hex) and the 90% reject sizes. Flange dimensions from ASME B16.5. Gasket type and colour code.</li></ul>
+    <p>For each corrosion area enter the <b>MRWT</b> (UT, or UT of adjacent steel minus pit depth). The app shows the CA remaining and the margin to the PS minimum, coloured green / amber / red. Pit gauge readings are indicative only.</p>
+    <p>For flanges with corrosion add a <b>flange sheet</b>: measured thickness, stud diameter and nut A/F against nominal, with loss in mm and %.</p>` },
+  { id: 'lookfor', t: 'What to look for', b: `
+    <p>Set the <b>service / fluid</b> on the Header and the pipe class in stage 1. The <i>🔎 What to look for</i> step then lists the likely damage mechanisms (after API RP 571) with what to look for and where, and inspection tips (after API RP 574): dead legs, injection points, small-bore connections, supports, insulation and more. They're short prompts, not a replacement for the site RBI / corrosion management strategy.</p>` },
+  { id: 'iso', t: 'Isometricks & the sketch tool', b: `
+    <ul><li><b>━ Pipe</b>: drag along the grid – runs snap to the three iso directions. Start from a pipe end to continue it.</li>
+    <li><b>⟋ 45° pipe</b>: draws a 45° offset with the hatched triangle that shows its plane.</li>
+    <li><b>Corners</b> draw as elbows (weld dots). Tap one with <b>⤿ Bend</b> (or in Select) to make it a <b>pulled bend</b> (PB) or a sharp corner.</li>
+    <li><b>Components</b> (valves, flanges, supports, reducers…) snap onto the pipe and line up with it. Valves ask for a tag; <b>▭ Line number</b> adds a boxed line number.</li>
+    <li><b>Labels</b> sit beside the pipe and read along it. In <b>☝ Select</b>, drag a label to move it – move it away and an arrow appears pointing back to the item. <i>⟳ Rotate label</i> turns it.</li>
+    <li><b>Markup</b>: arrows, boxes, circles, revision clouds, highlighter, callouts and text, in colour.</li>
+    <li>Two fingers to pan and zoom; ⤢ fits the drawing.</li></ul>
+    <p>In Isometricks, <i>⋯ More</i> lets you rename a sketch, save it as an image, or copy it into an IMSn't report.</p>` },
+  { id: 'gasket', t: 'Gasket Case – flange sheets', b: `
+    <ol><li>Enter the line number, flange number, pipe class (type to search) and size. Note which side is <b>side A</b>.</li>
+    <li>The nominal data fills in: flange OD, thickness and loss allowed, bolt circle, studs, stud and nut reject sizes, stud material, and the gasket with its colour code.</li>
+    <li>Measure the flange thickness on both sides, then each stud: its diameter and the A/F of both nuts at the <b>front</b> (outer face) and the <b>base</b> (bearing face against the flange – usually the worst). Readings go red below 90% of nominal.</li>
+    <li>Answer the checks (engagement, missing bolting, gasket matches class, leakage). The result lists the studs / nuts to replace.</li>
+    <li>Photos, then Word or PDF. <i>🔍 Inspect the flange faces</i> opens Face Off for the same joint.</li></ol>
+    <p>If the class has no gasket, or a different one is fitted, use <i>🔘 Choose gasket</i> – a sense check flags anything unusual.</p>` },
+  { id: 'face', t: 'Face Off – flange faces', b: `
+    <p>Enter the class and size. The top card shows the <b>maximum acceptable defect</b>: the largest <b>radial projection</b> allowed across the gasket sealing face, for marks not below the serration root and for marks below it.</p>
+    <ul><li><b>Radial projection</b> is how far a defect reaches across the face from the bore towards the outside. Its length around the face and a pit's diameter don't matter – a defect that runs right across the sealing face is a leak path.</li>
+    <li><b>Depth below serration root</b>: 0 if it doesn't go below the bottom of the serrations; leave blank if not measured (it's then assessed as below).</li>
+    <li>The <b>sealing face</b> comes from the gasket: the sealing element of a spiral wound gasket (ASME B16.20), or a flat gasket's ID to the raised-face edge (ASME B16.21).</li>
+    <li>Drag across the face map to record a scratch, tap to record a pit. Record side A and side B; defects that line up across the joint are flagged.</li></ul>
+    <p>The limits are <b>defaults until you confirm them</b> against ASME PCC-1 Appendix D or your site flange procedure (Face Off → Acceptance limits).</p>` },
+  { id: 'packs', t: 'Data packs', b: `
+    <p>A data pack is one file holding an asset's company data: piping classes (schedules, CA, bolting, gaskets), plot plans with FM areas, reference charts and the report logos. The app on the web contains no company data – it only ever lives in the pack, on the phone.</p>
+    <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. Packs are currently built from the piping class PDFs and plot plans by the toolbox owner – ask them for your asset's pack or an update.</p>` },
+  { id: 'refs', t: 'Reference library', b: `
+    <p>The apps use data from standards such as ASME PCC-1, B16.5, B16.20 and API 571. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company).</p>
+    <p>Toolbox → <b>📚 Reference library</b> lists each document, <b>why</b> each app needs it, and where to get it. Tap <i>Add your copy (PDF)</i>; then <i>📖 Open</i> reads it in the app, offline. Documents stay on the phone only and aren't in backups – add them again on a new phone. Company documents (PC005, PC007, IBMS, site procedures) come from document control.</p>` },
+  { id: 'ai', t: 'AI & the previous ECH', b: `
+    <p>AI is optional and only runs in the office when you tap a button. On site everything works without it.</p>
+    <p><b>1. Scan (no AI)</b> – in ★ Line prep tap <i>📄 Import previous ECH</i> and pick the R405 Condition History PDF. The phone reads the text, old photos and drawings, and fills empty fields where it can.</p>
+    <p><b>2. Summary with Copilot</b> (the approved route): tap <i>📋 Copy ECH for your AI tool</i>, paste into Copilot and send. Copilot replies with a block full of <code>{ }</code> curly brackets – copy <b>all</b> of it, paste into <i>Paste AI reply</i> and tap <i>Apply AI summary</i>.</p>
+    <p><b>"What's that curly-bracket gobbledegook?"</b> It's <b>JSON</b> – a parts list written for the app, not for you. Each line is a label in quotes, a colon, then the answer; the app puts each answer in the right box. If the app says <i>"No JSON found"</i>, you missed a bracket – copy the reply again, or ask Copilot to <i>"reply with only the JSON"</i>. A chatty sentence before or after it is fine.</p>
+    <p>The <b>Check &amp; AI</b> report review works the same way: copy the review pack → Copilot → paste the reply back, then accept or reject each suggestion. Measurements, findings and your conclusion are never changed automatically.</p>
+    <p><b>In-app AI</b> (only if your company's information rules allow it): Settings → 🤖 AI → paste an Anthropic API key (<code>sk-ant-…</code>) and pick a model. <i>🤖 Summarise with AI now</i> then appears in Line prep. The key stays on the phone; use is billed to the key's account.</p>` },
+  { id: 'backup', t: 'Backups, storage & updates', b: `
+    <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
+    <li><b>Import backup</b> restores it, on this or another phone.</li>
+    <li><b>💾 Storage info</b> shows how much space photos are using.</li>
+    <li>Not updating? Toolbox → <i>⟳ Check for updates</i>, or Settings → <i>Force update now</i> (keeps your data).</li></ul>` },
+  { id: 'rad', t: 'Totally RAD', b: `<p>An experimental feature. Everything you need to know is in its disclaimer, which you must read in full before use. Do not point it at people. Especially not Kelton.</p>` }
+];
+const INFO = {
+  systems: ['Piping systems', 'A piping system groups the line reports for one IMS inspection schedule. Set the shared details (site, F/Loc, IMS schedule, SAP WO) once on the system and they fill every line.', 'imsnt'],
+  lineprep: ['Line prep', 'Done in the office before going out: EP number, P&ID with the line highlighted, the isometric and the previous ECH. Lines with all four are "ready to inspect".', 'imsnt'],
+  ep: ['EP report number', 'The unique EP number issued for this report. It prints top right on every page and in the Unique No. box.', 'imsnt'],
+  lookfor: ['What to look for', 'Likely damage mechanisms and inspection tips for this pipe material and service, after API RP 571 / 574. Short prompts – the site RBI still rules.', 'lookfor'],
+  cair: ['CAIR items', 'Everything from the checklist that fails the Performance Standard or needs follow-up. You add a suggested action; the Area Inspector decides the remedial action.', 'imsnt'],
+  obs: ['Photo observations', 'Describe something you saw under this heading and attach its photos. Observations are numbered (4.1, 4.2…) and appear in the report text, checklist and photo captions.', 'imsnt'],
+  text: ['Report text', 'Written for you, in bullet points, from your checklist answers. Edit any box – edited boxes stop updating automatically.', 'imsnt'],
+  aireview: ['AI review', 'Copy the review pack into Copilot, paste the reply back, then accept or reject each suggestion. Nothing is changed without you.', 'ai'],
+  echai: ['AI summary of the previous ECH', 'Copy the ECH into Copilot and paste back the reply (the curly-bracket block). It sums up the last inspection and what to check this time.', 'ai'],
+  pack: ['Data pack', 'One private file with your asset\'s piping classes, gaskets, plot plans, FM areas and report logos. The app itself holds no company data.', 'packs'],
+  aikey: ['AI key', 'Only if your company allows it. Without a key, use the copy / paste route with Copilot.', 'ai'],
+  classes: ['Pipe class & sizes', 'Pick the class and tick every size on the line. The app then knows the schedule, NWT, CA, PS minimum wall, bolting, flange dimensions and gasket.', 'classes'],
+  refs: ['Reference library', 'Your own licensed copies of the standards the apps use, stored on this phone only.', 'refs'],
+  iso: ['Isometricks', 'Pipes snap to the iso grid; components line up with the pipe; labels can be dragged and rotated.', 'iso'],
+  flnom: ['Nominal data', 'From the pipe class and ASME B16.5: flange dimensions, bolting and the reject sizes for studs and nuts (90% of nominal).', 'gasket'],
+  fronts: ['Front and base A/F', 'Front = across flats at the outer face of the nut. Base = at the bearing face against the flange, usually the most corroded. Record both nuts (side A and side B) on every stud.', 'gasket'],
+  flres: ['Result', 'Pass / reject against PS 1.8: studs and nuts below 90% of nominal, flange thickness loss over the limit, missing bolting, short engagement or the wrong gasket.', 'gasket'],
+  maxdef: ['Max acceptable defect', 'The largest radial projection allowed across the gasket sealing face, for marks not below and below the serration root. Defaults until confirmed against your procedure.', 'face'],
+  rp: ['Radial projection', 'How far a defect reaches across the face from the bore towards the outside. Length around the face and pit diameter don\'t count – crossing the sealing face does.', 'face'],
+  facegk: ['Face & gasket data', 'Face geometry from ASME B16.5 and the sealing face from the gasket: the spiral wound sealing element (B16.20) or a flat gasket\'s ID to the raised-face edge (B16.21).', 'face'],
+  facemap: ['Face map', 'Look straight at the face with 12 o\'clock at the top. Drag across it to record a scratch, tap to record a pit. Do side A and side B.', 'face'],
+  facelim: ['Acceptance limits', 'Fractions of the sealing face width, for soft- and hard-faced gaskets. Check them against ASME PCC-1 Appendix D or your site procedure, then tick to confirm.', 'face']
+};
+const iBtn = key => INFO[key] ? `<button type="button" class="ii" data-info="${key}" aria-label="What is ${esc(INFO[key][0])}?">i</button>` : '';
+
+function renderHelp(sec) {
+  cur.report = null;
+  setTop('Help & manual', 'Inspection Toolbox', '/');
+  $('#main').innerHTML = `<div class="help-hero"><span>The owner's manual</span><h2>Inspection Toolbox</h2><p>Everything you need to know, nothing you don't – and it works offline.</p></div>
+    <nav class="help-toc">${HELP.map(h => `<a href="#/help/${h.id}">${esc(h.t)}</a>`).join('')}</nav>
+    ${HELP.map(h => `<section class="card help-sec" id="help-${h.id}"><h2>${esc(h.t)}</h2>${h.b}</section>`).join('')}
+    <p class="small muted" style="text-align:center">Inspection Toolbox v${APP_VERSION} · created by Chris Littlewood</p>`;
+  if (sec) setTimeout(() => document.getElementById('help-' + sec)?.scrollIntoView({ block: 'start' }), 30);
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-info]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+  const [t, txt, sec] = INFO[b.dataset.info] || []; if (!t) return;
+  const r = await modal(t, `<p>${esc(txt)}</p>`, [['More help', 'help'], ['OK', 'ok', 'primary']]);
+  if (r?.v === 'help') go('/help/' + sec);
+}, true);

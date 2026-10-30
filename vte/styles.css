@@ -498,3 +498,29 @@ input.ok{background:#e7f6ea!important;border-color:#43a047!important}input.bad{b
 @media (prefers-reduced-motion:reduce){.xr-alarm{animation:none}}
 
 .xr-top>span:last-child{display:flex;gap:6px;flex:none}.xr-title{text-align:center;flex:1;min-width:0}
+
+.xr-sub{font:700 .8rem/1 monospace;letter-spacing:.2em;text-transform:uppercase;opacity:.8;margin:-2px 0 10px}
+/* dark-mode fixes for Face Off / Gasket Case drawings and panels */
+.facemap-wrap,.flc-wrap{background:#f7f9fb;border-radius:14px;padding:6px;border:1px solid rgba(127,127,127,.25)}
+.limcard{border-color:#e2a93b!important}
+.limgrid div{background:rgba(127,127,127,.14)!important}
+.rp{background:rgba(127,127,127,.2)!important}
+:root[data-theme="dark"] .defrow.reject{background:rgba(229,57,53,.14)}
+:root[data-theme="dark"] .gasket{border-color:rgba(255,255,255,.18)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .defrow.reject{background:rgba(229,57,53,.14)}}
+
+/* info buttons + help */
+.ii{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;background:transparent;color:var(--blue,#1f6feb);font:700 italic 12px/1 Georgia,serif;padding:0;margin-left:4px;vertical-align:middle;cursor:pointer;opacity:.85;flex:none}
+.ii:active{transform:scale(.9)}
+.help-hero{background:linear-gradient(135deg,#1f5f5c,#2f8f8a);color:#f6efdf;border-radius:18px;padding:18px;margin:4px 0 12px}
+.help-hero span{font:700 .78rem/1 system-ui;letter-spacing:.2em;text-transform:uppercase;color:#e2a93b}.help-hero h2{margin:6px 0 4px;font-size:1.5rem}.help-hero p{margin:0;opacity:.9}
+.help-toc{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.help-toc a{font-size:.82rem;padding:5px 10px;border-radius:99px;border:1px solid var(--line,#d5dbe2);text-decoration:none;color:inherit}
+.help-sec{scroll-margin-top:70px}.help-sec h2{border-bottom:3px solid #e2a93b;padding-bottom:4px;margin-bottom:8px}.help-sec li{margin:5px 0;line-height:1.45}.help-sec p{line-height:1.5}
+.help-sec code{font-size:.85em;background:rgba(127,127,127,.15);padding:1px 5px;border-radius:4px}
+/* keep side-by-side input boxes lined up when one label wraps */
+@supports (grid-template-rows: subgrid){
+  .grid2,.grid3{row-gap:0}
+  .grid2>.field,.grid3>.field{display:grid;grid-template-rows:subgrid;grid-row:span 3;align-content:start}
+  .grid2>.field>span:first-child,.grid3>.field>span:first-child{align-self:end}
+  .grid2>.field>small,.grid3>.field>small{align-self:start}
+}

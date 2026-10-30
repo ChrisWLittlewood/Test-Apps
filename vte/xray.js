@@ -1,4 +1,4 @@
-/* X-Ray Pipe Vision (Experimental) – codename Bone Idle.
+/* Totally RAD (Experimental) – codename Bone Idle.
    A novelty: a drawing on top of the camera picture. Nothing is emitted, measured or diagnosed.
    Body tracking uses MediaPipe hand / face / pose landmarkers (downloaded once with signal); falls back to a training dummy. */
 const XR_MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -12,25 +12,26 @@ let xrNets = null;
 
 function renderXrayLanding() {
   cur.report = null;
-  setTop('X-Ray Pipe Vision', 'Experimental feature', '/');
-  $('#main').innerHTML = `<div class="card xr-hero"><span class="xr-exp">EXPERIMENTAL</span><h2>☢ X-Ray Pipe Vision</h2>
+  setTop('Totally RAD', 'Experimental feature', '/');
+  $('#main').innerHTML = `<div class="card xr-hero"><span class="xr-exp">EXPERIMENTAL</span><h2>☢ Totally RAD</h2><p class="xr-sub">Radiographic Assessment Device</p>
       <p>See straight through insulation and cladding to check for corrosion under insulation, without a single strip of delagging. Point the phone's camera at insulated pipework, hold steady, and let the X-ray emitter do the rest.</p>
+      <p><b>Now with profile radiography!</b> Wall loss, pitting and weld root profiles in seconds. No more booking radiography crews, clearing the area, or waiting for weird, smelly radiographers who turn up at 3am, drink all your juice from the fridge and leave the film for you to find. Totally RAD does it in your pocket. Juice not included.</p>
       <p class="small">Project codename: <b>Bone Idle</b> · Firmware MK II · Not yet approved by anyone</p></div>
-    <div class="card xr-danger"><div class="xr-trefoil">☢</div><h3>DO NOT POINT AT PEOPLE</h3><p>This feature emits experimental doses of make-believe ionising radiation. It is intended <b>only for pipework</b>. Pointing it at people, including yourself, colleagues, contractors, visiting management or Brenda, is <b>strictly forbidden</b>.</p></div>
+    <div class="card xr-danger"><div class="xr-trefoil">☢</div><h3>DO NOT POINT AT PEOPLE</h3><p>This feature emits experimental doses of make-believe ionising radiation. It is intended <b>only for pipework</b>. Pointing it at people, including yourself, colleagues, contractors, visiting management or Kelton, is <b>strictly forbidden</b>.</p></div>
     <div class="card xr-disc"><h3>Mandatory safety briefing (please read in full, nobody does)</h3>
       <ol class="small">
-        <li><b>Pipework only.</b> X-Ray Pipe Vision is designed exclusively for insulated piping. Under no circumstances point it at hands, heads, bodies, pets, or anything with a pulse. It will notice. It will tell you. Loudly.</li>
-        <li><b>Side effects.</b> Prolonged use may cause mild hair loss, depression, slow agonising death, mild sleepiness, and/or possible unexpected superpowers. Rare side effects include glowing in the dark, an affinity for lead aprons, and an uncontrollable urge to point it at Brenda.</li>
+        <li><b>Pipework only.</b> Totally RAD is designed exclusively for insulated piping. Under no circumstances point it at hands, heads, bodies, pets, or anything with a pulse. It will notice. It will tell you. Loudly.</li>
+        <li><b>Side effects.</b> Prolonged use may cause mild hair loss, depression, slow agonising death, mild sleepiness, and/or possible unexpected superpowers. Rare side effects include glowing in the dark, an affinity for lead aprons, and an uncontrollable urge to point it at Kelton.</li>
         <li><b>Superpowers.</b> Any superpowers acquired must be reported to your line manager, risk-assessed, and raised through management of change before use on site. Flight is not covered by your working-at-height training.</li>
         <li><b>Exclusion zone.</b> Maintain an exclusion zone of approximately everyone. Barriers and signage are recommended. A man with a flag walking in front of you is optional but encouraged.</li>
-        <li><b>Accuracy.</b> Wall thickness readings are experimental and may be off by up to 100%. Do not use them to credit any IMS schedule, RT, CR, DR, profile radiography or "having a quick look".</li>
+        <li><b>Accuracy.</b> Wall thickness readings are experimental and may be off by up to 100%. Profile radiography results are for entertainment purposes and must not be credited against any IMS schedule, RT, CR, DR or "having a quick look".</li>
         <li><b>Your skeleton.</b> Viewing your own skeleton may void its warranty. The manufacturer of your skeleton has not been consulted.</li>
         <li><b>Licensing.</b> Use requires a valid licence to operate imaginary radiation sources, a radiation protection supervisor with a good sense of humour, and a dosimeter you don't mind looking at.</li>
         <li><b>Hazardous areas.</b> Normal rules for phones and cameras in classified areas still apply. This feature does not make your phone intrinsically safe, though it may make you intrinsically silly.</li>
         <li><b>Battery.</b> The emitter is power-hungry. Expect your phone to get warm and your battery to get small.</li>
-        <li><b>Liability.</b> By continuing you accept that any hair loss, sleepiness, superpowers, funerals or loss of professional credibility are entirely your own. The authors, the Inspection Toolbox, the IMS team, your employer and Brenda accept no liability whatsoever, now or in any future life.</li>
+        <li><b>Testing.</b> Only one Welshman was lethally ionised, repeatedly and uncaringly, during the production of this technology. He says he's fine. He is glowing slightly.</li>
+        <li><b>Liability.</b> By continuing you accept that any hair loss, sleepiness, superpowers, funerals or loss of professional credibility are entirely your own. The authors, the Inspection Toolbox, the IMS team, your employer and Kelton accept no liability whatsoever, now or in any future life.</li>
       </ol>
-      <p class="xr-small">Small print of the small print: it's a joke. It's your camera and a drawing; nothing is emitted, detected, recorded or saved. The body trackers are downloaded once from Google MediaPipe and run on the phone.</p>
       <button class="btn danger block big" id="xrGo">☢ Enable experimental X-ray emitter</button>
       <button class="btn ghost block" id="xrDemo">🎓 Training mode (simulated colleague, no camera)</button></div>`;
   $('#xrGo').onclick = async () => { if (await xrConfirm()) openXray(false); };
@@ -59,8 +60,8 @@ async function getNets(onStep) {
 function openXray(demoOnly) {
   const ov = document.createElement('div'); ov.className = 'xray';
   ov.innerHTML = `<video playsinline muted autoplay></video><canvas></canvas>
-    <div class="xr-alarm" hidden><b>⚠ DANGER! ⚠</b><span>LETHAL RADIATION DOSE EXCEEDED!</span><span>SEEK EMERGENCY FUNERAL ARRANGEMENTS!</span></div>
-    <div class="xr-top"><button class="btn ghost sm" data-x="close">✕</button><span class="xr-title">X-RAY PIPE VISION <small>EXP</small></span><span><button class="btn ghost sm" data-x="mute" title="Klaxon">🔊</button> <button class="btn ghost sm" data-x="flip" title="Switch camera">🔄</button></span></div>
+    <div class="xr-alarm" hidden><b>⚠ DANGER! ⚠</b><span>LETHAL RADIATION DOSE EXCEEDED!</span></div>
+    <div class="xr-top"><button class="btn ghost sm" data-x="close">✕</button><span class="xr-title">TOTALLY RAD <small>EXP</small></span><span><button class="btn ghost sm" data-x="mute" title="Klaxon">🔊</button> <button class="btn ghost sm" data-x="flip" title="Switch camera">🔄</button></span></div>
     <div class="xr-hud"><div class="xr-gauge"><span>DOSE</span><i><b></b></i><em>0.00 mSv</em></div><div class="xr-msg">Charging emitter…</div></div>
     <div class="xr-foot">Experimental · pipework only · do not point at people</div>`;
   document.body.append(ov); document.body.classList.add('noscroll');
@@ -239,7 +240,7 @@ function openXray(demoOnly) {
     if (human) {
       alarm.hidden = false; sv += 37 + Math.random() * 90; bar.style.width = '100%'; bar.classList.add('max');
       dose.textContent = sv > 1e6 ? (sv / 1e6).toFixed(2) + ' MSv – extremely dead' : Math.round(sv).toLocaleString() + ' Sv';
-      msg.textContent = poses?.length ? 'PERSON IN BEAM. Full skeleton exposed.' : faces?.length ? 'HEAD IN BEAM. Skull located. Brenda, is that you?' : 'HAND IN BEAM. That is not pipework.';
+      msg.textContent = poses?.length ? 'PERSON IN BEAM. Full skeleton exposed.' : faces?.length ? 'HEAD IN BEAM. Skull located. Kelton, is that you?' : 'HAND IN BEAM. That is not pipework.';
       if (now - lastBeep > 900) { klaxon(); lastBeep = now; }
     } else {
       alarm.hidden = true; bar.classList.remove('max'); sv = Math.max(0, sv * 0.9);

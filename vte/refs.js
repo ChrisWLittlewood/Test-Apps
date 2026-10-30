@@ -62,7 +62,7 @@ function renderRefs(app) {
       ${it ? `<p class="small muted">${esc(it.name)} · ${(it.size / 1048576).toFixed(1)} MB · added ${fmtDate((it.addedAt || '').slice(0, 10))}</p>` : ''}
       <div class="grid2">${it ? `<button class="btn primary sm" data-ref="open" data-k="${d.key}">📖 Open</button><button class="btn ghost sm" data-ref="del" data-k="${d.key}">Remove</button>` : `<button class="btn primary sm" data-ref="add" data-k="${d.key}">⬆ Add your copy (PDF)</button>`}</div>
       ${d.links.length ? `<div class="reflinks small">${d.links.map(([l, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join(' · ')}</div>` : d.company ? '<div class="reflinks small muted">Get the current revision from document control.</div>' : ''}</div>`; };
-  $('#main').innerHTML = `<div class="card"><h2>📚 Reference library</h2>
+  $('#main').innerHTML = `<div class="card"><h2>📚 Reference library ${iBtn('refs')}</h2>
       <p class="small">The apps use data from these documents. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company). Files stay on this phone only – they are not uploaded anywhere and are not included in backups.</p>
       ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}</div>
     ${list.filter(d => !d.company).map(card).join('')}

@@ -18,12 +18,12 @@ function renderToolbox() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install Inspection Toolbox on this phone</button>` : ''}
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Add your name in <a href="#/settings">Settings</a> – it is used on every report and sheet.</div>` : ''}
     <div class="tb-hero"><h2>Inspection Toolbox</h2><p>Offline tools for plant inspection – work without signal, export Word / PDF.</p></div>
-    ${tile('#/imsnt', '<img src="img/icon-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
+    ${tile('#/imsnt', '<img src="img/imsnt-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}
     ${tile('#/flange', flIconSVG(), 'Gasket Case', 'Flange & bolting inspection sheets – stud by stud', nFl ? `${nFl} sheet${nFl === 1 ? '' : 's'}` : '')}
     ${tile('#/face', faceIconSVG(), 'Face Off', 'Flange face inspection – scratches & pits vs the gasket seating band', TB.face.items.length ? `${TB.face.items.length} inspection${TB.face.items.length === 1 ? '' : 's'}` : '')}
     <div class="section-title"><h2>Experimental features</h2></div>
-    ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'X-Ray Pipe Vision <small class="xr-exp">EXPERIMENTAL</small>', 'See through cladding for CUI. Do not point at people.', '')}
+    ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'Totally RAD <small class="xr-exp">EXPERIMENTAL</small>', 'Radiographic Assessment Device – see through cladding for CUI. Do not point at people.', '')}
     <div class="section-title"><h2>Tools</h2></div>
     <div class="grid2">
       <a class="btn ghost" href="#/settings">⚙ Settings</a>
@@ -31,6 +31,7 @@ function renderToolbox() {
       <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
     </div>
+    <a class="btn primary block" href="#/help" style="margin-top:8px">📖 Help &amp; manual</a>
     <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Reference library <span class="pill-s">${Object.keys(TB.refs.items).length}/${REF_DOCS.length} on this phone</span></a>
     ${!PACK ? `<p class="small muted">📦 No data pack loaded – pipe classes, gaskets and plot plans need one (<a href="#/settings">Settings</a>).</p>` : `<p class="small muted">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="ver-row"><span>Inspection Toolbox v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
@@ -51,7 +52,7 @@ function renderIsoLib() {
   cur.report = null;
   setTop('Isometricks', 'Isometric sketches', '/');
   const items = [...TB.iso.items].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  $('#main').innerHTML = `<div class="card"><h2>📐 Isometricks</h2><p class="muted small">Quick isometric sketches. Pipes snap to the iso grid, components line up with the pipe, and the markup tools (arrows, clouds, highlighter, text) work on top. Share as an image or copy into an IMSn't report.</p>
+  $('#main').innerHTML = `<div class="card"><h2>📐 Isometricks ${iBtn('iso')}</h2><p class="muted small">Quick isometric sketches. Pipes snap to the iso grid, components line up with the pipe, and the markup tools (arrows, clouds, highlighter, text) work on top. Share as an image or copy into an IMSn't report.</p>
       <button class="btn primary block big" data-tb="isoNew">✏️ New sketch</button></div>
     ${items.length ? items.map(it => `<div class="card iso-card">
         <div class="iso-thumb" data-tb="isoEdit" data-id="${it.id}"><img data-blobimg="${it.blobId}" alt=""></div>
@@ -182,7 +183,7 @@ function renderFlange(id) {
       <div class="grid2">${flInput('sideA', 'Side A is…', it.sideA, 'placeholder="e.g. upstream / valve side"')}${flInput('inspector', 'Inspector', it.inspector)}</div>
       <label class="field"><span>Date</span><input type="date" data-fp="date" value="${esc(it.date)}"></label></div>
 
-    ${c.dn ? `<div class="card"><h2>Nominal data</h2>
+    ${c.dn ? `<div class="card"><h2>Nominal data ${iBtn('flnom')}</h2>
       <table class="nomtbl"><tr><th>Flange OD</th><td>${c.fd?.od ?? '–'} mm</td></tr><tr><th>Flange thickness (tf)</th><td>${c.fd?.tf ?? '–'} mm <small>(loss allowed ${c.allow ?? '–'} mm)</small></td></tr>
         <tr><th>Bolt circle</th><td>${c.fd?.bc ?? '–'} mm</td></tr><tr><th>Studs</th><td>${c.bolt ? `${c.n} × ${c.bolt.dia}" ${c.bolt.thread}${c.bolt.len ? ' × ' + c.bolt.len + ' mm' : ''}` : c.n + ' (size not known)'}</td></tr>
         <tr><th>Stud Ø nominal / reject</th><td>${c.bolt ? `${c.bolt.diaMm} mm / &lt; ${c.bolt.dia90} mm` : '–'}</td></tr>
@@ -197,7 +198,7 @@ function renderFlange(id) {
       <div class="flc-wrap"><div id="flCircle">${boltCircleSVG(it, c, ev)}</div></div>
       <h3>Flange thickness (minimum)</h3>
       <div class="grid2"><label class="field"><span>Side A <em>(mm)</em></span><input type="text" inputmode="decimal" class="${ev.cells.tfA || ''}" data-fp="tfA" data-flcalc value="${esc(it.tfA ?? '')}"></label><label class="field"><span>Side B <em>(mm)</em></span><input type="text" inputmode="decimal" class="${ev.cells.tfB || ''}" data-fp="tfB" data-flcalc value="${esc(it.tfB ?? '')}"></label></div>
-      <h3>Studs & nuts <small class="muted">(min. after removing loose scale)</small></h3>
+      <h3>Studs & nuts <small class="muted">(min. after removing loose scale)</small> ${iBtn('fronts')}</h3>
       <div class="studtbl"><div class="sr sh"><span>Stud</span><span>Stud Ø</span><span>Nut A front</span><span>Nut A base</span><span>Nut B front</span><span>Nut B base</span></div>
         ${studs.map((_, i) => `<div class="sr"><b>${i + 1}</b>${cell(i, 'd')}${cell(i, 'af')}${cell(i, 'ab')}${cell(i, 'bf')}${cell(i, 'bb')}</div>`).join('')}</div>
       <p class="small muted">Front = outer face of the nut; base = bearing face against the flange (usually worst). Leave blank if not measured. Red = below 90% of nominal.</p>
@@ -207,7 +208,7 @@ function renderFlange(id) {
       ${pill('leak', it.leak, ['Yes', 'No'], 'Signs of leakage at the joint?', yn(false))}
       <label class="field"><span>Notes / condition</span><textarea rows="3" data-fp="notes">${esc(it.notes)}</textarea></label></div>
 
-    <div class="card"><h2>Result</h2><div id="flResult">${flResultHTML(it, c, ev)}</div></div>
+    <div class="card"><h2>Result ${iBtn('flres')}</h2><div id="flResult">${flResultHTML(it, c, ev)}</div></div>
 
     <section class="photos"><div class="ph-head"><h3>📷 Photos</h3></div>
       <div class="grid2"><button class="btn primary" data-tb="flPhoto" data-cap="1">📷 Take photo</button><button class="btn ghost" data-tb="flPhoto">🖼 From gallery</button></div>

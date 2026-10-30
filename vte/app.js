@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '2.0.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -462,6 +462,7 @@ async function route() {
   if (p[0] === 'face-limits') return renderFaceLimits();
   if (p[0] === 'refs') return renderRefs(p[1]);
   if (p[0] === 'xray') return renderXrayLanding();
+  if (p[0] === 'help') return renderHelp(p[1]);
   if (p[0] === 'settings') return renderSettings();
   if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
@@ -502,7 +503,7 @@ function renderHome() {
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Start by adding your name in <a href="#/settings">Settings</a> – it is used on every report.</div>` : ''}
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install app on this phone</button>` : ''}
     ${!PACK ? `<div class="card notice">📦 No data pack loaded – import your asset's data pack in <a href="#/settings">Settings</a> to enable pipe classes, plot plans and FM areas.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
-    <div class="section-title"><h2>Piping systems</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
+    <div class="section-title"><h2>Piping systems ${iBtn('systems')}</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
     <button class="btn ghost block" data-action="importLines">📥 Import line list from Excel (new system)</button>
     ${sys.length ? sys.map(s2 => {
       const lines = S.reports.filter(r => r.systemId === s2.id);
@@ -534,12 +535,12 @@ function renderSettings() {
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this phone.</p><a class="btn primary block" href="#/pids">Open P&ID library</a></div>
-  <div class="card"><h3>🤖 AI (optional)</h3>
+  <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
     <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules.</small></label>
     <label class="field"><span>Model</span><select data-bind="settings" data-path="aiModel">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommended)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (faster, cheaper)'], ['claude-opus-5-5', 'Claude Opus 5.5 (most thorough)']].map(([v, l]) => `<option value="${v}" ${(st.aiModel || 'claude-sonnet-5-5') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
-  <div class="card"><h3>📦 Data pack</h3>
+  <div class="card"><h3>📦 Data pack ${iBtn('pack')}</h3>
     ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
@@ -549,7 +550,12 @@ function renderSettings() {
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
   <div class="card"><h3>📷 Report logo</h3><p class="small muted">The report header uses the logo from the data pack. To use a different one, pick an image – it is stored on this phone only.</p>
     <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
-  <div class="card"><h3>About</h3><p><b>IMSn't</b> – created by Chris Littlewood.</p><p class="muted">Temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
+  <div class="card"><h3>About</h3>
+    <p><b>Inspection Toolbox</b> v${APP_VERSION} – created by Chris Littlewood.</p>
+    <p class="small">Offline inspection apps for plant inspectors: <b>IMSn't</b> (Pipework Visual Inspection Tool – VTE line reports while IMS isn't working), <b>Isometricks</b> (iso sketches), <b>Gasket Case</b> (flange &amp; bolting sheets), <b>Face Off</b> (flange face inspection) and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
+    <p class="small">Everything is stored on this device only. Company data comes from your data pack; standards come from your own reference library. Calculations follow the Performance Standard (PC005 / PC007), ASME B16.5 / B16.20 / B16.21 / B36.10M and API 571 / 574 – hints and defaults are flagged where they need confirming against your procedures.</p>
+    <a class="btn ghost block" href="#/help">📖 Help &amp; manual</a>
+    <p class="muted small" style="margin-top:10px">Original notes: temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
   return `<label class="field"><span>${esc(label)}</span><input type="${type}" data-bind="${bind}" data-path="${path}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
@@ -746,7 +752,7 @@ function pipeClassHTML(r) {
   const dns = cls ? Object.keys(cls.sch) : Object.keys(PIPE_DIMS).filter(d => +d >= 15 && +d <= 1200);
   const sel = selectedSizes(r);
   if (cls || G.classManual) {
-    h += `<div class="field"><span>Line size(s) <em>– tick all sizes on this line</em></span><div class="chips">${dns.map(d => `<button class="pill ${sel.includes(String(d)) ? 'on blue' : ''}" data-action="toggleSize" data-dn="${d}">${sizeLabel(d)}</button>`).join('')}</div></div>`;
+    h += `<div class="field"><span>Line size(s) <em>– tick all sizes on this line</em> ${iBtn('classes')}</span><div class="chips">${dns.map(d => `<button class="pill ${sel.includes(String(d)) ? 'on blue' : ''}" data-action="toggleSize" data-dn="${d}">${sizeLabel(d)}</button>`).join('')}</div></div>`;
   }
   if (sel.length) h += lineTableHTML(r) + boltingHTML(r, false);
   return h;
@@ -967,16 +973,16 @@ function stepHTML(r, step) {
           ${thumbsHTML(r, list, { capPh: 'Drawing number / title', rev: kind === 'pid' })}</section>`;
       };
       const e = r.ech;
-      return `<div class="card"><h2>★ Line prep</h2><p class="muted small">Do this in the office before going out: add the P&ID (highlight the line), the isometric and the previous ECH. Drawings and the ECH summary are then one tap away during the inspection (📐 button).</p>
+      return `<div class="card"><h2>★ Line prep ${iBtn('lineprep')}</h2><p class="muted small">Do this in the office before going out: add the P&ID (highlight the line), the isometric and the previous ECH. Drawings and the ECH summary are then one tap away during the inspection (📐 button).</p>
           ${prepChips(r)}${ps.ready ? '<div class="calc ok">✓ Ready to inspect</div>' : ''}
-          <label class="field" style="margin-top:10px"><span>EP report number</span><input type="text" data-path="h.uniqueNo" value="${esc(h.uniqueNo)}" autocapitalize="characters" placeholder="Unique EP number issued for this report"><small>Printed top right of every report page and in the Unique No. box.</small></label></div>
+          <label class="field" style="margin-top:10px"><span>EP report number ${iBtn('ep')}</span><input type="text" data-path="h.uniqueNo" value="${esc(h.uniqueNo)}" autocapitalize="characters" placeholder="Unique EP number issued for this report"><small>Printed top right of every report page and in the Unique No. box.</small></label></div>
         ${grp('pid', 'P&ID / PEFS', 'Highlight the line inspected – use the highlighter (▬ / 🖍).')}
         ${grp('iso', 'Isometric', 'Add the isometric, draw a sketch, or tick "No ISO available".')}
         <section class="photos ${r.noEch && !e ? 'none' : ''}"><div class="ph-head"><h3>Previous ECH</h3>
           ${!e ? `<label class="nophoto"><input type="checkbox" data-path="noEch" data-rerender ${r.noEch ? 'checked' : ''}> No previous ECH</label>` : ''}</div>
           <p class="muted small">Reference only – not printed in the report. Import the last Condition History (R405 PDF) from IMS.</p>
           ${e ? `${echCardHTML(r)}
-            <div class="ech-ai-box"><h4>🤖 AI summary ${e.ai ? '(done – run again to refresh)' : ''}</h4>
+            <div class="ech-ai-box"><h4>🤖 AI summary ${e.ai ? '(done – run again to refresh)' : ''} ${iBtn('echai')}</h4>
               ${S.settings.aiKey ? `<button class="btn primary block" data-action="echAiApi">🤖 Summarise with AI now (needs signal)</button>` : ''}
               <button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'} block" data-action="echAiCopy">📋 Copy ECH for your AI tool</button>
               <label class="field"><span>Paste AI reply</span><textarea id="echAiReply" rows="3" placeholder='{"overview": ...}'></textarea></label>
@@ -1033,7 +1039,7 @@ function stepHTML(r, step) {
 
     case 'dm': {
       const c = dmContext(r); const dms = damageMechanisms(r); const tips = inspTips(r);
-      return `<div class="card"><h2>🔎 What to look for</h2>
+      return `<div class="card"><h2>🔎 What to look for ${iBtn('lookfor')}</h2>
           <div class="chips"><span class="pill-s">${esc(MAT_LABEL[c.mat])}${c.cls ? ' – class ' + esc(c.cls.c) : ''}</span><span class="pill-s">${esc(c.svc || 'Service not set')}</span>${c.ins ? '<span class="pill-s warn">Insulated</span>' : ''}${c.sbc ? '<span class="pill-s">Small bore</span>' : ''}</div>
           ${!c.cls || !c.svc ? `<div class="calc warn small">Set the ${!c.cls ? `pipe class (<a href="#/report/${r.id}/st_general">stage 1</a>)` : ''}${!c.cls && !c.svc ? ' and ' : ''}${!c.svc ? `service / fluid (<a href="#/report/${r.id}/header">Header</a>)` : ''} for better hints.</div>` : ''}
           <p class="muted small">Quick hints from API RP 571 (damage mechanisms) and API RP 574 (piping inspection practice). They don't replace the site RBI / corrosion management strategy.</p></div>
@@ -1043,7 +1049,7 @@ function stepHTML(r, step) {
     }
     case 'findings': {
       const fnd = allFindings(r); const nums = photoNumbers(r); const na = !!r.cairNA;
-      return `<div class="card"><h2>CAIR items</h2><p class="muted small">Items that fail the Performance Standard or need follow-up are pulled in from the checklist. Add a <b>suggested action</b> – remedial actions are decided by the Area Inspector after review. If there is potential for imminent danger, inform the Site Manager and Inspection TL immediately.</p>
+      return `<div class="card"><h2>CAIR items ${iBtn('cair')}</h2><p class="muted small">Items that fail the Performance Standard or need follow-up are pulled in from the checklist. Add a <b>suggested action</b> – remedial actions are decided by the Area Inspector after review. If there is potential for imminent danger, inform the Site Manager and Inspection TL immediately.</p>
           <label class="na-toggle"><input type="checkbox" data-action="cairNA" ${na ? 'checked' : ''}> <b>Not required</b> – no CAIR items for this line</label></div>
         <div class="${na ? 'greyed' : ''}">
         ${fnd.length ? fnd.map((f, i) => {
@@ -1071,7 +1077,7 @@ function stepHTML(r, step) {
           <textarea rows="${rows}" data-path="text.${k}">${esc(edited ? r.text[k] : gen[k])}</textarea>
           ${edited ? `<button class="btn ghost sm" data-action="regen" data-k="${k}">↺ Reset to text generated from checklist</button>` : ''}</div>`;
       };
-      return `<div class="card"><h2>Report text</h2><p class="muted small">Generated from your checklist answers. Edit freely – edited boxes stop updating automatically. You can polish these with AI in the office (Check & AI step).</p>
+      return `<div class="card"><h2>Report text ${iBtn('text')}</h2><p class="muted small">Generated from your checklist answers. Edit freely – edited boxes stop updating automatically. You can polish these with AI in the office (Check & AI step).</p>
         ${block('ext', 'External condition', 7)}${block('fit', 'External fittings (supports, access fittings, instrument fittings etc.)', 5)}
         ${block('int', 'Internal condition', 2)}${block('intf', 'Internal fittings', 2)}${block('restr', 'Inspection restrictions', 3)}
         ${block('ech', 'IMS ECH summary (to paste into IMS later)', 5)}</div>`;
@@ -1115,7 +1121,7 @@ function stepHTML(r, step) {
         ${v.errors.length ? `<h3 class="red-t">Must fix (${v.errors.length})</h3><ul class="checks">${v.errors.map(x => li(x, 'err')).join('')}</ul>` : ''}
         ${v.warnings.length ? `<h3 class="amber-t">Check (${v.warnings.length})</h3><ul class="checks">${v.warnings.map(x => li(x, 'warn')).join('')}</ul>` : ''}
       </div>
-      <div class="card"><h2>🤖 AI review <small class="muted">(office – needs network)</small></h2>
+      <div class="card"><h2>🤖 AI review <small class="muted">(office – needs network)</small> ${iBtn('aireview')}</h2>
         <p class="small">1. Copy the review pack and paste it into the AI tool you're permitted to use (e.g. your company's approved Copilot / AI tool, or Claude).<br>2. Copy the AI's whole reply and paste it below.<br>3. Accept or reject each suggestion. Findings, measurements and your conclusion are never changed automatically.</p>
         <p class="small muted">Only report text is included – no photos. Check your company's information classification rules before sharing asset data.</p>
         <button class="btn primary block" data-action="aiCopy">📋 Copy AI review pack</button>

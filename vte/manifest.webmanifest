@@ -1,13 +1,13 @@
 {
   "name": "Inspection Toolbox",
-  "short_name": "Toolbox",
+  "short_name": "Inspection Toolbox",
   "description": "Offline inspection tools – IMSn't (pipework VTE reports), Isometricks (iso sketches), Gasket Case (flange bolting) and Face Off (flange faces).",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f4e7c9",
-  "theme_color": "#1d2b36",
+  "background_color": "#f6efdf",
+  "theme_color": "#1f5f5c",
   "icons": [
     {
       "src": "img/icon-192.png",
