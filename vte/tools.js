@@ -34,6 +34,7 @@ function renderToolbox() {
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
     </div>
     <a class="btn primary block" href="#/help" style="margin-top:8px">📖 Help &amp; manual</a>
+    <a class="btn ghost block" href="#/promo" style="margin-top:8px">🎬 Promo &amp; info – advert video &amp; guide</a>
     <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Reference library <span class="pill-s">${Object.keys(TB.refs.items).length}/${REF_DOCS.length} on this phone</span></a>
     ${!PACK ? `<p class="small muted">📦 No data pack loaded – pipe classes, gaskets and plot plans need one (<a href="#/settings">Settings</a>).</p>` : `<p class="small muted">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="ver-row"><span>Inspection Toolbox v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;

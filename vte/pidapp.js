@@ -64,6 +64,47 @@ function pidTitleBlock(items, fileBase) {
   const rm = /\bREV(?:ISION)?\.?\s*[:\-]?\s*([A-Z0-9]{1,3})\b/i.exec(fileBase) || /\bREV(?:ISION)?\.?\s*[:\-]?\s*([A-Z0-9]{1,3})\b/i.exec(tbText);
   return { dwgNo, rev: rm ? rm[1].toUpperCase() : '' };
 }
+/* The drawing description from the title block (bottom-right corner): the biggest descriptive text there,
+   plus the lines stacked with it – e.g. "LEMAN 'A' – GAS COMPRESSION – 1ST STAGE SUCTION SCRUBBER". */
+const PID_DESC_NOISE = /\b(DRAWING|DWG|DRG|REV(ISION)?S?|SCALE|DATE|DRAWN|CHECKED|CHK'?D|APPROVED|APPR|APPD|SHEET|SHT|PROJECT|CONTRACT|JOB|SIZE|NTS|DOC(UMENT)?|STATUS|ISSUED?|AS[- ]?BUILT|FOR (CONSTRUCTION|APPROVAL|INFORMATION|REVIEW|DESIGN)|CLIENT|COPYRIGHT|CONFIDENTIAL|PROPERTY|REFERENCE|REF|NOTES?|PLOT(TED)?|FILE|CAD|ORIGINATOR|DISCIPLINE|AMEND(ED|MENT)?|MOC|SUPERSEDES?|LIMITED|LTD|PLC|INC|TITLE|DESCRIPTION|BY|CHKD|ENG|QA)\b/;
+const PID_DESC_GENERIC = /^(P\s*&\s*I\s*D|(PIPING|PROCESS) (AND|&) INSTRUMENT(ATION|S)? DIAGRAMS?|ENGINEERING (FLOW|LINE) DIAGRAMS?|(MECHANICAL|PROCESS) FLOW DIAGRAMS?|UTILITY FLOW DIAGRAMS?)$/;
+function pidDescription(items, dwgNo) {
+  const tb = items.filter(a => a[1] > 0.55 && a[2] > 0.7 && a[3] >= a[4] * 0.8).sort((p, q) => p[2] - q[2] || p[1] - q[1]);
+  const rows = []; let row = null;
+  for (const a of tb) { if (row && Math.abs(a[2] - row.y) < Math.max(a[4], row.h) * 0.5) row.a.push(a); else { row = { y: a[2], h: a[4], a: [a] }; rows.push(row); } }
+  const segs = [];   // a row can hold several title-block cells – split it on wide gaps
+  for (const r of rows) {
+    r.a.sort((p, q) => p[1] - q[1]); let sg = null;
+    for (const a of r.a) {
+      const gap = sg ? a[1] - sg.x1 : 0;
+      if (!sg || gap > a[4] * 2.5) { sg = { t: a[0], x0: a[1], x1: a[1] + a[3], y: a[2], h: a[4], fh: a[5] || a[4] }; segs.push(sg); }
+      else { sg.t += (gap > a[4] * 0.12 ? ' ' : '') + a[0]; sg.x1 = Math.max(sg.x1, a[1] + a[3]); sg.fh = Math.max(sg.fh, a[5] || a[4]); }
+    }
+  }
+  const dk = pnorm(dwgNo || '');
+  const cand = segs.map(g => ({ ...g, t: g.t.replace(/\s+/g, ' ').trim() })).filter(g => {
+    const T = g.t.toUpperCase(), L = (T.match(/[A-Z]/g) || []).length;
+    if (L < 4 || L / T.replace(/\s/g, '').length < 0.55) return false;
+    if (PID_DESC_NOISE.test(T) || (dk && pnorm(T).includes(dk)) || /\d{1,2}[-./]\d{1,2}[-./]\d{2,4}/.test(T)) return false;
+    return true;
+  });
+  const real = cand.filter(g => !PID_DESC_GENERIC.test(g.t.toUpperCase().replace(/\.$/, '')));
+  if (!real.length) return '';
+  const anchor = real.reduce((m, g) => g.fh > m.fh || (g.fh === m.fh && g.t.length > m.t.length) ? g : m);
+  const grp = real.filter(g => g.fh >= anchor.fh * 0.6 && Math.abs(g.y - anchor.y) < anchor.h * 7 && g.x0 < anchor.x1 && g.x1 > anchor.x0).sort((p, q) => p.y - q.y);
+  return grp.map(g => g.t).join(' – ').slice(0, 180);
+}
+async function pidDescExisting() {
+  let n = 0;
+  for (const it of S.pidlib.items) {
+    if (it._desc) continue; it._desc = 1;
+    if (!it.desc && it.hasText) { const t = await DB.get('meta', 'pidtxt_' + it.id); if (t) it.desc = pidDescription(t.items, it.dwgNo); }
+    if (!it.desc && it.ai?.title) it.desc = pidAiDesc(it.ai.title);
+    if (it.desc) n++;
+  }
+  await savePidLib(); return n;
+}
+const pidAiDesc = t => { t = String(t || '').trim(); return PID_DESC_GENERIC.test(t.toUpperCase()) ? '' : t.slice(0, 180); };
 function buildPidRows(items) {
   const norm = items.map(a => pnorm(a[0]));
   const order = items.map((a, i) => i).sort((i, j) => items[i][2] - items[j][2] || items[i][1] - items[j][1]);
@@ -103,7 +144,7 @@ async function pidImport(files) {
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
         const hasText = pg.items.length > 2; if (!hasText) noText++;
         if (hasText) { await DB.put('meta', { id: 'pidtxt_' + id, items: pg.items }); PIDIDX.set(id, buildPidRows(pg.items)); }
-        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText, ...(keepAi ? { ai: keepAi } : {}) });
+        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, desc: (hasText ? pidDescription(pg.items, tb.dwgNo) : '') || (keepAi ? pidAiDesc(keepAi.title) : ''), _desc: 1, hasText, ...(keepAi ? { ai: keepAi } : {}) });
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
@@ -132,7 +173,7 @@ async function pidSearch(q) {
   q = String(q || '').trim(); if (q.length < 3) return [];
   const idx = await pidIndex(); const vars = pidQueryVariants(q); const res = [];
   for (const it of S.pidlib.items) {
-    const meta = pnorm([it.title, it.dwgNo, it.src].join(' ')); let best = null;
+    const meta = pnorm([it.title, it.dwgNo, it.src, it.desc].join(' ')); let best = null;
     const P = idx.get(it.id);
     if (P) for (const [v, w, why] of vars) {
       const boxes = new Set();
@@ -152,13 +193,13 @@ async function pidSearch(q) {
     const ixKey = pnorm(ix.dwgNo); const local = S.pidlib.items.find(l => (ixKey && pnorm(l.dwgNo) === ixKey && (l.page || 1) === (ix.page || 1)) || l.title === ix.title);
     let m = null;
     for (const [v, w, why] of vars) {
-      const n = (ix.rows || []).filter(r => r.includes(v)).length; const ai = (ix.ai || []).some(t => t.includes(v)); const meta = pnorm([ix.dwgNo, ix.title].join(' ')).includes(v);
+      const n = (ix.rows || []).filter(r => r.includes(v)).length; const ai = (ix.ai || []).some(t => t.includes(v)); const meta = pnorm([ix.dwgNo, ix.title, ix.desc].join(' ')).includes(v);
       if (n || ai || meta) { m = { w, why: n ? why : ai ? 'AI scan (' + why + ')' : 'drawing number / title', n }; break; }
     }
     if (!m) continue;
     if (local) { const lr = res.find(x => x.it.id === local.id); if (lr && ix.rev && local.rev && pnorm(ix.rev) !== pnorm(local.rev)) { lr.idxRev = ix.rev; lr.idxPack = pk.name; } continue; }
     if (res.some(x => x.remote && pnorm(x.it.dwgNo) === ixKey && x.it.page === ix.page)) continue;
-    res.push({ remote: true, it: { id: 'ix_' + k, title: ix.title, dwgNo: ix.dwgNo, rev: ix.rev, page: ix.page || 1 }, pack: pk, w: m.w - 0.1, hits: 0, rhits: m.n, boxes: [], why: m.why });
+    res.push({ remote: true, it: { id: 'ix_' + k, title: ix.title, dwgNo: ix.dwgNo, rev: ix.rev, desc: ix.desc || '', page: ix.page || 1 }, pack: pk, w: m.w - 0.1, hits: 0, rhits: m.n, boxes: [], why: m.why });
   }
   return res.sort((a, b) => b.w - a.w || b.hits - a.hits || a.it.title.localeCompare(b.it.title, undefined, { numeric: true }));
 }
@@ -169,7 +210,7 @@ async function openPidViewer(id, boxes = [], q = '') {
   const blob = await getBlob(it.blobId); if (!blob) return toast('Drawing missing – re-import it');
   const url = URL.createObjectURL(blob); const P = (await pidIndex()).get(id);
   const ov = document.createElement('div'); ov.className = 'pidv';
-  ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}</span>
+  ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
       <span class="pidv-z"><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
@@ -196,16 +237,17 @@ async function openPidViewer(id, boxes = [], q = '') {
 /* ---------- the app screen ---------- */
 function pidRowHTML(x, opts = {}) {
   const it = x.it || x;
-  if (x.remote) return `<div class="pid-item remote"><div class="pid-noimg">📄</div><span><b>${esc(it.dwgNo || it.title)}</b>${it.page > 1 ? ` <small>(page ${it.page})</small>` : ''}<br><small>${esc(it.title)}${it.rev ? ' · rev ' + esc(it.rev) : ''} · from index “${esc(x.pack.name)}”</small>
+  if (x.remote) return `<div class="pid-item remote"><div class="pid-noimg">📄</div><span><b>${esc(it.dwgNo || it.title)}</b>${it.page > 1 ? ` <small>(page ${it.page})</small>` : ''}${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${esc(it.title)}${it.rev ? ' · rev ' + esc(it.rev) : ''} · from index “${esc(x.pack.name)}”</small>
     <br><small class="pid-miss">⚠ Not in your P&amp;ID library – get the latest revision from document control.</small><br><small class="pid-hit">${x.rhits ? `on ${x.rhits} label${x.rhits > 1 ? 's' : ''} – ` : ''}${esc(x.why)}</small></span></div>`;
   return `<button class="pid-item" data-action="${opts.pick ? 'pickPid' : 'pidOpen'}" data-id="${it.id}" ${x.boxes ? `data-q="${esc(opts.q || '')}"` : ''}><img src="${it.thumb}" alt="">
-    <span><b>${esc(it.title)}</b><br><small>${[it.dwgNo, it.rev && 'rev ' + it.rev].filter(Boolean).map(esc).join(' · ') || esc(it.src || '')}${!it.hasText ? ' · <i>scanned – no text</i>' : ''}</small>
+    <span><b>${esc(it.title)}</b>${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${[it.dwgNo, it.rev && 'rev ' + it.rev].filter(Boolean).map(esc).join(' · ') || esc(it.src || '')}${!it.hasText ? ' · <i>scanned – no text</i>' : ''}</small>
     ${x.idxRev ? `<br><small class="pid-miss">⚠ Index “${esc(x.idxPack)}” lists rev ${esc(x.idxRev)} – your copy is rev ${esc(it.rev)}. Check document control for the latest.</small>` : ''}
     ${x.boxes ? `<br><small class="pid-hit">${x.hits ? `${x.hits} hit${x.hits > 1 ? 's' : ''} – ${esc(x.why)}` : 'matches the ' + esc(x.why)}</small>` : ''}</span></button>`;
 }
 let PIDRES = {};
 function renderPidApp() {
   if (S.pidlib.items.some(it => !it._tidy)) pidTidyExisting().then(n => { if (n) { toast(`✨ ${n} P&ID name${n > 1 ? 's' : ''} tidied (“_Publication” suffix moved to the revision)`, 4000); if (location.hash.startsWith('#/pids')) renderPidApp(); } });
+  if (S.pidlib.items.some(it => !it._desc)) pidDescExisting().then(n => { if (n) { toast(`📝 Descriptions read from ${n} P&ID title block${n > 1 ? 's' : ''}`, 3500); if (location.hash === '#/pids') renderPidApp(); } });
   setTop('P&I Spy', `${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
@@ -215,7 +257,7 @@ function renderPidApp() {
       <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189). Line numbers come with the pipe spec from the data pack.</p>
       <div id="pidSpec"></div><div id="pidAppRes" class="pidlist"></div></div>
     <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
-    <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
+    <input type="search" id="pidLibQ" placeholder="Filter by title, description or drawing number" autocomplete="off">
     <div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>`;
   if (cur.pidQ) pidAppSearch(cur.pidQ);
 }
@@ -336,7 +378,7 @@ Object.assign(actions, {
 /* ---------- AI scan (run on the phone if the PC can't reach the AI service) ----------
    Reads each drawing image in 4 overlapping tiles so small text stays legible. Mostly for scanned P&IDs with no
    text layer, but also adds anything the PDF text missed. Results are searchable and travel in the library pack. */
-const PID_AI_SCHEMA = `{"dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title",
+const PID_AI_SCHEMA = `{"dwgNo":"drawing number from the title block","rev":"revision","title":"the drawing title / description from the title block in the bottom-right corner, e.g. GAS COMPRESSION – 1ST STAGE SUCTION SCRUBBER (not just 'Piping and instrument diagram')",
 "lines":["every pipeline number exactly as written, e.g. 6\"-PX-20189-61472"],
 "tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"]}`;
 function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all || !it.hasText)); }
@@ -370,6 +412,7 @@ async function pidAiOne(it) {
   if (!res.ok) throw new Error(`AI request failed (${res.status}) ${(await res.text()).slice(0, 120)}`);
   const j = parseAiJson(((await res.json()).content || []).map(c => c.text || '').join(''));
   it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), title: j.title || '', _at: new Date().toISOString(), _via: S.settings.aiModel || 'AI' };
+  if (!it.desc && it.ai.title) it.desc = pidAiDesc(it.ai.title);
   if (!it.dwgNo && j.dwgNo) it.dwgNo = String(j.dwgNo); if (!it.rev && j.rev) it.rev = String(j.rev);
 }
 async function pidAiScan(all) {
@@ -398,7 +441,7 @@ async function pidIxExport() {
   if (!r) return;
   const idx = await pidIndex(); const prog = progressModal('Building the index…', false);
   const items = S.pidlib.items.map((it, k) => { prog.set(k, S.pidlib.items.length, it.title); const P = idx.get(it.id);
-    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
+    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, desc: it.desc || '', page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
   const zip = new JSZip(); const name = (r.vals.name || def).trim();
   zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name, created: new Date().toISOString(), by: S.settings.inspectorName || '', libraryUpdated: S.pidlib.updated || '', items }));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }); prog.close();
@@ -474,13 +517,14 @@ function pidScanPromptHTML() {
 function pidScanBtns() { const w = pidNotIndexed().length; return w && S.settings.aiKey ? [['Later', ''], [`🤖 Scan now (${w})`, 'scan', 'primary']] : [['OK', '', 'primary']]; }
 function pidIndexItems(idx) {
   return S.pidlib.items.map(it => { const P = idx.get(it.id);
-    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
+    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, desc: it.desc || '', page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
 }
 async function assetExport() {
   const dp = await exportPackJson(); const n = S.pidlib.items.length;
-  if (!dp && !n) return toast('Nothing to export – import a data pack or some P&IDs first');
+  const np = typeof promoLoad === 'function' ? Object.keys((await promoLoad()).items).length : 0;
+  if (!dp && !n && !np) return toast('Nothing to export – import a data pack or some P&IDs first');
   const def = (dp?.name || PACK?.name || S.settings.defaultSite || 'Platform').replace(/\s*data\s*pack\s*/i, ' ').trim();
-  const r = await modal('Export asset pack', `<p>One file with:</p><ul class="ticks">${dp ? `<li>Data pack <b>${esc(dp.name)}</b> v${esc(dp.packVersion || '')} (piping classes, plot plans, logos)</li>` : '<li class="muted">No data pack on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with text and AI scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li></ul>
+  const r = await modal('Export asset pack', `<p>One file with:</p><ul class="ticks">${dp ? `<li>Data pack <b>${esc(dp.name)}</b> v${esc(dp.packVersion || '')} (piping classes, plot plans, logos)</li>` : '<li class="muted">No data pack on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with text and AI scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li><li>Promo video &amp; guide, if they're on this device</li></ul>
     <label class="field"><span>Asset name</span><input type="text" name="name" value="${esc(def)}"></label>
     <p class="small muted">Company data – internal only, company devices / Workspace Connect only.</p>`, [['Cancel', ''], ['📤 Export', 'ok', 'primary']]);
   if (!r) return;
@@ -492,6 +536,7 @@ async function assetExport() {
     const b = await getBlob(it.blobId); if (b) zip.file(`img/${it.id}.jpg`, b);
     if (it.hasText) { const t = await DB.get('meta', 'pidtxt_' + it.id); if (t) zip.file(`txt/${it.id}.json`, JSON.stringify(t.items), J); }
   }
+  const nPromo = typeof promoToZip === 'function' ? await promoToZip(zip) : 0;
   const created = new Date().toISOString(), by = S.settings.inspectorName || '';
   zip.file('pidpack.json', JSON.stringify({ format: 'pid-pack', version: 1, exported: created, updated: S.pidlib.updated || '', items: S.pidlib.items }), J);
   zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name: name + ' P&IDs', created, by, libraryUpdated: S.pidlib.updated || '', items: pidIndexItems(idx) }), J);
@@ -515,6 +560,7 @@ async function assetImportRun(zip, a, pj, r) {
   // modal() only returns text values, so the checkbox states were captured by the click handler below
   const want = assetImportRun._want || { dp: true, pid: true }; assetImportRun._want = null;
   const sum = { dp: false, added: 0, updated: [], same: 0 };
+  if (typeof promoFromZip === 'function') sum.promo = await promoFromZip(zip);
   if (want.dp && zip.file('datapack.json')) { await importPackJson(JSON.parse(await zip.file('datapack.json').async('string')), true); sum.dp = true; }
   if (want.pid && pj.items.length) {
     await pidIndex(); const prog = progressModal('Importing P&IDs…', false);
@@ -531,7 +577,7 @@ async function assetImportRun(zip, a, pj, r) {
     prog.close();
     S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = pj.updated || new Date().toISOString(); await savePidLib();
   }
-  const res = await modal('Asset pack imported', `<ul class="ticks">${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}
+  const res = await modal('Asset pack imported', `<ul class="ticks">${sum.promo ? `<li>${sum.promo} promo file${sum.promo > 1 ? 's' : ''} (video / guide) – see 🎬 Promo &amp; info</li>` : ''}${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}
     ${want.pid ? `<li><b>${sum.added}</b> new P&amp;ID page${sum.added === 1 ? '' : 's'}</li><li><b>${sum.updated.length}</b> updated${sum.updated.length ? ': ' + sum.updated.slice(0, 8).map(esc).join(', ') + (sum.updated.length > 8 ? '…' : '') : ''}</li><li><b>${sum.same}</b> already up to date</li>` : ''}</ul>
     ${pidScanPromptHTML()}`, pidScanBtns());
   if (res?.v === 'scan') await pidAiScan(true);
