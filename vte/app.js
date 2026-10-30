@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.10.1';
+const APP_VERSION = '2.11.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -460,7 +460,7 @@ async function route() {
   if (p[0] === 'flange') return p[1] ? renderFlange(p[1]) : renderFlangeLib();
   if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
   if (p[0] === 'face-limits') return renderFaceLimits();
-  if (p[0] === 'refs') return renderRefs(p[1]);
+  if (p[0] === 'refs') return p[1] === 'doc' ? renderRefDoc(p[2]) : renderRefs(p[1]);
   if (p[0] === 'xray') return renderXrayLanding();
   if (p[0] === 'help') return renderHelp(p[1]);
   if (p[0] === 'promo') return typeof renderPromo === 'function' ? renderPromo() : renderToolbox();

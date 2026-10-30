@@ -59,6 +59,7 @@ function renderRefs(app) {
   setTop('Standard Issue', app ? 'Documents for ' + APP_NAMES[app] : 'Reference library', app ? ({ imsnt: '/imsnt', iso: '/iso', flange: '/flange', face: '/face' }[app] || '/') : '/');
   const card = d => { const it = TB.refs.items[d.key]; const apps = Object.keys(d.why); const defs = refDefsFor(d);
     return `<div class="card refcard ${it ? 'have' : ''}" data-refcard><div class="ref-head"><div><b>${esc(d.name)}</b>${d.company ? ' <span class="pill-s">Company</span>' : ''}<br><span class="small muted">${esc(d.title || '')}</span></div><span class="pill-s ${it ? 'ok' : ''}">${it ? '✓ On this device' : 'Not added'}</span></div>
+      <a class="ref-status" href="#/refs/doc/${d.key}">${refStatusHTML(d)} <span class="muted">Details ›</span></a>
       ${apps.length ? `<ul class="small refwhy">${(app ? [app] : apps).map(a => `<li><b>${APP_NAMES[a]}:</b> ${esc(d.why[a])}</li>`).join('')}</ul>` : '<p class="small muted">Your own document.</p>'}
       ${defs.length && !d.custom ? `<p class="small">🎯 Sets: ${defs.map(x => esc(x.label)).join(', ')}</p>` : ''}
       ${it ? `<p class="small muted">${esc(it.name)} · ${(it.size / 1048576).toFixed(1)} MB · added ${fmtDate((it.addedAt || '').slice(0, 10))}</p>` : ''}
@@ -69,12 +70,13 @@ function renderRefs(app) {
         ${it ? `<button class="btn ghost sm danger-t" data-ref="del" data-k="${d.key}">Remove file</button>` : ''}${d.custom ? `<button class="btn ghost sm danger-t" data-ref="custDel" data-k="${d.key}">Delete entry</button>` : ''}</div>
       ${d.links.length ? `<div class="reflinks small">${d.links.map(([l, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join(' · ')}</div>` : d.company ? '<div class="reflinks small muted">Get the current revision from document control.</div>' : ''}</div>`; };
   const nHave = allDocs().filter(d => TB.refs.items[d.key]).length;
+  const stt = allDocs().map(refStatus); const cnt = k => stt.filter(x => x.k === k).length;
   $('#main').innerHTML = `<div class="card"><h2>📚 Standard Issue ${iBtn('refs')}</h2>
       <p class="small">One place for every reference document – standards, performance standards and site procedures. <b>The apps take their acceptance criteria from here.</b> Each user adds their own licensed copy (or one supplied by the company). Files stay on this device only – never uploaded, not in backups.</p>
       <div class="pid-disc sm">⚠ Company policy and licence terms may restrict sending these documents to an AI service. Only use 🤖 AI scan if you're authorised – <b>if in doubt, ask!</b> Otherwise set the data manually.</div>
       <input type="search" id="refQ" placeholder="Search documents and key facts" autocomplete="off">
       ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}
-      <p class="small muted">${nHave} of ${allDocs().length} documents on this device.</p></div>
+      <p class="small muted">${nHave} of ${allDocs().length} documents on this device · ${cnt('ai')} AI-scanned · ${cnt('manual')} set manually${cnt('stale') ? ` · <b class="warn-t">${cnt('stale')} need re-checking</b>` : ''}${cnt('none') ? ` · ${cnt('none')} with values not set` : ''}</p></div>
     ${app ? '' : critCardHTML()}
     <div class="section-title"><h2>Standards</h2></div>
     ${list.filter(d => !d.company).map(card).join('')}
@@ -91,8 +93,15 @@ async function addRef(key) {
     const f = inp.files[0]; if (!f) return;
     const old = TB.refs.items[key]; if (old) await DB.del('blobs', old.blobId);
     const blobId = 'std_' + key + '_' + uid(); await DB.put('blobs', { id: blobId, blob: f });
-    TB.refs.items[key] = { blobId, name: f.name, size: f.size, addedAt: new Date().toISOString() };
-    await DB.put('meta', TB.refs); toast(`${allDocs().find(d => d.key === key)?.name || 'Document'} added`); route();
+    const d = allDocs().find(x => x.key === key); const hadData = !!(TB.refs.ai?.[key] || refValKeys(key).length);
+    TB.refs.items[key] = { blobId, name: f.name, size: f.size, addedAt: new Date().toISOString(), stale: !!(old && hadData) };
+    await DB.put('meta', TB.refs); toast(`${d?.name || 'Document'} ${old ? 'updated' : 'added'}`);
+    if (old && hadData) {
+      const r = await modal('New copy uploaded', `<p>You've replaced <b>${esc(d?.name || 'this document')}</b>. The values and key facts taken from the old copy may be out of date.</p><p class="small">Until you check them, the document is marked <b>⚠ New copy – values need re-checking</b>. The apps keep using the current values meanwhile.</p>`,
+        [['Later', ''], ...(refDefsFor(d).length ? [['✎ Update manually', 'manual']] : []), ['🤖 Rescan', 'ai', 'primary']]);
+      if (r?.v === 'ai') return refAiScan(key); if (r?.v === 'manual') return critManual(key);
+    } else if (!old && refDefsFor(d).length) toast(`${d.name} added – now 🤖 scan it (if authorised) or ✎ set its values`, 5000);
+    route();
   };
   inp.click();
 }
@@ -196,6 +205,8 @@ async function critManual(docKey) {
   let n = 0;
   for (const d of defs) { const v = num(r.vals['v_' + d.k]); if (v == null) continue; if (v < d.min || v > d.max) { toast(`⚠ ${d.label}: ${v} looks wrong (expected ${d.min}–${d.max}) – not saved`, 5000); continue; }
     if (v !== crit(d.k) || (docKey && !TB.crit.items[d.k])) { await critSet(d.k, v, { src: 'manual', doc: r.vals.doc || '', ref: r.vals.ref || '' }); n++; } }
+  if (docKey && TB.refs.items[docKey]?.stale) { TB.refs.items[docKey].stale = false; await DB.put('meta', TB.refs); }
+  if (docKey) { TB.refs.manual = TB.refs.manual || {}; TB.refs.manual[docKey] = { at: new Date().toISOString(), by: S.settings.inspectorName || '', n }; await DB.put('meta', TB.refs); }
   await critSaved(); toast(`✓ ${n} value${n === 1 ? '' : 's'} saved`); route();
 }
 
@@ -274,7 +285,8 @@ async function refAiReview(d, defs, j, auth) {
   if (!r) return;
   let n = 0; for (const [x, v] of found) { if (r.vals['c_' + x.k] !== 'yes') continue; const nv = num(r.vals['v_' + x.k]); if (nv == null || nv < x.min || nv > x.max) continue; await critSet(x.k, nv, { src: 'ai', doc: d.key, ref: v.ref || '', quote: v.quote || '' }); n++; }
   await critSaved();
-  TB.refs.ai = TB.refs.ai || {}; TB.refs.ai[d.key] = { at: new Date().toISOString(), docRev: j.docRev || '', facts, auth, model: auth.via === 'copilot' ? 'Copilot' : (S.settings.aiModel || 'AI') };
+  if (TB.refs.items[d.key]) TB.refs.items[d.key].stale = false;
+  TB.refs.ai = TB.refs.ai || {}; TB.refs.ai[d.key] = { file: TB.refs.items[d.key]?.name || '', applied: n, at: new Date().toISOString(), docRev: j.docRev || '', facts, auth, model: auth.via === 'copilot' ? 'Copilot' : (S.settings.aiModel || 'AI') };
   await DB.put('meta', TB.refs); toast(`✓ ${n} value${n === 1 ? '' : 's'} applied · ${facts.length} facts saved`, 4000); route();
 }
 function refFactsHTML(key) {
@@ -289,4 +301,42 @@ async function refAddCustom() {
   if (!r || !r.vals.name?.trim()) return;
   TB.refs.custom = TB.refs.custom || []; const key = 'cu_' + uid(); TB.refs.custom.push({ key, name: r.vals.name.trim(), title: (r.vals.title || '').trim(), company: r.vals.company === 'yes' });
   await DB.put('meta', TB.refs); route(); setTimeout(() => addRef(key), 50);
+}
+
+/* ----- per-document status & detail page ----- */
+const refValKeys = key => Object.entries(TB.crit?.items || {}).filter(([, v]) => v.doc === key).map(([k]) => k);
+function refStatus(d) {
+  const it = TB.refs.items[d.key], ai = TB.refs.ai?.[d.key], man = TB.refs.manual?.[d.key], vk = refValKeys(d.key), defs = refDefsFor(d);
+  const nAi = vk.filter(k => TB.crit.items[k].src === 'ai').length, nMan = vk.filter(k => TB.crit.items[k].src === 'manual').length;
+  if (it?.stale) return { k: 'stale', cls: 'warn', t: '⚠ New copy – values need re-checking' };
+  if (ai) return { k: 'ai', cls: 'ok', t: `🤖 AI-scanned ${fmtDate(ai.at.slice(0, 10))}${ai.docRev ? ' · ' + ai.docRev : ''} · ${nAi} value${nAi === 1 ? '' : 's'} in use${nMan ? ` + ${nMan} manual` : ''}` };
+  if (nMan || man) { const at = man?.at || vk.map(k => TB.crit.items[k].at).sort().pop() || ''; return { k: 'manual', cls: 'ok', t: `✎ Values set manually ${fmtDate(at.slice(0, 10))} · ${nMan} value${nMan === 1 ? '' : 's'}` }; }
+  if (defs.length && !d.custom && defs.every(x => TB.crit.items[x.k])) return { k: 'plain', cls: '', t: 'Not scanned – its values are set from other documents' };
+  if (defs.length && !d.custom) return { k: 'none', cls: 'warn', t: '○ Not scanned – its values are on defaults' };
+  return { k: 'plain', cls: '', t: 'Not scanned' };
+}
+const refStatusHTML = d => { const s = refStatus(d); return `<span class="pill-s ${s.cls}">${esc(s.t)}</span>`; };
+function renderRefDoc(key) {
+  const d = allDocs().find(x => x.key === key); if (!d) return go('/refs');
+  cur.report = null; setTop(d.name, 'Standard Issue', '/refs');
+  const it = TB.refs.items[key], ai = TB.refs.ai?.[key], defs = refDefsFor(d);
+  const extra = refValKeys(key).filter(k => !defs.some(x => x.k === k)).map(critDef).filter(Boolean);
+  const rows = [...defs, ...extra].map(x => { const v = TB.crit.items[x.k]; const mine = v && v.doc === key && (!x.face || +v.v === crit(x.k));
+    const other = v && v.doc && v.doc !== key ? allDocs().find(o => o.key === v.doc) : null;
+    return `<div class="crit-row"><div><b>${esc(x.label)}</b><br><small class="muted">Used in: ${esc(x.apps)}</small></div><div class="crit-v"><b>${crit(x.k)}</b> <small>${esc(x.unit)}</small><br>
+      ${mine ? `<span class="pill-s ok">${v.src === 'ai' ? '🤖 AI scan' : '✎ Manual'}${v.ref ? ' · ' + esc(v.ref) : ''}</span>${v.quote ? `<br><small class="muted">“${esc(v.quote)}”</small>` : ''}<br><small class="muted">${v.by ? esc(v.by) + ' · ' : ''}${fmtDate((v.at || '').slice(0, 10))}</small>`
+        : other ? `<span class="pill-s">From ${esc(other.name)}</span>` : critSrcHTML(x.k)}</div></div>`; }).join('');
+  const st = refStatus(d);
+  $('#main').innerHTML = `<div class="card refcard ${it ? 'have' : ''}"><div class="ref-head"><div><b>${esc(d.name)}</b>${d.company ? ' <span class="pill-s">Company</span>' : ''}<br><span class="small muted">${esc(d.title || '')}</span></div><span class="pill-s ${it ? 'ok' : ''}">${it ? '✓ On this device' : 'Not added'}</span></div>
+      <p><span class="pill-s ${st.cls}">${esc(st.t)}</span></p>
+      ${it ? `<p class="small muted">📄 ${esc(it.name)} · ${(it.size / 1048576).toFixed(1)} MB · added ${fmtDate((it.addedAt || '').slice(0, 10))}</p>` : '<p class="small muted">No copy on this device yet.</p>'}
+      ${ai ? `<p class="small muted">Last scan ${fmtDate(ai.at.slice(0, 10))} via ${esc(ai.model || 'AI')}${ai.auth?.by ? ', authorised by ' + esc(ai.auth.by) : ''}${ai.file ? ` · file scanned: ${esc(ai.file)}` : ''}${ai.docRev ? ` · ${esc(ai.docRev)}` : ''}</p>` : ''}
+      ${it?.stale ? '<div class="pid-disc sm">⚠ A new copy has been uploaded since the values were set. Rescan it (if authorised) or update the values manually – the apps keep using the current values until you do.</div>' : ''}
+      <div class="grid2">${it ? `<button class="btn primary sm" data-ref="open" data-k="${key}">📖 Open</button>` : ''}<button class="btn ${it ? 'ghost' : 'primary'} sm" data-ref="add" data-k="${key}">⬆ ${it ? 'Upload new copy' : 'Add your copy (PDF)'}</button>
+        <button class="btn ghost sm" data-ref="ai" data-k="${key}">🤖 ${ai ? 'Rescan' : 'AI scan'}</button>${defs.length || d.custom ? `<button class="btn ghost sm" data-ref="manual" data-k="${key}">✎ ${refValKeys(key).length ? 'Update values' : 'Set values manually'}</button>` : ''}</div></div>
+    ${Object.keys(d.why).length ? `<div class="card"><h3>Why the apps need it</h3><ul class="small refwhy">${Object.entries(d.why).map(([a, w]) => `<li><b>${APP_NAMES[a]}:</b> ${esc(w)}</li>`).join('')}</ul></div>` : ''}
+    <div class="card"><h3>🎯 Values from this document</h3>
+      ${rows ? `<div class="crit-tbl">${rows}</div>` : `<p class="small muted">No app values come from this document${d.custom ? ' yet – a scan or ✎ manual entry can set any of the acceptance criteria from it' : ''}.</p>`}</div>
+    ${refFactsHTML(key).replace('<details class="ref-facts">', '<details class="ref-facts card" open>')}
+    <a class="btn ghost block" href="#/refs">‹ All documents</a>`;
 }

@@ -19,6 +19,7 @@ function renderToolbox() {
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Add your name in <a href="#/settings">Settings</a> – it is used on every report and sheet.</div>` : ''}
     <div class="tb-hero"><h2>Inspection Toolbox</h2><p>A growing suite of offline tools for plant inspection – work without signal, export Word / PDF.</p></div>
     ${assetBarHTML()}
+    ${(() => { const n = typeof refStatus === 'function' ? allDocs().filter(d => refStatus(d).k === 'stale').length : 0; return n ? `<a class="card notice small" style="display:block;text-decoration:none;color:inherit" href="#/refs">⚠ <b>${n} reference document${n > 1 ? 's' : ''}</b> in 📚 Standard Issue ${n > 1 ? 'have' : 'has'} a new copy – rescan or update the values ›</a>` : ''; })()}
     ${tile('#/imsnt', '<img src="img/imsnt-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}
     ${tile('#/flange', flIconSVG(), 'Gasket Case', 'Flange & bolting inspection sheets – stud by stud', nFl ? `${nFl} sheet${nFl === 1 ? '' : 's'}` : '')}
