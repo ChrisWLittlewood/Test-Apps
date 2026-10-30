@@ -56,7 +56,7 @@ async function pidIndex() {
 async function pidImport(files) {
   files = files.filter(f => /\.(pdf|jpe?g|png|webp|zip)$/i.test(f.name) && f.size > 0);
   const packs = files.filter(f => /\.zip$/i.test(f.name)); files = files.filter(f => !/\.zip$/i.test(f.name));
-  for (const p of packs) await pidPackImport(p);
+  for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('pidindex.json')) await pidIxImport(z); else await pidPackImport(p); }
   if (!files.length) return;
   const lib = await getPdfjs(); await pidIndex();
   const prog = progressModal(`Reading ${files.length} P&ID file${files.length > 1 ? 's' : ''}…`, true); let added = 0, updated = 0, noText = 0;
@@ -120,6 +120,19 @@ async function pidSearch(q) {
     else if (aHit) res.push({ it, w: aHit[1] - 0.25, hits: 0, boxes: [], why: 'AI scan (' + aHit[2] + ')' });
     else if (tHit) res.push({ it, w: tHit[1] - 0.5, hits: 0, boxes: [], why: 'drawing number / title' });
   }
+  // shared search indexes: drawings other people scanned. Not in this library -> point to document control.
+  for (const pk of (await pidIxLoad()).packs) for (const [k, ix] of pk.items.entries()) {
+    const ixKey = pnorm(ix.dwgNo); const local = S.pidlib.items.find(l => (ixKey && pnorm(l.dwgNo) === ixKey && (l.page || 1) === (ix.page || 1)) || l.title === ix.title);
+    let m = null;
+    for (const [v, w, why] of vars) {
+      const n = (ix.rows || []).filter(r => r.includes(v)).length; const ai = (ix.ai || []).some(t => t.includes(v)); const meta = pnorm([ix.dwgNo, ix.title].join(' ')).includes(v);
+      if (n || ai || meta) { m = { w, why: n ? why : ai ? 'AI scan (' + why + ')' : 'drawing number / title', n }; break; }
+    }
+    if (!m) continue;
+    if (local) { const lr = res.find(x => x.it.id === local.id); if (lr && ix.rev && local.rev && pnorm(ix.rev) !== pnorm(local.rev)) { lr.idxRev = ix.rev; lr.idxPack = pk.name; } continue; }
+    if (res.some(x => x.remote && pnorm(x.it.dwgNo) === ixKey && x.it.page === ix.page)) continue;
+    res.push({ remote: true, it: { id: 'ix_' + k, title: ix.title, dwgNo: ix.dwgNo, rev: ix.rev, page: ix.page || 1 }, pack: pk, w: m.w - 0.1, hits: 0, rhits: m.n, boxes: [], why: m.why });
+  }
   return res.sort((a, b) => b.w - a.w || b.hits - a.hits || a.it.title.localeCompare(b.it.title, undefined, { numeric: true }));
 }
 
@@ -156,8 +169,11 @@ async function openPidViewer(id, boxes = [], q = '') {
 /* ---------- the app screen ---------- */
 function pidRowHTML(x, opts = {}) {
   const it = x.it || x;
+  if (x.remote) return `<div class="pid-item remote"><div class="pid-noimg">📄</div><span><b>${esc(it.dwgNo || it.title)}</b>${it.page > 1 ? ` <small>(page ${it.page})</small>` : ''}<br><small>${esc(it.title)}${it.rev ? ' · rev ' + esc(it.rev) : ''} · from index “${esc(x.pack.name)}”</small>
+    <br><small class="pid-miss">⚠ Not in your P&amp;ID library – get the latest revision from document control.</small><br><small class="pid-hit">${x.rhits ? `on ${x.rhits} label${x.rhits > 1 ? 's' : ''} – ` : ''}${esc(x.why)}</small></span></div>`;
   return `<button class="pid-item" data-action="${opts.pick ? 'pickPid' : 'pidOpen'}" data-id="${it.id}" ${x.boxes ? `data-q="${esc(opts.q || '')}"` : ''}><img src="${it.thumb}" alt="">
     <span><b>${esc(it.title)}</b><br><small>${[it.dwgNo, it.rev && 'rev ' + it.rev].filter(Boolean).map(esc).join(' · ') || esc(it.src || '')}${!it.hasText ? ' · <i>scanned – no text</i>' : ''}</small>
+    ${x.idxRev ? `<br><small class="pid-miss">⚠ Index “${esc(x.idxPack)}” lists rev ${esc(x.idxRev)} – your copy is rev ${esc(it.rev)}. Check document control for the latest.</small>` : ''}
     ${x.boxes ? `<br><small class="pid-hit">${x.hits ? `${x.hits} hit${x.hits > 1 ? 's' : ''} – ${esc(x.why)}` : 'matches the ' + esc(x.why)}</small>` : ''}</span></button>`;
 }
 let PIDRES = {};
@@ -171,12 +187,17 @@ function renderPidApp() {
       <div id="pidAppRes" class="pidlist"></div></div>
     <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
     ${pidAiHTML()}
+    <div class="card"><h3>📇 Shared search index ${iBtn('pidindex')}</h3>
+      <p class="small muted">A small file with every drawing's number, revision and the line numbers / tags on it (from the text and AI scans) – <b>no drawings</b>. Share it so others can search; drawings they don't have point them to document control.</p>
+      <div id="pidIxList" class="small"></div>
+      <div class="grid2">${n ? '<button class="btn ghost" data-action="pidIxExport">📇 Share search index</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import index (.zip)</button></div></div>
     ${n ? `<div class="grid2"><button class="btn primary" data-action="pidSendPack">📤 Send library to phone</button><button class="btn ghost" data-action="pidPickFiles">⬆ Import library pack (.zip)</button></div>` : ''}
     <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
     <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
     <div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>
     ${n ? '<button class="btn ghost block danger-t" data-action="clearPids">Remove all P&IDs</button>' : ''}`;
   if (cur.pidQ) pidAppSearch(cur.pidQ);
+  pidIxLoad().then(ix => { const el = $('#pidIxList'); if (el) el.innerHTML = ix.packs.length ? ix.packs.map((p, i) => `<div class="pid-ixrow">📇 <b>${esc(p.name)}</b> · ${p.items.length} drawing page${p.items.length > 1 ? 's' : ''} · made ${fmtDate((p.created || '').slice(0, 10))}${p.by ? ' by ' + esc(p.by) : ''} <button class="btn ghost sm danger-t" data-action="pidIxDel" data-i="${i}" aria-label="Remove index">🗑</button></div>`).join('') : '<p class="small muted">No shared index imported.</p>'; });
 }
 let pidT = null;
 async function pidAppSearch(q) {
@@ -224,23 +245,22 @@ async function pidPackImport(file) {
 /* ---------- IMSn't: suggest P&IDs for a line, and fill a whole system ---------- */
 async function pidSuggestFill(r) {
   const box = $('#pidSuggest'); if (!box || !r) return;
-  if (!S.pidlib.items.length) { box.innerHTML = ''; return; }
-  const res = (await pidSearch(r.h?.tagNo || '')).filter(x => x.hits).slice(0, 8);
+  const found = await pidSearch(r.h?.tagNo || ''); const res = found.filter(x => x.hits).slice(0, 8); const remote = found.filter(x => x.remote).slice(0, 4);
   const pn = r.c?.general?.pidNumber; const byNo = pn ? (await pidSearch(pn)).filter(x => !x.hits && !res.some(y => y.it.id === x.it.id)).slice(0, 3) : [];
-  const all = [...res, ...byNo];
+  const all = [...res, ...byNo, ...remote];
   box.innerHTML = all.length ? `<p class="small" style="margin:4px 0"><b>Suggested for ${esc(r.h?.tagNo || 'this line')}</b> – the line number appears on these:</p>${all.map(x => pidRowHTML(x, { pick: true })).join('')}`
     : `<p class="small muted" style="margin:4px 0">${esc(r.h?.tagNo || 'This line')} wasn't found in the library text – search below.</p>`;
 }
 async function pidAutoForSystem(sysId) {
   const lines = S.reports.filter(r => r.systemId === sysId && !(r.att || []).some(a => a.kind === 'pid'));
-  if (!S.pidlib.items.length) return toast('The P&ID library is empty – import the P&IDs in P&I Spy first', 5000);
+  if (!S.pidlib.items.length && !(await pidIxLoad()).packs.length) return toast('The P&ID library is empty – import the P&IDs (or a shared search index) in P&I Spy first', 5000);
   if (!lines.length) return toast('Every line already has a P&ID');
   const prog = progressModal('Searching the P&ID library…', false); const rows = [];
-  for (const [k, r] of lines.entries()) { prog.set(k, lines.length, r.h?.tagNo || ''); await tick(); rows.push({ r, hits: (await pidSearch(r.h?.tagNo || '')).filter(x => x.hits).slice(0, 4) }); }
+  for (const [k, r] of lines.entries()) { prog.set(k, lines.length, r.h?.tagNo || ''); await tick(); const f = await pidSearch(r.h?.tagNo || ''); rows.push({ r, hits: f.filter(x => x.hits).slice(0, 4), remote: f.filter(x => x.remote).slice(0, 3) }); }
   prog.close();
   const m = document.createElement('div'); m.className = 'modal-back';
   m.innerHTML = `<div class="modal wide"><h3>🔎 P&amp;IDs from the library</h3><p class="small muted">Ticked drawings are copied into each line's report (the library keeps the clean original). Check each is the latest revision before marking it up.</p>
-    <div class="eb-list">${rows.map((x, i) => `<div class="eb-row ${x.hits.length ? 'ok' : 'ask'}"><div class="eb-f"><b>${esc(x.r.h?.tagNo || '')}</b>${x.hits.length ? x.hits.map((h, j) => `<label class="imp-row" style="border:0;padding:3px 0"><input type="checkbox" data-r="${i}" data-id="${h.it.id}" ${j === 0 || h.w >= 2 ? 'checked' : ''}><span>${esc(h.it.title)}${h.it.rev ? ' · rev ' + esc(h.it.rev) : ''} <small class="muted">(${h.hits} hit${h.hits > 1 ? 's' : ''}, ${esc(h.why)})</small></span></label>`).join('') : '<br><small class="eb-note">Not found in the library text</small>'}</div></div>`).join('')}</div>
+    <div class="eb-list">${rows.map((x, i) => `<div class="eb-row ${x.hits.length ? 'ok' : 'ask'}"><div class="eb-f"><b>${esc(x.r.h?.tagNo || '')}</b>${x.hits.length ? x.hits.map((h, j) => `<label class="imp-row" style="border:0;padding:3px 0"><input type="checkbox" data-r="${i}" data-id="${h.it.id}" ${j === 0 || h.w >= 2 ? 'checked' : ''}><span>${esc(h.it.title)}${h.it.rev ? ' · rev ' + esc(h.it.rev) : ''} <small class="muted">(${h.hits} hit${h.hits > 1 ? 's' : ''}, ${esc(h.why)})</small></span></label>`).join('') : ''}${x.remote.length ? `<br><small class="pid-miss">⚠ Also on ${x.remote.map(h => esc(h.it.dwgNo || h.it.title) + (h.it.rev ? ' rev ' + esc(h.it.rev) : '')).join(', ')} – not in your library, get from document control</small>` : ''}${!x.hits.length && !x.remote.length ? '<br><small class="eb-note">Not found in the library text</small>' : ''}</div></div>`).join('')}</div>
     <div class="modal-btns"><button class="btn ghost" data-v="">Cancel</button><button class="btn primary" data-v="ok">Add to reports</button></div></div>`;
   document.body.append(m);
   const picks = await new Promise(res => m.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b) return; const p = $$('input[data-r]:checked', m).map(c => ({ r: rows[+c.dataset.r].r, id: c.dataset.id })); m.remove(); res(b.dataset.v ? p : null); }));
@@ -327,3 +347,36 @@ async function pidAiScan(all) {
   toast(`🤖 ${n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} scanned${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
 }
 Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1') });
+
+/* ---------- shared search index (no drawings) ---------- */
+let PIDIX = null;
+async function pidIxLoad() { if (!PIDIX) PIDIX = (await DB.get('meta', 'pidindex')) || { id: 'pidindex', packs: [] }; return PIDIX; }
+async function pidIxExport() {
+  const def = PACK?.name || S.settings.defaultSite || 'Platform';
+  const r = await modal('Share the P&ID search index', `<p class="small">Saves the drawing numbers, revisions and every line number / tag found on each P&amp;ID (text + AI scans) – no drawings. Send it to colleagues by Teams / OneDrive; they import it in P&amp;I Spy.</p>
+    <label class="field"><span>Index name</span><input type="text" name="name" value="${esc(def + ' P&IDs')}"></label>
+    <p class="small muted">Company data – keep it internal, company devices / Workspace Connect only.</p>`, [['Cancel', ''], ['Save index', 'ok', 'primary']]);
+  if (!r) return;
+  const idx = await pidIndex(); const prog = progressModal('Building the index…', false);
+  const items = S.pidlib.items.map((it, k) => { prog.set(k, S.pidlib.items.length, it.title); const P = idx.get(it.id);
+    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
+  const zip = new JSZip(); const name = (r.vals.name || def).trim();
+  zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name, created: new Date().toISOString(), by: S.settings.inspectorName || '', libraryUpdated: S.pidlib.updated || '', items }));
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }); prog.close();
+  shareBlob(blob, `PID_Index_${safeName(name)}_${todayISO()}.zip`, 'P&ID search index');
+}
+async function pidIxImport(zip) {
+  const j = JSON.parse(await zip.file('pidindex.json').async('string')); if (j.format !== 'pid-index') throw new Error('Not a P&ID search index');
+  const ix = await pidIxLoad(); const old = ix.packs.findIndex(p => p.name === j.name);
+  const ok = await modal('Import P&ID search index', `<p>📇 <b>${esc(j.name)}</b> – ${j.items.length} drawing page(s), made ${fmtDate((j.created || '').slice(0, 10))}${j.by ? ' by ' + esc(j.by) : ''}.</p>
+    ${old >= 0 ? '<p class="small">Replaces the index with the same name already on this device.</p>' : ''}
+    <p class="small">You'll be able to search it. Drawings you don't have in your own library will tell you to get the latest revision from document control.</p>`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
+  if (!ok) return;
+  const pk = { name: j.name, created: j.created, by: j.by, libraryUpdated: j.libraryUpdated, items: j.items };
+  if (old >= 0) ix.packs[old] = pk; else ix.packs.push(pk);
+  await DB.put('meta', ix); toast(`📇 Index “${j.name}” imported`, 4000);
+}
+Object.assign(actions, {
+  pidIxExport: () => pidIxExport(),
+  pidIxDel: async el => { const ix = await pidIxLoad(); const p = ix.packs[+el.dataset.i]; if (!p || !await confirmBox('Remove index', `Remove the search index “${p.name}” from this device?`, 'Remove')) return; ix.packs.splice(+el.dataset.i, 1); await DB.put('meta', ix); renderPidApp(); }
+});

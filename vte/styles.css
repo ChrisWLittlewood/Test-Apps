@@ -570,3 +570,7 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 
 .ai-queue{display:flex;flex-direction:column;gap:6px;border-left:5px solid #6a4fc4}
 .ai-queue .grid2{margin-top:4px}
+
+.pid-miss{color:#a8650a;font-weight:600}
+.pid-item.remote{cursor:default;border-style:dashed}.pid-noimg{width:64px;height:46px;display:grid;place-items:center;font-size:1.6rem;background:rgba(127,127,127,.12);border-radius:6px;flex:none}
+.pid-ixrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0}.pid-ixrow .btn{margin-left:auto}
