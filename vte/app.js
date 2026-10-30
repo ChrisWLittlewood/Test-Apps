@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.8.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -553,7 +553,9 @@ function renderSettings() {
   <div class="card"><h3>📷 Report logo</h3><p class="small muted">The report header uses the logo from the data pack. To use a different one, pick an image – it is stored on this phone only.</p>
     <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
   <div class="card"><h3>About</h3>
-    <p><b>Inspection Toolbox</b> v${APP_VERSION} – created by Chris Littlewood.</p>
+    <p><b>Inspection Toolbox</b> v${APP_VERSION} – designed and developed by <b>Chris Littlewood</b>, 2026.</p>
+    <div class="credit"><p>Concept, design and development © Chris Littlewood. If you share, adapt or build on any part of this toolbox, please credit the original author.</p>
+    <p>Company data, standards and document formats remain the property of their respective owners.</p></div>
     <p class="small">A growing suite of offline inspection apps for plant inspectors, with more to come: <b>IMSn't</b> (Pipework Visual Inspection Tool – VTE line reports while IMS isn't working), <b>Isometricks</b> (iso sketches), <b>Gasket Case</b> (flange &amp; bolting sheets), <b>Face Off</b> (flange face inspection) and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
     <p class="small">Everything is stored on this device only. Company data comes from your data pack; standards come from your own reference library. Calculations follow the Performance Standard (PC005 / PC007), ASME B16.5 / B16.20 / B16.21 / B36.10M and API 571 / 574 – hints and defaults are flagged where they need confirming against your procedures.</p>
     <p class="small">💡 <b>Have an idea, an improvement or a requirement for a specific tool or app?</b> Let me know!</p>

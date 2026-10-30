@@ -580,3 +580,5 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 .pid-spec-t{width:100%;border-collapse:collapse;margin:6px 0;font-size:.86rem}.pid-spec-t th{text-align:left;width:5.5em;vertical-align:top;padding:3px 6px 3px 0;color:var(--muted,#6b7785);font-weight:600}.pid-spec-t td{padding:3px 0;border-bottom:1px solid rgba(127,127,127,.15)}
 
 .pid-spec-sum{margin:8px 0 2px;font-size:.88rem}
+
+.credit{border-left:4px solid #2f7f86;padding:6px 10px;margin:8px 0;font-size:.86rem;background:rgba(47,127,134,.07);border-radius:0 8px 8px 0}.credit p{margin:4px 0}
