@@ -1,5 +1,5 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v1.9.1';
+const VERSION = 'vte-v1.9.2';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './checklist.js', './dm.js', './launch.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js', './tools.js', './face.js', './refs.js', './xray.js',
   './manifest.webmanifest', './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',

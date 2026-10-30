@@ -22,8 +22,8 @@ function renderToolbox() {
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}
     ${tile('#/flange', flIconSVG(), 'Gasket Case', 'Flange & bolting inspection sheets – stud by stud', nFl ? `${nFl} sheet${nFl === 1 ? '' : 's'}` : '')}
     ${tile('#/face', faceIconSVG(), 'Face Off', 'Flange face inspection – scratches & pits vs the gasket seating band', TB.face.items.length ? `${TB.face.items.length} inspection${TB.face.items.length === 1 ? '' : 's'}` : '')}
-    <div class="section-title"><h2>Novelty department</h2></div>
-    ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><g stroke="#cfe9ff" stroke-width="5" stroke-linecap="round"><path d="M22 52 L24 38"/><path d="M30 52 L30 30 L30 16"/><path d="M38 52 L39 22"/><path d="M44 52 L47 28"/><path d="M18 50 L12 40"/></g><circle cx="30" cy="16" r="3" fill="#fff"/></svg>`, 'Bone Idle', 'X-ray vision for hands. Hands only. Please read the disclaimer.', '')}
+    <div class="section-title"><h2>Experimental features</h2></div>
+    ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'X-Ray Pipe Vision <small class="xr-exp">EXPERIMENTAL</small>', 'See through cladding for CUI. Do not point at people.', '')}
     <div class="section-title"><h2>Tools</h2></div>
     <div class="grid2">
       <a class="btn ghost" href="#/settings">⚙ Settings</a>
