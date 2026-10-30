@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -461,6 +461,7 @@ async function route() {
   if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
   if (p[0] === 'face-limits') return renderFaceLimits();
   if (p[0] === 'refs') return renderRefs(p[1]);
+  if (p[0] === 'xray') return renderXrayLanding();
   if (p[0] === 'settings') return renderSettings();
   if (p[0] === 'pids') return renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
