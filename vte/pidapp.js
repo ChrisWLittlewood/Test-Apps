@@ -209,9 +209,9 @@ function renderPidApp() {
   $('#main').innerHTML = `${PID_DISCLAIMER()}
     <div class="card"><div class="pid-headrow"><h2>🔎 Which P&amp;IDs is it on? ${iBtn('pidspy')}</h2><a class="btn ghost sm" href="#/pids/settings">⚙ Settings</a></div>
       <input type="search" id="pidAppQ" placeholder="Type a line number, tag or drawing number" autocomplete="off" autocapitalize="characters" value="${esc(cur.pidQ || '')}">
+      ${!n ? '<p class="small">No P&amp;IDs on this device yet – add them in <a href="#/pids/settings">⚙ Settings</a>.</p>' : ''}
       <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189). Line numbers come with the pipe spec from the data pack.</p>
       <div id="pidSpec"></div><div id="pidAppRes" class="pidlist"></div></div>
-    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one. Library packs and shared indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
     <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
     <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
     <div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>`;
@@ -221,6 +221,7 @@ function renderPidSettings() {
   setTop('P&I Spy settings', 'AI scan, sharing, import & export', '/pids');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
+    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one. Library packs and shared indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
     ${pidAiHTML() || `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${!n ? 'Nothing to scan yet – import some P&amp;IDs first.' : S.settings.aiKey ? 'Every P&amp;ID has been AI-scanned.' : 'Add an authorised AI key in the main <a href="#/settings">Settings</a> to read scanned P&amp;IDs and add anything the drawing text missed.'}</p></div>`}
     <div class="card"><h3>📤 Export / send to device</h3>
       <p class="small muted">Saves the whole library (drawings, text index and AI scans) as one .zip. Send it to another device by Teams / OneDrive and import it there.</p>
