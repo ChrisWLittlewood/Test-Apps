@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -504,6 +504,7 @@ function renderHome() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install app on this phone</button>` : ''}
     ${!PACK ? `<div class="card notice">📦 No data pack loaded – import your asset's data pack in <a href="#/settings">Settings</a> to enable pipe classes, plot plans and FM areas.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="section-title"><h2>Piping systems ${iBtn('systems')}</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
+    ${typeof echAiAllHTML === "function" ? echAiAllHTML() : ""}
     ${typeof prepDropHTML === "function" ? prepDropHTML(null) : ""}
     <button class="btn ghost block" data-action="importLines">📥 Import line list from Excel (new system)</button>
     ${sys.length ? sys.map(s2 => {

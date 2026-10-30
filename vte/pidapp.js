@@ -114,7 +114,11 @@ async function pidSearch(q) {
       if (boxes.size) { best = { w, why, boxes: [...boxes] }; break; }
     }
     const tHit = vars.find(([v]) => meta.includes(v));
-    if (best || tHit) res.push({ it, w: best ? best.w : tHit[1] - 0.5, hits: best ? best.boxes.length : 0, boxes: best?.boxes || [], why: best ? best.why : 'drawing number / title' });
+    const aiTok = it.ai ? pnorm([...(it.ai.lines || []), ...(it.ai.tags || [])].join('|')) : '';
+    const aHit = !best && aiTok ? vars.find(([v]) => aiTok.includes(v)) : null;
+    if (best) res.push({ it, w: best.w, hits: best.boxes.length, boxes: best.boxes, why: best.why });
+    else if (aHit) res.push({ it, w: aHit[1] - 0.25, hits: 0, boxes: [], why: 'AI scan (' + aHit[2] + ')' });
+    else if (tHit) res.push({ it, w: tHit[1] - 0.5, hits: 0, boxes: [], why: 'drawing number / title' });
   }
   return res.sort((a, b) => b.w - a.w || b.hits - a.hits || a.it.title.localeCompare(b.it.title, undefined, { numeric: true }));
 }
@@ -166,6 +170,7 @@ function renderPidApp() {
       <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189).</p>
       <div id="pidAppRes" class="pidlist"></div></div>
     <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
+    ${pidAiHTML()}
     ${n ? `<div class="grid2"><button class="btn primary" data-action="pidSendPack">📤 Send library to phone</button><button class="btn ghost" data-action="pidPickFiles">⬆ Import library pack (.zip)</button></div>` : ''}
     <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
     <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
@@ -268,3 +273,57 @@ Object.assign(actions, {
   pidOpen: el => { const r = PIDRES[el.dataset.id]; openPidViewer(el.dataset.id, el.dataset.q != null && r ? r.boxes : [], el.dataset.q || ''); },
   pidAuto: el => pidAutoForSystem(el.dataset.sys || cur.system?.id)
 });
+
+/* ---------- AI scan (run on the phone if the PC can't reach the AI service) ----------
+   Reads each drawing image in 4 overlapping tiles so small text stays legible. Mostly for scanned P&IDs with no
+   text layer, but also adds anything the PDF text missed. Results are searchable and travel in the library pack. */
+const PID_AI_SCHEMA = `{"dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title",
+"lines":["every pipeline number exactly as written, e.g. 6\"-PX-20189-61472"],
+"tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"]}`;
+function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all || !it.hasText)); }
+function pidAiHTML() {
+  if (!S.pidlib.items.length) return '';
+  const scanned = pidAiWaiting(false).length, rest = pidAiWaiting(true).length;
+  if (!S.settings.aiKey) return scanned ? `<p class="small muted">${scanned} scanned P&amp;ID${scanned > 1 ? 's have' : ' has'} no text to search. Add an AI key in Settings and use 🤖 AI scan to read ${scanned > 1 ? 'them' : 'it'}.</p>` : '';
+  if (!rest) return `<p class="small muted">🤖 Every P&amp;ID has been AI-scanned.</p>`;
+  return `<div class="card ai-queue"><b>🤖 AI scan the P&amp;IDs</b><span class="small muted">Reads line numbers and tags off the drawing images so scanned P&amp;IDs become searchable. Needs signal and uses your AI key. Only if company rules allow sending P&amp;IDs to the AI service.</span>
+    <div class="grid2">${scanned ? `<button class="btn primary" data-action="pidAiScan" data-all="0">Scanned ones (${scanned})</button>` : ''}<button class="btn ${scanned ? 'ghost' : 'primary'}" data-action="pidAiScan" data-all="1">All not yet scanned (${rest})</button></div></div>`;
+}
+async function pidTiles(blob) {
+  const bmp = await createImageBitmap(blob); const out = []; const ov = 0.08;
+  for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const sw = bmp.width * (0.5 + ov), sh = bmp.height * (0.5 + ov); const sx = cx ? bmp.width - sw : 0, sy = cy ? bmp.height - sh : 0;
+    const sc = Math.min(1, 1568 / Math.max(sw, sh)); const c = document.createElement('canvas'); c.width = Math.round(sw * sc); c.height = Math.round(sh * sc);
+    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    out.push((await b64.enc(await canvasToBlob(c, 'image/jpeg', 0.85))).split(',')[1]);
+  }
+  return out;
+}
+async function pidAiOne(it) {
+  const key = S.settings.aiKey; if (!key) throw new Error('No API key set (Settings → AI)');
+  const blob = await getBlob(it.blobId); if (!blob) throw new Error('drawing missing');
+  const tiles = await pidTiles(blob);
+  const content = [...tiles.map(d => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: d } })),
+    { type: 'text', text: `These 4 images are the top-left, top-right, bottom-left and bottom-right quarters (slightly overlapping) of one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the drawing carefully, including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA}` }];
+  const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: S.settings.aiModel || 'claude-sonnet-5-5', max_tokens: 4000, messages: [{ role: 'user', content }] }) });
+  if (!res.ok) throw new Error(`AI request failed (${res.status}) ${(await res.text()).slice(0, 120)}`);
+  const j = parseAiJson(((await res.json()).content || []).map(c => c.text || '').join(''));
+  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), title: j.title || '', _at: new Date().toISOString(), _via: S.settings.aiModel || 'AI' };
+  if (!it.dwgNo && j.dwgNo) it.dwgNo = String(j.dwgNo); if (!it.rev && j.rev) it.rev = String(j.rev);
+}
+async function pidAiScan(all) {
+  const list = pidAiWaiting(all); if (!list.length) return toast('Nothing waiting for an AI scan');
+  if (!navigator.onLine) return toast('No signal – try again when online');
+  const prog = progressModal(`AI scanning ${list.length} P&ID page${list.length > 1 ? 's' : ''}…`, true); let n = 0, err = '';
+  for (const [k, it] of list.entries()) {
+    if (prog.stopped) break;
+    prog.set(k, list.length, it.title); await tick();
+    try { await pidAiOne(it); n++; if (n % 5 === 0) await savePidLib(); }
+    catch (e) { err = e.message; if (/\b(401|403|No API key)\b/.test(err)) break; }
+  }
+  prog.close(); await savePidLib(); renderPidApp();
+  toast(`🤖 ${n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} scanned${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
+}
+Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1') });

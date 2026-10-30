@@ -85,6 +85,7 @@ const HELP = [
     <li><b>Check the list</b>: green = matched, amber = needs you. Change any line from the drop-down, skip it, or add an unknown one as a new line. Then <i>Attach</i>.</li>
     <li>Each line gets its ECH, photos and these filled in (only if empty): type and date of last inspection, design code, P&amp;ID number, pipe class, F/Loc, equipment description, "ECH reviewed" and the previous findings.</li>
     <li><b>AI summaries</b> fill in the rest – previous findings, FM areas, linear meterage, valves &amp; flanges, supports and service: <i>📋 Copilot summaries</i> makes a few batches to copy into Copilot and paste back; with an authorised API key, <i>🤖 AI summaries</i> does them all in one go.</li></ol>
+    <p><b>PC can't reach the AI?</b> Do the prep on the PC, send it to the phone, then on the phone IMSn't shows <i>🤖 AI scan now</i> for every ECH still waiting – across all systems.</p>
     <p class="small">Nothing you've typed is ever overwritten. Previous findings are refreshed when an AI summary arrives, unless you've edited them.</p>` },
   { id: 'pids', t: 'P&I Spy – the P&ID library', b: `
     <p><b>⚠ Uncontrolled copies.</b> The library is a local reference copy. Always check you have the latest revision in document control before relying on a P&amp;ID – the screen shows when the library was last updated.</p>
@@ -93,7 +94,7 @@ const HELP = [
     <li><b>📤 Send library to phone</b> saves the whole library as one .zip – send it by Teams / OneDrive and import it in P&amp;I Spy on the phone.</li>
     <li><b>In IMSn't</b>, ★ Line prep → <i>Choose from P&amp;ID library</i> suggests the P&amp;IDs the line appears on, and <i>🔎 Find P&amp;IDs in the library</i> on the system page does every line at once.</li></ol>
     <p>Choosing a P&amp;ID for a report makes a <b>separate copy</b> for that report – mark it up as much as you like; the original in the library stays clean. Tick "latest revision confirmed" on each copy.</p>
-    <p class="small">Scanned P&amp;IDs (pictures with no text layer) can only be found by title or drawing number.</p>` },
+    <p class="small">Scanned P&amp;IDs (pictures with no text layer) can't be searched until they're read: with an authorised AI key, <i>🤖 AI scan</i> reads the line numbers and tags off the drawing images (needs signal – run it on the phone if your PC can't reach the AI service). The results go in the library pack too.</p>` },
   { id: 'desktop', t: 'Prep on a PC, inspect on the phone', b: `
     <p>The line prep is quicker on a company PC with a big screen, and the inspection then happens on the phone.</p>
     <ol><li>On a <b>company PC</b>, open the same link in Chrome or Edge: <code>chriswlittlewood.github.io/Test-Apps/vte/</code> → IMSn't.</li>

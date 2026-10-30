@@ -142,7 +142,7 @@ async function echBulkApply(sys, chosen, photos, opts = {}) {
   if (!opts.quiet) await echBulkAfter(sys.id, n, filled, fails);
   return { n, filled, fails };
 }
-function linesNeedingAi(sysId) { return S.reports.filter(r => r.systemId === sysId && r.ech && !r.ech.ai); }
+function linesNeedingAi(sysId) { return S.reports.filter(r => (!sysId || r.systemId === sysId) && r.ech && !r.ech.ai); }   // no sysId = every system
 async function echBulkAfter(sysId, n, filled, fails = []) {
   const waiting = linesNeedingAi(sysId);
   const btns = [['Done', '']];
@@ -167,7 +167,7 @@ async function echBulkApi(sysId) {
       prefillFromEch(r); r.updatedAt = Date.now(); await DB.put('reports', r); n++;
     } catch (e) { err = e.message; if (/\b(401|403|No API key)\b/.test(err)) break; }
   }
-  prog.close(); renderSystem(sysId);
+  prog.close(); route();
   toast(`🤖 ${n} of ${list.length} summarised${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
 }
 
@@ -250,3 +250,12 @@ Object.assign(actions, {
   echBulk: el => pickEchBulk(el.dataset.sys || cur.system?.id),
   echBulkAi: el => { const id = el.dataset.sys || cur.system?.id; return el.dataset.how === 'api' ? echBulkApi(id) : echBulkCopilot(id); }
 });
+
+/* IMSn't home: one button for every ECH still waiting for an AI summary, across all systems (run it on the phone). */
+function echAiAllHTML() {
+  const w = linesNeedingAi(null).length; if (!w) return '';
+  return S.settings.aiKey
+    ? `<div class="card ai-queue"><b>🤖 ${w} ECH${w > 1 ? 's' : ''} waiting for an AI scan</b><span class="small muted">Needs signal. Only if your company's rules allow sending ECHs to the AI service.</span><button class="btn primary block" data-action="echAiAll">🤖 AI scan now (${w})</button></div>`
+    : `<div class="card ai-queue"><b>${w} ECH${w > 1 ? 's' : ''} waiting for a summary</b><span class="small muted">Use 📋 Copilot summaries on each system page, or add an AI key in Settings to scan them all from here.</span></div>`;
+}
+Object.assign(actions, { echAiAll: () => echBulkApi(null) });
