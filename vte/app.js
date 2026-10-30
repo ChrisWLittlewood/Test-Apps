@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.13.1';
+const APP_VERSION = '2.14.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -528,7 +528,7 @@ function renderHome() {
 }
 
 function renderSettings() {
-  setTop('Settings', '', '/');
+  setTop('Settings & tools', '', '/');
   const st = S.settings;
   $('#main').innerHTML = `<div class="card">
     ${inputHTML('settings', 'inspectorName', st.inspectorName, 'Your name (Authorised Inspector)')}
@@ -537,6 +537,16 @@ function renderSettings() {
     <label class="field"><span>Photo size</span><select data-bind="settings" data-path="photoMax">
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
+  <div class="card"><h3>🧰 Tools</h3>
+    <div class="grid2">
+      <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
+      <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
+      <button class="btn ghost" data-action="storage">💾 Storage info</button>
+      <button class="btn ghost" data-action="checkUpdate">⟳ Check for updates</button>
+      <a class="btn ghost" href="#/promo">🎬 Promo &amp; info</a>
+      <a class="btn ghost" href="#/refs">📚 Standard Issue</a>
+    </div>
+    <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
   <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>

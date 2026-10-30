@@ -17,7 +17,6 @@ function renderToolbox() {
   $('#main').innerHTML = `
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install Inspection Toolbox on this phone</button>` : ''}
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Add your name in <a href="#/settings">Settings</a> – it is used on every report and sheet.</div>` : ''}
-    <div class="tb-hero"><h2>Inspection Toolbox</h2><p>A growing suite of offline tools for plant inspection – work without signal, export Word / PDF.</p></div>
     ${assetBarHTML()}
     ${(() => { const n = typeof refStatus === 'function' ? allDocs().filter(d => refStatus(d).k === 'stale').length : 0; return n ? `<a class="card notice small" style="display:block;text-decoration:none;color:inherit" href="#/refs">⚠ <b>${n} reference document${n > 1 ? 's' : ''}</b> in 📚 Standard Issue ${n > 1 ? 'have' : 'has'} a new copy – rescan or update the values ›</a>` : ''; })()}
     ${tile('#/imsnt', '<img src="img/imsnt-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
@@ -29,18 +28,7 @@ function renderToolbox() {
     <div class="section-title"><h2>Experimental features</h2></div>
     ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'Totally RAD <small class="xr-exp">EXPERIMENTAL</small>', 'Radiographic Assessment Device – see through cladding for CUI. Do not point at people.', '')}
     <div class="tb-idea">💡 <b>More apps to come.</b> Have an idea, an improvement or a requirement for a specific tool or app? Let me know!</div>
-    <div class="section-title"><h2>Tools</h2></div>
-    <div class="grid2">
-      <a class="btn ghost" href="#/settings">⚙ Settings</a>
-      <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
-      <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
-      <button class="btn ghost" data-action="storage">💾 Storage info</button>
-    </div>
-    <a class="btn primary block" href="#/help" style="margin-top:8px">📖 Help &amp; manual</a>
-    <a class="btn ghost block" href="#/promo" style="margin-top:8px">🎬 Promo &amp; info – advert video &amp; guide</a>
-    <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Standard Issue – reference library <span class="pill-s">${Object.keys(TB.refs.items).length} on this device</span></a>
-    ${!PACK ? `<p class="small muted">📦 No data pack loaded – pipe classes, gaskets and plot plans need one (<a href="#/settings">Settings</a>).</p>` : `<p class="small muted">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
-    <div class="ver-row"><span>Inspection Toolbox v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
+    <div class="grid2" style="margin-top:14px"><a class="btn primary" href="#/help">📖 Help &amp; manual</a><a class="btn ghost" href="#/settings">⚙ Settings &amp; tools</a></div>`;
 }
 function isoIconSVG() {
   return `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2f7f86"/><g stroke="#f4e7c9" stroke-width="5" stroke-linecap="round" fill="none"><path d="M12 44 L28 35 L28 18 L48 29"/></g><path d="M23 38 l5 -9 l5 9z" fill="#e9b23a" stroke="#1d2b36" stroke-width="2"/><circle cx="48" cy="29" r="5" fill="#c8402f" stroke="#1d2b36" stroke-width="2"/></svg>`;

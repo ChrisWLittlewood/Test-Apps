@@ -16,8 +16,8 @@ const HELP = [
     <li><b>Settings</b> → your name and position (they go on every report).</li>
     <li><b>Settings → Data pack → Import</b> your asset's data pack file (piping classes, gaskets, plot plans, logos).</li>
     <li>Optional: add your copies of the standards in the <a href="#/help/refs">reference library</a>, and an <a href="#/help/ai">AI key</a> if authorised.</li>
-    <li><b>Back up</b> regularly (Toolbox → ⬇ Backup everything). Everything lives on the phone.</li></ol>
-    <p><b>Updates</b> install themselves when you open the app with signal. To check by hand use <i>⟳ Check for updates</i> on the toolbox. If the installed name or icon looks out of date, remove the app from the home screen and install it again – your data is kept.</p>` },
+    <li><b>Back up</b> regularly (Settings → ⬇ Backup everything). Everything lives on the phone.</li></ol>
+    <p><b>Updates</b> install themselves when you open the app with signal. To check by hand use <i>⟳ Check for updates</i> in Settings. If the installed name or icon looks out of date, remove the app from the home screen and install it again – your data is kept.</p>` },
   { id: 'imsnt', t: 'IMSn\'t – line reports', b: `
     <ol><li><b>Create a piping system</b> – fastest is <i>📥 Import line list from Excel</i> (one report per line, system name from the file name). Fill in site, F/Loc, SCE, <b>IMS schedule No.</b> and <b>SAP WO</b> once – they fill every line.</li>
     <li><b>★ Line prep</b> (in the office): the <b>EP report number</b>, the P&amp;ID (pick from the P&amp;ID library and highlight the line – check it's the latest revision), the isometric (or <i>No ISO available</i>) and the previous ECH. The system page shows which lines are ready.</li>
@@ -109,14 +109,14 @@ const HELP = [
     <li><b>Drag the folder</b> (or the files) onto the <i>📥 Drop the prep files here</i> box. On a system page, drop just the ECHs and drawings.</li>
     <li>The app sorts everything: the Excel file becomes the line reports; each ECH goes to its line by equipment number; an isometric goes to its line (line number in the file name or on the drawing); a P&amp;ID goes to <b>every line that uses it</b> (P&amp;ID number from the ECHs). Check the lists – anything it isn't sure about is amber – and change any that are wrong.</li>
     <li>Then: <i>✎ EP numbers</i> (type them all in one table), <i>📋 Copilot summaries</i> for the ECHs, and tick "latest revision" on each P&amp;ID in ★ Line prep.</li>
-    <li><i>📤 Export / send to device</i> saves the whole system as one file. Send it to the inspection device by Teams or OneDrive. On that device: Toolbox → <i>⬆ Import backup</i>.</li></ol>
+    <li><i>📤 Export / send to device</i> saves the whole system as one file. Send it to the inspection device by Teams or OneDrive. On that device: Settings → <i>⬆ Import backup</i>.</li></ol>
     <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
-  { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Toolbox → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
+  { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Settings → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
     <li><b>💾 Storage info</b> shows how much space photos are using.</li>
-    <li>Not updating? Toolbox → <i>⟳ Check for updates</i>, or Settings → <i>Force update now</i> (keeps your data).</li></ul>` },
+    <li>Not updating? Settings → <i>⟳ Check for updates</i>, or Settings → <i>Force update now</i> (keeps your data).</li></ul>` },
   { id: 'rad', t: 'Totally RAD', b: `<p>An experimental feature. Everything you need to know is in its disclaimer, which you must read in full before use. Do not point it at people. Especially not Kelton.</p>` }
 ];
 const INFO = {
