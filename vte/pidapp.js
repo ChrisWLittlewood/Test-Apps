@@ -121,6 +121,7 @@ async function pidIndex() {
 }
 
 async function pidImport(files) {
+  { const tx = files.filter(f => /\.(txt|json)$/i.test(f.name)); if (tx.length) { let all = ''; for (const f of tx) all += '\n' + await f.text(); if (/"files"\s*:/.test(all)) await pidCpImportText(all); } }
   files = files.filter(f => /\.(pdf|jpe?g|png|webp|zip)$/i.test(f.name) && f.size > 0);
   const packs = files.filter(f => /\.zip$/i.test(f.name)); files = files.filter(f => !/\.zip$/i.test(f.name));
   for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('asset.json')) await assetImport(z); else if (z.file('pidindex.json') && !z.file('pidpack.json')) await pidIxImport(z); else await pidPackImport(p); }
@@ -212,7 +213,7 @@ async function openPidViewer(id, boxes = [], q = '') {
   const url = URL.createObjectURL(blob); const P = (await pidIndex()).get(id);
   const ov = document.createElement('div'); ov.className = 'pidv';
   ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
-      <span class="pidv-z"><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
+      <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
     <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" style="left:${a[1] * 100}%;top:${a[2] * 100}%;width:${a[3] * 100}%;height:${a[4] * 100}%"></i>`; }).join('')}</div></div>`;
@@ -358,7 +359,7 @@ async function pidCopyToReport(r, id) {
 }
 
 /* ---------- wiring ---------- */
-const pidInput = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true, id: 'filePidApp', accept: '.pdf,.zip,image/*' });
+const pidInput = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true, id: 'filePidApp', accept: '.pdf,.zip,image/*,.txt,.json' });
 document.body.append(pidInput);
 pidInput.addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; if (!files.length) return; try { await pidImport(files); } catch (err) { console.error(err); toast('⚠ ' + err.message, 5000); } if (location.hash.startsWith('#/pids')) route(); });
 document.addEventListener('drop', async e => {
@@ -386,10 +387,15 @@ function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all |
 function pidAiHTML() {
   if (!S.pidlib.items.length) return '';
   const scanned = pidAiWaiting(false).length, rest = pidAiWaiting(true).length;
-  if (!S.settings.aiKey) return scanned ? `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${scanned} scanned P&amp;ID${scanned > 1 ? 's have' : ' has'} no text to search. Add an AI key in Settings and use 🤖 AI scan to read ${scanned > 1 ? 'them' : 'it'}.</p></div>` : '';
-  if (!rest) return `<p class="small muted">🤖 Every P&amp;ID has been AI-scanned.</p>`;
-  return `<div class="card ai-queue"><b>🤖 AI scan the P&amp;IDs</b><span class="small muted">Reads line numbers and tags off the drawing images so scanned P&amp;IDs become searchable. Needs signal and uses your AI key. Only if company rules allow sending P&amp;IDs to the AI service.</span>
-    <div class="grid2">${scanned ? `<button class="btn primary" data-action="pidAiScan" data-all="0">Scanned ones (${scanned})</button>` : ''}<button class="btn ${scanned ? 'ghost' : 'primary'}" data-action="pidAiScan" data-all="1">All not yet scanned (${rest})</button></div></div>`;
+  if (!rest) return `<div class="card"><h3>🤖 AI index</h3><p class="small muted">Every P&amp;ID has been AI-indexed. New or replaced drawings (a new revision) will show here.</p></div>`;
+  const list = pidAiWaiting(true).sort((a, b) => (a.hasText - b.hasText) || a.title.localeCompare(b.title, undefined, { numeric: true }));
+  return `<div class="card ai-queue"><h3>🤖 AI index – ${rest} new or replaced P&amp;ID page${rest > 1 ? 's' : ''}</h3><span class="small muted">Reads line numbers and tags off the drawing image, so scanned P&amp;IDs become searchable and anything the drawing text missed is added. Drawings already indexed are never sent again. Only if company rules allow sending P&amp;IDs to the AI service – if in doubt, ask.</span>
+    ${S.settings.aiKey ? `<div class="grid2"><button class="btn primary" data-action="pidAiScan" data-all="1">🤖 Scan all new / replaced (${rest})</button>${scanned && scanned < rest ? `<button class="btn ghost" data-action="pidAiScan" data-all="0">Scanned drawings only (${scanned})</button>` : ''}</div>` : '<p class="small">No AI key on this device – use 📋 Copilot below.</p>'}
+    <div class="pid-cpbox"><b class="small">📋 With Copilot, in batches</b><span class="small muted">Export the ${rest} waiting drawing${rest > 1 ? 's' : ''} as one zip (batches + prompt), run each batch in Copilot, then import all the replies at once.</span>
+      <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📦 Export for Copilot (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Import Copilot results</button></div></div>
+    <details class="pid-cpq"><summary class="small"><b>📋 One at a time with Copilot</b></summary>
+      ${list.slice(0, 60).map(it => `<div class="pid-cprow"><span><b>${esc(it.title)}</b>${it.rev ? ' · rev ' + esc(it.rev) : ''}${!it.hasText ? ' <small class="muted">scanned</small>' : ''}${it.desc ? `<br><small class="muted">${esc(it.desc)}</small>` : ''}</span><button class="btn ghost sm" data-action="pidCopilot" data-id="${it.id}">📋 Copilot</button></div>`).join('')}
+      ${list.length > 60 ? `<p class="small muted">…and ${list.length - 60} more – each drawing also has a 🤖 button in the list.</p>` : ''}</details></div>`;
 }
 async function pidTiles(blob) {
   const bmp = await createImageBitmap(blob); const out = []; const ov = 0.08;
@@ -411,10 +417,43 @@ async function pidAiOne(it) {
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({ model: S.settings.aiModel || 'claude-sonnet-5-5', max_tokens: 4000, messages: [{ role: 'user', content }] }) });
   if (!res.ok) throw new Error(`AI request failed (${res.status}) ${(await res.text()).slice(0, 120)}`);
-  const j = parseAiJson(((await res.json()).content || []).map(c => c.text || '').join(''));
-  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), title: j.title || '', _at: new Date().toISOString(), _via: S.settings.aiModel || 'AI' };
+  pidAiApply(it, parseAiJson(((await res.json()).content || []).map(c => c.text || '').join('')), S.settings.aiModel || 'AI');
+}
+function pidAiApply(it, j, via) {
+  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), title: j.title || '', _at: new Date().toISOString(), _via: via, _file: it.src || '', _rev: it.rev || '' };
   if (!it.desc && it.ai.title) it.desc = pidAiDesc(it.ai.title);
   if (!it.dwgNo && j.dwgNo) it.dwgNo = String(j.dwgNo); if (!it.rev && j.rev) it.rev = String(j.rev);
+}
+/* Copilot route – one drawing at a time: save the drawing, attach it in Copilot with the prompt, paste the reply back. */
+const pidCopilotPrompt = () => `The attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA}`;
+async function pidCopilot(id) {
+  const it = S.pidlib.items.find(x => x.id === id); if (!it) return;
+  try { await navigator.clipboard.writeText(pidCopilotPrompt()); toast('Prompt copied', 2500); } catch { }
+  const name = `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' + safeName(it.rev) : ''}${(it.page || 1) > 1 ? '_p' + it.page : ''}.jpg`;
+  const r = await modal('📋 Read this P&ID with Copilot', `<p><b>${esc(it.title)}</b>${it.rev ? ' · rev ' + esc(it.rev) : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</p>
+    <p class="small muted">Only if company rules allow sending P&amp;IDs to Copilot – if in doubt, ask.</p>
+    <ol class="small"><li><button class="btn ghost sm" type="button" data-pidcp="save" data-id="${id}">⬇ Save the drawing</button> (${esc(name)}) – a sharp image of just this page.</li>
+      <li>Open Copilot, <b>attach the drawing</b> and paste the prompt – it's already copied. <button class="btn ghost sm" type="button" data-pidcp="prompt">📋 Copy prompt again</button></li>
+      <li>Copy <b>all</b> of Copilot's reply (the block with { } brackets) and paste it here.</li></ol>
+    <textarea name="reply" rows="7" placeholder="Paste Copilot's reply here"></textarea>
+    ${it.ai ? `<p class="small muted">Already indexed ${fmtDate((it.ai._at || '').slice(0, 10))} via ${esc(it.ai._via || 'AI')} – this replaces it.</p>` : ''}`, [['Cancel', ''], ['Apply', 'ok', 'primary']]);
+  if (!r) return;
+  let j; try { j = parseAiJson(r.vals.reply || ''); } catch (e) { toast('⚠ ' + e.message + ' – copy the whole reply, including the { } brackets', 6000); return pidCopilot(id); }
+  pidAiApply(it, j, 'Copilot'); await savePidLib(); PIDIDX = null;
+  toast(`✓ ${it.ai.lines.length} line numbers and ${it.ai.tags.length} tags added – ${it.dwgNo || it.title} is now indexed`, 5000); route();
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-pidcp]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+  if (b.dataset.pidcp === 'prompt') { try { await navigator.clipboard.writeText(pidCopilotPrompt()); toast('Prompt copied'); } catch { toast('Could not copy – long-press to copy instead'); } }
+  if (b.dataset.pidcp === 'save') { const it = S.pidlib.items.find(x => x.id === b.dataset.id); const bl = it && await getBlob(it.blobId); if (bl) shareBlob(bl, `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' + safeName(it.rev) : ''}${(it.page || 1) > 1 ? '_p' + it.page : ''}.jpg`, it.title); }
+}, true);
+async function pidAiPick(id) {
+  const it = S.pidlib.items.find(x => x.id === id); if (!it) return;
+  if (!S.settings.aiKey) return pidCopilot(id);
+  const r = await modal('🤖 Index this P&ID', `<p><b>${esc(it.title)}</b>${it.rev ? ' · rev ' + esc(it.rev) : ''}</p>${it.ai ? `<p class="small muted">Already indexed ${fmtDate((it.ai._at || '').slice(0, 10))} via ${esc(it.ai._via || 'AI')}.</p>` : ''}<p class="small">Only if company rules allow sending P&amp;IDs to the AI service – if in doubt, ask.</p>`,
+    [['Cancel', ''], ['📋 Copilot', 'cp'], ['🤖 Scan now', 'api', 'primary']]);
+  if (r?.v === 'cp') return pidCopilot(id);
+  if (r?.v === 'api') { if (!navigator.onLine) return toast('No signal – try again when online'); toast('Scanning…', 30000); try { await pidAiOne(it); await savePidLib(); PIDIDX = null; toast(`✓ ${it.dwgNo || it.title} indexed`); } catch (err) { toast('⚠ ' + err.message, 6000); } route(); }
 }
 async function pidAiScan(all) {
   const list = pidAiWaiting(all); if (!list.length) return toast('Nothing waiting for an AI scan');
@@ -429,7 +468,7 @@ async function pidAiScan(all) {
   prog.close(); await savePidLib(); route();
   toast(`🤖 ${n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} scanned${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
 }
-Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1') });
+Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1'), pidCopilot: el => pidCopilot(el.dataset.id), pidAiPick: el => pidAiPick(el.dataset.id) });
 
 /* ---------- shared search index (no drawings) ---------- */
 let PIDIX = null;
@@ -513,9 +552,9 @@ function pidNotIndexed() { return S.pidlib.items.filter(it => !it.ai); }
 function pidScanPromptHTML() {
   const w = pidNotIndexed(); if (!w.length) return '';
   const sc = w.filter(it => !it.hasText).length;
-  return `<p>🤖 <b>${w.length}</b> P&amp;ID page${w.length === 1 ? ' hasn’t' : 's haven’t'} been AI-indexed${sc ? ` (${sc} scanned, with no searchable text)` : ''}. ${S.settings.aiKey ? 'Do you want to scan now? (needs signal, uses your AI key)' : 'Add an authorised AI key in Settings to scan them.'}</p>`;
+  return `<p>🤖 <b>${w.length}</b> P&amp;ID page${w.length === 1 ? ' hasn’t' : 's haven’t'} been AI-indexed${sc ? ` (${sc} scanned, with no searchable text)` : ''}. ${S.settings.aiKey ? 'Do you want to scan the new / replaced ones now? (needs signal, uses your AI key – drawings already indexed are skipped)' : 'Index them with 📋 Copilot in P&amp;I Spy ⚙ Settings – in batches or one at a time.'}</p>`;
 }
-function pidScanBtns() { const w = pidNotIndexed().length; return w && S.settings.aiKey ? [['Later', ''], [`🤖 Scan now (${w})`, 'scan', 'primary']] : [['OK', '', 'primary']]; }
+function pidScanBtns() { const w = pidNotIndexed().length; return w && S.settings.aiKey ? [['Later', ''], [`🤖 Scan new / replaced (${w})`, 'scan', 'primary']] : [['OK', '', 'primary']]; }
 function pidIndexItems(idx) {
   return S.pidlib.items.map(it => { const P = idx.get(it.id);
     return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, desc: it.desc || '', page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
@@ -598,3 +637,54 @@ async function assetImportRun(zip, a, pj, r) {
 /* size the description boxes to their text whenever a P&ID list is drawn */
 const fitPidDesc = () => document.querySelectorAll('.pid-desc-in').forEach(t => { if (t.offsetParent && !t.dataset.fit) { t.dataset.fit = 1; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } });
 new MutationObserver(() => requestAnimationFrame(fitPidDesc)).observe(document.getElementById('main') || document.body, { childList: true, subtree: true });
+
+/* ---------- Copilot in batches: export the un-indexed drawings + prompt, import all the replies in one go ---------- */
+const PID_CP_TAG = /__(p_[a-z0-9]+)/i;
+const pidCpFileName = it => `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' + safeName(it.rev) : ''}${(it.page || 1) > 1 ? '_p' + it.page : ''}__${it.id}.jpg`;
+const pidCpBatchPrompt = () => `Each attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. For EACH attached image, read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out.
+Reply with ONLY one JSON object in exactly this shape – one entry per attached image, with "file" set to the image's exact file name (it ends in a code like __p_abc123 – keep that code):
+{"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"]}]}`;
+async function pidCpExport() {
+  const list = pidAiWaiting(true); if (!list.length) return toast('Every P&ID is already indexed');
+  const r = await modal('📦 Export for Copilot', `<p><b>${list.length}</b> P&amp;ID page${list.length > 1 ? 's' : ''} not yet indexed (new or replaced). This saves one zip with each drawing as a sharp image, split into batches, plus the prompt.</p>
+    <label class="field"><span>Drawings per batch (Copilot attachment limit)</span><select name="per"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select></label>
+    <p class="small muted">Only if company rules allow sending P&amp;IDs to Copilot – if in doubt, ask. Company data – keep the zip in company storage.</p>`, [['Cancel', ''], ['📦 Export', 'ok', 'primary']]);
+  if (!r) return;
+  const per = +r.vals.per || 10, nb = Math.ceil(list.length / per), zip = new JSZip(), prog = progressModal('Packing drawings for Copilot…', false);
+  for (const [k, it] of list.entries()) { prog.set(k, list.length, it.title); if (k % 5 === 0) await tick(); const b = await getBlob(it.blobId); if (b) zip.file(`Batch ${String(Math.floor(k / per) + 1).padStart(2, '0')} of ${nb}/${pidCpFileName(it)}`, b); }
+  zip.file('1 - PROMPT - paste into Copilot.txt', pidCpBatchPrompt());
+  zip.file('0 - READ ME.txt', `P&ID index with Copilot – ${list.length} drawings in ${nb} batch${nb > 1 ? 'es' : ''}\r\n\r\nFor each batch folder:\r\n 1. Open a new Copilot chat and attach ALL the images in the folder.\r\n 2. Paste the text from "1 - PROMPT - paste into Copilot.txt" and send.\r\n 3. Copy Copilot's whole reply (the block with { } brackets) and add it to one text file, or paste it straight into the app.\r\n\r\nThen in the Inspection Toolbox: P&I Spy > Settings > AI index > Import Copilot results. Paste all the replies at once, or choose the saved text file(s).\r\nDon't rename the images - the code at the end of each file name links the reply to the drawing.\r\n\r\nOnly if company rules allow sending P&IDs to Copilot - if in doubt, ask. Uncontrolled copies - company data, keep in company storage.`);
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); prog.close();
+  shareBlob(blob, `PID_Copilot_${list.length}_drawings_${todayISO()}.zip`, 'P&IDs for Copilot');
+}
+function jsonObjects(txt) {   // every top-level {...} in a piece of text (several pasted replies)
+  const out = []; let d = 0, st = -1, q = false, esc2 = false;
+  for (let i = 0; i < txt.length; i++) { const c = txt[i];
+    if (q) { if (esc2) esc2 = false; else if (c === '\\') esc2 = true; else if (c === '"') q = false; continue; }
+    if (c === '"') { if (d) q = true; continue; }
+    if (c === '{') { if (!d) st = i; d++; } else if (c === '}' && d) { d--; if (!d) { try { out.push(JSON.parse(txt.slice(st, i + 1))); } catch { } } } }
+  return out;
+}
+async function pidCpImportText(txt) {
+  const objs = jsonObjects(String(txt || '')); const entries = objs.flatMap(o => Array.isArray(o.files) ? o.files : (o.file ? [o] : []));
+  if (!entries.length) return modal('Nothing found', `<p>No Copilot results found. Paste Copilot's whole reply – the block starting <code>{"files":</code> – including the { } brackets.</p>`, [['OK', '']]);
+  let n = 0; const miss = [];
+  for (const e of entries) {
+    const f = String(e.file || ''); const id = (PID_CP_TAG.exec(f) || [])[1];
+    let it = id && S.pidlib.items.find(x => x.id === id);
+    if (!it && e.dwgNo) it = S.pidlib.items.find(x => pnorm(x.dwgNo) === pnorm(e.dwgNo) && (!e.rev || !x.rev || pnorm(x.rev) === pnorm(e.rev)));
+    if (!it) { miss.push(f || e.dwgNo || '?'); continue; }
+    pidAiApply(it, e, 'Copilot'); n++;
+  }
+  await savePidLib(); PIDIDX = null; const left = pidAiWaiting(true).length;
+  await modal('Copilot results imported', `<p>✓ <b>${n}</b> drawing${n === 1 ? '' : 's'} indexed.</p>${miss.length ? `<p class="small">⚠ ${miss.length} entr${miss.length === 1 ? 'y' : 'ies'} didn't match a drawing in this library: ${miss.slice(0, 8).map(esc).join(', ')}${miss.length > 8 ? '…' : ''}</p>` : ''}<p class="small muted">${left ? `${left} still waiting – import the other batches' replies when you have them.` : 'Every P&amp;ID is now indexed.'}</p>`, [['OK', '', 'primary']]);
+  route();
+}
+async function pidCpImport() {
+  const r = await modal('📥 Import Copilot results', `<p class="small">Paste Copilot's replies – one or several batches at once – or choose the text file(s) you saved them in.</p>
+    <textarea name="reply" id="cpReply" rows="8" placeholder='{"files":[ … ]}'></textarea>
+    <label class="btn ghost sm" style="margin-top:6px">📄 Choose reply files<input type="file" id="cpFiles" accept=".txt,.json,text/plain,application/json" multiple hidden></label>`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
+  if (r) return pidCpImportText(r.vals.reply);
+}
+document.addEventListener('change', async e => { if (e.target.id !== 'cpFiles') return; const ta = $('#cpReply'); for (const f of e.target.files) ta.value += '\n' + await f.text(); toast(`${e.target.files.length} file${e.target.files.length > 1 ? 's' : ''} added`); });
+Object.assign(actions, { pidCpExport: () => pidCpExport(), pidCpImport: () => pidCpImport() });
