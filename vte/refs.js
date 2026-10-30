@@ -77,7 +77,7 @@ function renderRefs(app) {
       <input type="search" id="refQ" placeholder="Search documents and key facts" autocomplete="off">
       ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}
       <p class="small muted">${nHave} of ${allDocs().length} documents on this device · ${cnt('ai')} AI-scanned · ${cnt('manual')} set manually${cnt('stale') ? ` · <b class="warn-t">${cnt('stale')} need re-checking</b>` : ''}${cnt('none') ? ` · ${cnt('none')} with values not set` : ''}</p></div>
-    ${app ? '' : critCardHTML()}
+    ${app ? '' : refScanAllHTML() + critCardHTML()}
     <div class="section-title"><h2>Standards</h2></div>
     ${list.filter(d => !d.company).map(card).join('')}
     <div class="section-title"><h2>Company documents</h2></div>
@@ -138,6 +138,9 @@ document.addEventListener('click', async e => {
   if (b.dataset.ref === 'add') return addRef(k);
   if (b.dataset.ref === 'open') return openRef(k);
   if (b.dataset.ref === 'ai') return refAiScan(k);
+  if (b.dataset.ref === 'scanAll') return refScanAll();
+  if (b.dataset.ref === 'cpExport') return refCpExport();
+  if (b.dataset.ref === 'cpImport') return refCpImport();
   if (b.dataset.ref === 'manual') return critManual(k);
   if (b.dataset.ref === 'custom') return refAddCustom();
   if (b.dataset.ref === 'critReset') { if (!await confirmBox('Reset criteria', 'Put every acceptance value back to the built-in defaults?', 'Reset')) return; TB.crit.items = {}; await critSaved(); if (TB.face) { TB.face.limits = clone(FACE_LIMIT_DEFAULTS); saveFace(); } return route(); }
@@ -278,8 +281,8 @@ async function refAiReview(d, defs, j, auth) {
   const vals = j.values || {}; const facts = (j.facts || []).filter(f => f && f.text).slice(0, 40);
   const found = defs.map(x => [x, vals[x.k]]).filter(([, v]) => v && v.value != null && isFinite(+v.value));
   const r = await modal('Check the AI results', `<p class="small">From <b>${esc(d.name)}</b>${j.docRev ? ' (' + esc(j.docRev) + ')' : ''}. AI can misread tables – check each value against the document before ticking it.</p>
-    ${found.length ? found.map(([x, v]) => { const ok = +v.value >= x.min && +v.value <= x.max; return `<div class="crit-rev ${ok ? '' : 'bad'}"><label class="imp-row"><input type="checkbox" name="c_${x.k}" value="${ok ? 'yes' : ''}" data-cv ${ok ? 'checked' : ''}><span><b>${esc(x.label)}</b> <small class="muted">now ${crit(x.k)} ${esc(x.unit)}</small></span></label>
-      <input type="text" inputmode="decimal" name="v_${x.k}" value="${esc(String(v.value))}"><small>${esc(v.ref || '')}${v.quote ? ` – “${esc(v.quote)}”` : ''}${v.note ? ' · ' + esc(v.note) : ''}${ok ? '' : ` · <b>outside the expected ${x.min}–${x.max}</b>`}</small></div>`; }).join('')
+    ${found.length ? found.map(([x, v]) => { const ok = +v.value >= x.min && +v.value <= x.max; const gov = refGoverned(x.k, d); const tk = ok && !gov; return `<div class="crit-rev ${ok ? '' : 'bad'}"><label class="imp-row"><input type="checkbox" name="c_${x.k}" value="${tk ? 'yes' : ''}" data-cv ${tk ? 'checked' : ''}><span><b>${esc(x.label)}</b> <small class="muted">now ${crit(x.k)} ${esc(x.unit)}</small></span></label>
+      <input type="text" inputmode="decimal" name="v_${x.k}" value="${esc(String(v.value))}"><small>${esc(v.ref || '')}${v.quote ? ` – “${esc(v.quote)}”` : ''}${v.note ? ' · ' + esc(v.note) : ''}${ok ? '' : ` · <b>outside the expected ${x.min}–${x.max}</b>`}${ok && gov ? ` · <b>currently set from ${esc(gov.name)}</b>, which governs – tick only to replace it` : ''}</small></div>`; }).join('')
     : `<p class="small muted">${defs.length ? 'None of the app values were found in this document – set them manually if they are elsewhere.' : 'No app values come from this document.'}</p>`}
     <p class="small"><b>${facts.length}</b> key fact${facts.length === 1 ? '' : 's'} will be saved with the document (marked as AI-extracted).</p>`, [['Cancel', ''], ['✓ Use ticked values', 'ok', 'primary']]);
   if (!r) return;
@@ -339,4 +342,101 @@ function renderRefDoc(key) {
       ${rows ? `<div class="crit-tbl">${rows}</div>` : `<p class="small muted">No app values come from this document${d.custom ? ' yet – a scan or ✎ manual entry can set any of the acceptance criteria from it' : ''}.</p>`}</div>
     ${refFactsHTML(key).replace('<details class="ref-facts">', '<details class="ref-facts card" open>')}
     <a class="btn ghost block" href="#/refs">‹ All documents</a>`;
+}
+
+/* ----- scan all: every document on this device that hasn't been scanned, or has a new copy ----- */
+const refScanCandidates = () => allDocs().filter(d => TB.refs.items[d.key] && (!TB.refs.ai?.[d.key] || TB.refs.items[d.key].stale));
+const refPri = d => d.company ? 0 : d.custom ? 1 : 2;   // company / site documents govern over published standards
+const refCpName = d => `${safeName(d.name)}__ref_${d.key}.pdf`;
+const refGoverned = (k, d) => { const cur = TB.crit.items[k], cd = cur?.doc && cur.doc !== d.key ? allDocs().find(o => o.key === cur.doc) : null; return cd && refPri(cd) < refPri(d) ? cd : null; };   // already set from a company / site document
+const REF_CP_TAG = /__ref_([A-Za-z0-9]+(?:_[A-Za-z0-9]+)?)/;
+function refScanAllHTML() {
+  const c = refScanCandidates(); if (!c.length) return '';
+  return `<div class="card ai-queue"><h3>🤖 ${c.length} document${c.length > 1 ? 's' : ''} to scan</h3><span class="small muted">On this device but not scanned yet, or with a new copy: ${c.map(d => esc(d.name)).join(', ')}. Already-scanned documents are never sent again.</span>
+    <span class="small"><b>Only if you're authorised to send them to an AI service – if in doubt, ask!</b> You confirm each document first, and check every value before it's used.</span>
+    <div class="grid2">${S.settings.aiKey ? `<button class="btn primary" data-ref="scanAll" data-k="">🤖 Scan all (${c.length})</button>` : ''}<button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-ref="cpExport" data-k="">📦 Export for Copilot (${c.length})</button><button class="btn ghost" data-ref="cpImport" data-k="">📥 Import Copilot results</button></div></div>`;
+}
+async function refAuthMany(docs, how) {
+  const r = await modal(`${how === 'api' ? '🤖 Scan all' : '📦 Export for Copilot'} – authorisation`, `<div class="pid-disc"><b>⚠ Are you authorised?</b> Company policy, information-security rules and each document's licence terms may restrict sending it to an AI service (including Copilot). Standards are copyright; company documents may be confidential.</div>
+    <p><b>Tick only the documents you are authorised to send. If in doubt, ask!</b> Leave the rest unticked and set their values manually.</p>
+    ${docs.map(d => `<label class="imp-row"><input type="checkbox" name="a_${d.key}" value="" data-cv> <span><b>${esc(d.name)}</b>${d.company ? ' <span class="pill-s">Company</span>' : ''}<br><small class="muted">${esc(TB.refs.items[d.key]?.name || '')}${TB.refs.items[d.key]?.stale ? ' · new copy' : ''}</small></span></label>`).join('')}
+    ${how === 'cp' ? `<label class="field"><span>Documents per Copilot chat</span><select name="per"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option></select></label>` : ''}`,
+    [['Cancel', ''], [how === 'api' ? '🤖 Scan ticked' : '📦 Export ticked', 'ok', 'primary']]);
+  if (!r) return null;
+  const ok = docs.filter(d => r.vals['a_' + d.key] === 'yes'); if (!ok.length) { toast('Nothing ticked – set the values manually instead', 4000); return null; }
+  return { docs: ok, per: +r.vals.per || 3, auth: { by: S.settings.inspectorName || '', at: new Date().toISOString(), via: how === 'api' ? 'api' : 'copilot' } };
+}
+async function refScanAll() {
+  const a = await refAuthMany(refScanCandidates(), 'api'); if (!a) return;
+  if (!navigator.onLine) return toast('No signal – try again when online');
+  const prog = progressModal(`Scanning ${a.docs.length} document${a.docs.length > 1 ? 's' : ''}…`, true); const results = [], errs = [];
+  for (const [k, d] of a.docs.entries()) {
+    if (prog.stopped) break; prog.set(k, a.docs.length, d.name); await tick();
+    try { results.push({ d, j: await refAiCall(d, refDefsFor(d), await getBlob(TB.refs.items[d.key].blobId)) }); }
+    catch (e) { errs.push(`${d.name}: ${e.message}`); if (/\b(401|403|No API key)\b/.test(e.message)) break; }
+  }
+  prog.close();
+  if (errs.length) await modal('Some scans failed', `<ul class="small">${errs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`, [['OK', '', 'primary']]);
+  if (results.length) return refReviewMany(results, a.auth);
+}
+function refMultiPrompt(docs) {
+  return `You are reading reference documents for a UK offshore piping / plant inspector's app. ${docs.length > 1 ? `${docs.length} documents are attached` : 'One document is attached'}; each is identified by its exact file name, which ends in a code like __ref_pc005.
+For EACH attached document:
+1. Find the values listed for it below IF THAT DOCUMENT STATES THEM. Do not guess and do not use values from other documents or general knowledge – use null if the document does not state it. For each give "value" (a number in the unit asked), "ref" (clause / table and page), "quote" (short exact quote, max 25 words) and optional "note".
+2. List up to 25 key facts useful to a plant inspector from that document (acceptance criteria, limits, inspection requirements and intervals, reporting rules), each paraphrased in max 40 words with its clause / page.
+${docs.map(d => { const defs = refDefsFor(d); return `\nFile "${refCpName(d)}" (${d.name}${d.title ? ' – ' + d.title : ''}) – values to look for:${defs.length ? '\n' + defs.map(x => `- ${x.k}: ${x.ask} [unit: ${x.unit}]`).join('\n') : ' none – key facts only'}`; }).join('\n')}
+
+Reply with ONLY one JSON object in exactly this shape, one entry per attached document, with "file" set to its exact file name:
+{"docs":[{"file":"exact file name","docRev":"revision / edition / date if stated","values":{"key":{"value":null,"ref":"","quote":"","note":""}},"facts":[{"topic":"","text":"","ref":""}]}]}`;
+}
+async function refCpExport() {
+  const a = await refAuthMany(refScanCandidates(), 'cp'); if (!a) return;
+  const docs = [...a.docs].sort((x, y) => refPri(x) - refPri(y)); const nb = Math.ceil(docs.length / a.per); const zip = new JSZip();
+  const prog = progressModal('Packing documents for Copilot…', false);
+  for (let bi = 0; bi < nb; bi++) {
+    const part = docs.slice(bi * a.per, (bi + 1) * a.per), dir = `Chat ${String(bi + 1).padStart(2, '0')} of ${nb}/`;
+    for (const d of part) { prog.set(docs.indexOf(d), docs.length, d.name); await tick(); const b = await getBlob(TB.refs.items[d.key].blobId); if (b) zip.file(dir + refCpName(d), b); }
+    zip.file(dir + 'PROMPT - paste into Copilot.txt', refMultiPrompt(part));
+  }
+  zip.file('0 - READ ME.txt', `Reference documents for Copilot – ${docs.length} document${docs.length > 1 ? 's' : ''} in ${nb} chat${nb > 1 ? 's' : ''}\r\n\r\nFor each "Chat" folder:\r\n 1. Open a NEW Copilot chat and attach the PDF(s) in the folder.\r\n 2. Paste the text from that folder's "PROMPT - paste into Copilot.txt" (each folder has its own prompt) and send.\r\n 3. Copy Copilot's whole reply (the block with { } brackets) into one text file, or paste it straight into the app.\r\n\r\nThen in the Inspection Toolbox: Standard Issue > Import Copilot results. Paste all the replies at once, or choose the saved text file(s). Check and tick each value before it's used.\r\nDon't rename the PDFs - the code at the end of each name links the reply to the document.\r\n\r\nOnly send documents you are authorised to send to Copilot - if in doubt, ask. Keep this zip in company storage.`);
+  TB.refs.cpAuth = { ...(TB.refs.cpAuth || {}), ...Object.fromEntries(docs.map(d => [d.key, a.auth])) }; await DB.put('meta', TB.refs);
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); prog.close();
+  shareBlob(blob, `Reference_docs_for_Copilot_${todayISO()}.zip`, 'Reference documents for Copilot');
+}
+async function refCpImport() {
+  const r = await modal('📥 Import Copilot results', `<p class="small">Paste Copilot's replies – one or several chats at once – or choose the text file(s) you saved them in.</p>
+    <textarea name="reply" id="refCpReply" rows="8" placeholder='{"docs":[ … ]}'></textarea>
+    <label class="btn ghost sm" style="margin-top:6px">📄 Choose reply files<input type="file" id="refCpFiles" accept=".txt,.json,text/plain,application/json" multiple hidden></label>`, [['Cancel', ''], ['Check values', 'ok', 'primary']]);
+  if (!r) return;
+  const entries = jsonObjects(r.vals.reply || '').flatMap(o => Array.isArray(o.docs) ? o.docs : (o.file ? [o] : [])); const results = [], miss = [];
+  for (const e of entries) { const key = (REF_CP_TAG.exec(String(e.file || '')) || [])[1]; const d = key && allDocs().find(x => x.key === key); if (d) results.push({ d, j: e }); else miss.push(e.file || '?'); }
+  if (!results.length) return modal('Nothing found', `<p>No results matched a document in the library. Paste Copilot's whole reply – the block starting <code>{"docs":</code> – including the { } brackets.</p>${miss.length ? `<p class="small">Unmatched: ${miss.map(esc).join(', ')}</p>` : ''}`, [['OK', '']]);
+  if (miss.length) toast(`⚠ ${miss.length} entr${miss.length === 1 ? 'y' : 'ies'} didn't match a document`, 5000);
+  return refReviewMany(results, null);
+}
+document.addEventListener('change', async e => { if (e.target.id !== 'refCpFiles') return; const ta = $('#refCpReply'); for (const f of e.target.files) ta.value += '\n' + await f.text(); toast(`${e.target.files.length} file${e.target.files.length > 1 ? 's' : ''} added`); });
+async function refReviewMany(results, auth) {
+  results.sort((a, b) => refPri(a.d) - refPri(b.d)); const taken = new Set();
+  const secs = results.map(({ d, j }, ri) => {
+    const defs = refDefsFor(d), vals = j.values || {}, facts = (j.facts || []).filter(f => f && f.text);
+    const found = defs.map(x => [x, vals[x.k]]).filter(([, v]) => v && v.value != null && isFinite(+v.value));
+    return `<div class="crit-doc"><h4>${esc(d.name)}${j.docRev ? ` <small class="muted">${esc(j.docRev)}</small>` : ''}</h4>
+      ${found.length ? found.map(([x, v]) => { const ok = +v.value >= x.min && +v.value <= x.max; const gov = refGoverned(x.k, d); const first = ok && !taken.has(x.k) && !gov; if (ok && !gov) taken.add(x.k);
+        return `<div class="crit-rev ${ok ? '' : 'bad'}"><label class="imp-row"><input type="checkbox" name="c_${ri}_${x.k}" value="${first ? 'yes' : ''}" data-cv ${first ? 'checked' : ''}><span><b>${esc(x.label)}</b> <small class="muted">now ${crit(x.k)} ${esc(x.unit)}</small></span></label>
+          <input type="text" inputmode="decimal" name="v_${ri}_${x.k}" value="${esc(String(v.value))}"><small>${esc(v.ref || '')}${v.quote ? ` – “${esc(v.quote)}”` : ''}${v.note ? ' · ' + esc(v.note) : ''}${ok ? '' : ` · <b>outside the expected ${x.min}–${x.max}</b>`}${ok && gov ? ` · <b>currently set from ${esc(gov.name)}</b>, which governs – tick only to replace it` : ok && !first ? ' · <b>also found in a document above</b> – tick to use this one instead' : ''}</small></div>`; }).join('')
+        : `<p class="small muted">${defs.length ? 'None of its app values were found.' : 'No app values come from this document.'}</p>`}
+      <p class="small">${facts.length} key fact${facts.length === 1 ? '' : 's'} will be saved.</p></div>`;
+  }).join('');
+  const r = await modal('Check the AI results', `<p class="small">${results.length} document${results.length > 1 ? 's' : ''}. AI can misread tables – check each value against its document before ticking it. Where two documents give the same value, the company / site document is ticked first.</p>${secs}`, [['Cancel', ''], ['✓ Use ticked values', 'ok', 'primary']]);
+  if (!r) return;
+  let n = 0;
+  for (let ri = results.length - 1; ri >= 0; ri--) {   // standards first, company documents last – so they win if both are ticked
+    const { d, j } = results[ri], vals = j.values || {}, facts = (j.facts || []).filter(f => f && f.text).slice(0, 40);
+    for (const x of refDefsFor(d)) { if (r.vals[`c_${ri}_${x.k}`] !== 'yes') continue; const nv = num(r.vals[`v_${ri}_${x.k}`]); if (nv == null || nv < x.min || nv > x.max) continue; await critSet(x.k, nv, { src: 'ai', doc: d.key, ref: vals[x.k]?.ref || '', quote: vals[x.k]?.quote || '' }); n++; }
+    if (TB.refs.items[d.key]) TB.refs.items[d.key].stale = false;
+    const au = auth || TB.refs.cpAuth?.[d.key] || { by: S.settings.inspectorName || '', at: new Date().toISOString(), via: 'copilot' };
+    TB.refs.ai = TB.refs.ai || {}; TB.refs.ai[d.key] = { file: TB.refs.items[d.key]?.name || '', applied: 0, at: new Date().toISOString(), docRev: j.docRev || '', facts, auth: au, model: au.via === 'copilot' ? 'Copilot' : (S.settings.aiModel || 'AI') };
+  }
+  await critSaved(); await DB.put('meta', TB.refs);
+  toast(`✓ ${n} value${n === 1 ? '' : 's'} applied from ${results.length} document${results.length > 1 ? 's' : ''}`, 4500); route();
 }

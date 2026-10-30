@@ -603,3 +603,4 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 
 .pid-cpq{margin-top:8px}.pid-cpq summary{cursor:pointer}.pid-cprow{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}.pid-cprow span{min-width:0}.warn-b{border-color:#e9c46a;background:#fff8e1}
 .pid-cpbox{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.crit-doc{border-top:2px solid var(--line);margin-top:10px;padding-top:6px}.crit-doc h4{margin:4px 0}
