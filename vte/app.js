@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.6.1';
+const APP_VERSION = '2.7.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -464,7 +464,7 @@ async function route() {
   if (p[0] === 'xray') return renderXrayLanding();
   if (p[0] === 'help') return renderHelp(p[1]);
   if (p[0] === 'settings') return renderSettings();
-  if (p[0] === 'pids') return typeof renderPidApp === 'function' ? renderPidApp() : renderPidLib();
+  if (p[0] === 'pids') return typeof renderPidApp === 'function' ? (p[1] === 'settings' ? renderPidSettings() : renderPidApp()) : renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
   if (p[0] === 'report') return renderReport(p[1], p[2] || 'header');
   renderToolbox();
@@ -611,7 +611,7 @@ function renderSystem(id) {
     ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📚 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
     ${lines.length ? `<div class="grid2"><button class="btn ghost" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button><button class="btn ghost" data-action="pidAuto" data-sys="${s2.id}">🔎 Find P&amp;IDs in the library</button></div>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
-    ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Send to phone (prep pack)</button><p class="small muted">Prepped on a PC? This saves the whole system as one file – send it to the inspection phone by Teams or OneDrive, then on the phone: Toolbox → ⬆ Import backup.</p>` : ''}
+    ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Export / send to device</button><p class="small muted">Saves the whole system (lines, ECHs, photos, drawings) as one file – send it to another device by Teams or OneDrive, then on that device: Toolbox → ⬆ Import backup.</p>` : ''}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {
@@ -1628,7 +1628,7 @@ const actions = {
   shareDocx: () => shareBlob(cur.docx.blob, cur.docx.name, cur.docx.name),
   saveDocx: () => downloadBlob(cur.docx.blob, cur.docx.name),
   exportReport: async () => { const r = cur.report; toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
-  sendToPhone: async () => { toast('Packing this system…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection prep pack'); },
+  sendToPhone: async () => { toast('Packing this system…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection Toolbox export'); },
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   forceUpdate: () => forceUpdate(),
   checkUpdate: async el => {

@@ -574,3 +574,9 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 .pid-miss{color:#a8650a;font-weight:600}
 .pid-item.remote{cursor:default;border-style:dashed}.pid-noimg{width:64px;height:46px;display:grid;place-items:center;font-size:1.6rem;background:rgba(127,127,127,.12);border-radius:6px;flex:none}
 .pid-ixrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0}.pid-ixrow .btn{margin-left:auto}
+
+.pid-headrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.pid-headrow h2{margin:0}
+.pid-spec{border:2px solid #2f7f86;border-radius:12px;padding:10px 12px;margin:10px 0;background:rgba(47,127,134,.07)}
+.pid-spec-t{width:100%;border-collapse:collapse;margin:6px 0;font-size:.86rem}.pid-spec-t th{text-align:left;width:5.5em;vertical-align:top;padding:3px 6px 3px 0;color:var(--muted,#6b7785);font-weight:600}.pid-spec-t td{padding:3px 0;border-bottom:1px solid rgba(127,127,127,.15)}
+
+.pid-spec-sum{margin:8px 0 2px;font-size:.88rem}

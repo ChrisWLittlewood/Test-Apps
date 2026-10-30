@@ -1,7 +1,7 @@
 /* Prep drop box (built for a desktop PC, works on a phone too): drop the line list, the previous ECHs, the
    isometrics and the P&IDs for a piping system in one go – or a whole folder. The app sorts them:
    Excel/CSV → line list · R405 PDFs → ECHs (matched by equipment no.) · drawings → ISO for a line (line no. in the
-   file name / drawing) or P&ID for every line that uses it (P&ID no. from the ECH). Then "Send to phone" packs the
+   file name / drawing) or P&ID for every line that uses it (P&ID no. from the ECH). Then "Export / send to device" packs the
    prepped system into one file for the inspector's phone. Everything is read on this device – nothing is uploaded. */
 
 const PREP_SHEET = /\.(xlsx|csv)$/i, PREP_PDF = /\.pdf$/i, PREP_IMG = /\.(jpe?g|png|webp|heic)$/i;
@@ -136,13 +136,13 @@ async function prepSummary(sysId, s) {
   if (waiting) { btns.push(['📋 Copilot summaries', 'copilot']); if (S.settings.aiKey) btns.push(['🤖 AI summaries', 'api']); }
   if (noEp) btns.push(['✎ EP numbers', 'ep']);
   const noPid = lines.filter(r => !(r.att || []).some(a => a.kind === 'pid')).length; if (noPid && S.pidlib.items.length) btns.push(['🔎 P&IDs from library', 'pid']);
-  btns.push(['📤 Send to phone', 'send', 'primary']);
+  btns.push(['📤 Export / send to device', 'send', 'primary']);
   const li = (n, t) => n ? `<li><b>${n}</b> ${t}</li>` : '';
   const res = await modal('Prep done', `<ul class="ticks">${li(s.lines, 'line(s) imported')}${li(s.ech, `ECH(s) attached, ${s.filled} field(s) filled`)}${li(s.iso, 'isometric(s) added')}${li(s.pid, 'P&ID(s) added to their lines')}${li(s.lib, 'P&ID(s) added to the library')}</ul>
     ${s.other ? `<p class="small muted">${s.other} file(s) ignored (not Excel, PDF or an image).</p>` : ''}
     <p><b>${ready}</b> of ${lines.length} line(s) ready to inspect.${noEp ? ` Still needed: EP numbers for ${noEp} line(s) (★ Line prep), and ticking "latest revision" on each P&amp;ID.` : ''}</p>
     ${waiting ? `<p class="small">${waiting} ECH(s) still need an AI summary (previous findings, FM areas, meterage, supports).</p>` : ''}
-    <p class="small muted">📤 Send to phone saves this whole system (lines, ECHs, photos, drawings) as one file. Send it to the inspection phone by Teams or OneDrive, then on the phone: Toolbox → ⬆ Import backup.</p>`, btns);
+    <p class="small muted">📤 Export / send to device saves this whole system (lines, ECHs, photos, drawings) as one file. Send it to the inspection device by Teams or OneDrive, then on that device: Toolbox → ⬆ Import backup.</p>`, btns);
   if (res?.v === 'copilot') { await echBulkCopilot(sysId); return prepSummary(sysId, {}); }
   if (res?.v === 'api') { await echBulkApi(sysId); return prepSummary(sysId, {}); }
   if (res?.v === 'pid') { await pidAutoForSystem(sysId); return prepSummary(sysId, {}); }

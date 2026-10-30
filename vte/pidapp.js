@@ -100,7 +100,7 @@ async function pidImport(files) {
         const old = S.pidlib.items.find(x => (tb.dwgNo && x.dwgNo === tb.dwgNo && (x.page || 1) === pg.page) || (x.src === f.name && (x.page || 1) === pg.page));
         if (old) { await pidDelete(old, true); updated++; } else added++;
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
-        const hasText = pg.items.length > 5; if (!hasText) noText++;
+        const hasText = pg.items.length > 2; if (!hasText) noText++;
         if (hasText) { await DB.put('meta', { id: 'pidtxt_' + id, items: pg.items }); PIDIDX.set(id, buildPidRows(pg.items)); }
         S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText });
       }
@@ -207,35 +207,44 @@ function renderPidApp() {
   setTop('P&I Spy', `${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
-    <div class="card"><h2>🔎 Which P&amp;IDs is it on? ${iBtn('pidspy')}</h2>
+    <div class="card"><div class="pid-headrow"><h2>🔎 Which P&amp;IDs is it on? ${iBtn('pidspy')}</h2><a class="btn ghost sm" href="#/pids/settings">⚙ Settings</a></div>
       <input type="search" id="pidAppQ" placeholder="Type a line number, tag or drawing number" autocomplete="off" autocapitalize="characters" value="${esc(cur.pidQ || '')}">
-      <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189).</p>
-      <div id="pidAppRes" class="pidlist"></div></div>
-    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
-    ${pidAiHTML()}
+      <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189). Line numbers come with the pipe spec from the data pack.</p>
+      <div id="pidSpec"></div><div id="pidAppRes" class="pidlist"></div></div>
+    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one. Library packs and shared indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
+    <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
+    <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
+    <div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>`;
+  if (cur.pidQ) pidAppSearch(cur.pidQ);
+}
+function renderPidSettings() {
+  setTop('P&I Spy settings', 'AI scan, sharing, import & export', '/pids');
+  const n = S.pidlib.items.length;
+  $('#main').innerHTML = `${PID_DISCLAIMER()}
+    ${pidAiHTML() || `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${!n ? 'Nothing to scan yet – import some P&amp;IDs first.' : S.settings.aiKey ? 'Every P&amp;ID has been AI-scanned.' : 'Add an authorised AI key in the main <a href="#/settings">Settings</a> to read scanned P&amp;IDs and add anything the drawing text missed.'}</p></div>`}
+    <div class="card"><h3>📤 Export / send to device</h3>
+      <p class="small muted">Saves the whole library (drawings, text index and AI scans) as one .zip. Send it to another device by Teams / OneDrive and import it there.</p>
+      <div class="grid2">${n ? '<button class="btn primary" data-action="pidSendPack">📤 Export / send to device</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import library pack (.zip)</button></div></div>
     <div class="card"><h3>📇 Shared search index ${iBtn('pidindex')}</h3>
       <p class="small muted">A small file with every drawing's number, revision and the line numbers / tags on it (from the text and AI scans) – <b>no drawings</b>. Share it so others can search; drawings they don't have point them to document control.</p>
       <div id="pidIxList" class="small"></div>
-      <div class="grid2">${n ? '<button class="btn ghost" data-action="pidIxExport">📇 Share search index</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import index (.zip)</button></div></div>
-    ${n ? `<div class="grid2"><button class="btn primary" data-action="pidSendPack">📤 Send library to phone</button><button class="btn ghost" data-action="pidPickFiles">⬆ Import library pack (.zip)</button></div>` : ''}
-    <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
-    <input type="search" id="pidLibQ" placeholder="Filter by title / drawing number" autocomplete="off">
-    <div id="pidLibList" class="pidlist">${pidListHTML('', false)}</div>
-    ${n ? '<button class="btn ghost block danger-t" data-action="clearPids">Remove all P&IDs</button>' : ''}`;
-  if (cur.pidQ) pidAppSearch(cur.pidQ);
+      <div class="grid2">${n ? '<button class="btn ghost" data-action="pidIxExport">📇 Export search index</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import index (.zip)</button></div></div>
+    <div class="card"><h3>🗂 Library</h3><p class="small muted">${n} P&amp;ID page${n === 1 ? '' : 's'} on this device · last updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}. Reports keep their own copies whatever happens here.</p>
+      ${n ? '<button class="btn ghost block danger-t" data-action="clearPids">Remove all P&IDs</button>' : ''}</div>`;
   pidIxLoad().then(ix => { const el = $('#pidIxList'); if (el) el.innerHTML = ix.packs.length ? ix.packs.map((p, i) => `<div class="pid-ixrow">📇 <b>${esc(p.name)}</b> · ${p.items.length} drawing page${p.items.length > 1 ? 's' : ''} · made ${fmtDate((p.created || '').slice(0, 10))}${p.by ? ' by ' + esc(p.by) : ''} <button class="btn ghost sm danger-t" data-action="pidIxDel" data-i="${i}" aria-label="Remove index">🗑</button></div>`).join('') : '<p class="small muted">No shared index imported.</p>'; });
 }
 let pidT = null;
 async function pidAppSearch(q) {
   cur.pidQ = q; const box = $('#pidAppRes'); if (!box) return;
-  if (q.trim().length < 3) { box.innerHTML = ''; return; }
+  if (q.trim().length < 3) { box.innerHTML = ''; if ($('#pidSpec')) $('#pidSpec').innerHTML = ''; return; }
   box.innerHTML = '<p class="small muted" style="padding:8px">Searching…</p>';
   const res = await pidSearch(q); if (cur.pidQ !== q) return; PIDRES = Object.fromEntries(res.map(r => [r.it.id, r]));
+  const sp = $('#pidSpec'); if (sp) sp.innerHTML = pidSpecHTML(q, res);
   box.innerHTML = res.length ? `<p class="small" style="margin:6px 0"><b>${res.length}</b> P&amp;ID page${res.length > 1 ? 's' : ''} found:</p>` + res.slice(0, 60).map(r => pidRowHTML(r, { q })).join('') : '<p class="small muted" style="padding:8px">Not found on any P&amp;ID. Try just the service and number (e.g. PX-20189).</p>';
 }
 document.addEventListener('input', e => { if (e.target.id === 'pidAppQ') { clearTimeout(pidT); const v = e.target.value; pidT = setTimeout(() => pidAppSearch(v), 250); } });
 
-/* ---------- send to phone (library pack) ---------- */
+/* ---------- export / send to device (library pack) ---------- */
 async function pidPackExport() {
   if (!S.pidlib.items.length) return;
   const prog = progressModal('Packing the P&ID library…', false); const zip = new JSZip();
@@ -265,7 +274,7 @@ async function pidPackImport(file) {
   }
   prog.close();
   S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = j.updated || new Date().toISOString(); await savePidLib();
-  toast(`${j.items.length} P&ID page(s) imported`, 4000); if (location.hash.startsWith('#/pids')) renderPidApp();
+  toast(`${j.items.length} P&ID page(s) imported`, 4000); if (location.hash.startsWith('#/pids')) route();
 }
 
 /* ---------- IMSn't: suggest P&IDs for a line, and fill a whole system ---------- */
@@ -305,11 +314,11 @@ async function pidCopyToReport(r, id) {
 /* ---------- wiring ---------- */
 const pidInput = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true, id: 'filePidApp', accept: '.pdf,.zip,image/*' });
 document.body.append(pidInput);
-pidInput.addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; if (!files.length) return; try { await pidImport(files); } catch (err) { console.error(err); toast('⚠ ' + err.message, 5000); } if (location.hash.startsWith('#/pids')) renderPidApp(); });
+pidInput.addEventListener('change', async e => { const files = [...e.target.files]; e.target.value = ''; if (!files.length) return; try { await pidImport(files); } catch (err) { console.error(err); toast('⚠ ' + err.message, 5000); } if (location.hash.startsWith('#/pids')) route(); });
 document.addEventListener('drop', async e => {
   if (!location.hash.startsWith('#/pids') || !e.dataTransfer?.files?.length) return; e.preventDefault(); document.body.classList.remove('dragging');
   try { const files = await filesFromDrop(e.dataTransfer); await pidImport(files); } catch (err) { console.error(err); toast('⚠ ' + err.message, 5000); }
-  renderPidApp();
+  route();
 });
 document.addEventListener('dragover', e => { if (location.hash.startsWith('#/pids') && e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); document.body.dataset.drop = 'Drop to add the P&IDs to the library'; document.body.classList.add('dragging'); } });
 document.addEventListener('dragleave', e => { if (location.hash.startsWith('#/pids') && !e.relatedTarget) document.body.classList.remove('dragging'); });
@@ -330,7 +339,7 @@ function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all |
 function pidAiHTML() {
   if (!S.pidlib.items.length) return '';
   const scanned = pidAiWaiting(false).length, rest = pidAiWaiting(true).length;
-  if (!S.settings.aiKey) return scanned ? `<p class="small muted">${scanned} scanned P&amp;ID${scanned > 1 ? 's have' : ' has'} no text to search. Add an AI key in Settings and use 🤖 AI scan to read ${scanned > 1 ? 'them' : 'it'}.</p>` : '';
+  if (!S.settings.aiKey) return scanned ? `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${scanned} scanned P&amp;ID${scanned > 1 ? 's have' : ' has'} no text to search. Add an AI key in Settings and use 🤖 AI scan to read ${scanned > 1 ? 'them' : 'it'}.</p></div>` : '';
   if (!rest) return `<p class="small muted">🤖 Every P&amp;ID has been AI-scanned.</p>`;
   return `<div class="card ai-queue"><b>🤖 AI scan the P&amp;IDs</b><span class="small muted">Reads line numbers and tags off the drawing images so scanned P&amp;IDs become searchable. Needs signal and uses your AI key. Only if company rules allow sending P&amp;IDs to the AI service.</span>
     <div class="grid2">${scanned ? `<button class="btn primary" data-action="pidAiScan" data-all="0">Scanned ones (${scanned})</button>` : ''}<button class="btn ${scanned ? 'ghost' : 'primary'}" data-action="pidAiScan" data-all="1">All not yet scanned (${rest})</button></div></div>`;
@@ -369,7 +378,7 @@ async function pidAiScan(all) {
     try { await pidAiOne(it); n++; if (n % 5 === 0) await savePidLib(); }
     catch (e) { err = e.message; if (/\b(401|403|No API key)\b/.test(err)) break; }
   }
-  prog.close(); await savePidLib(); renderPidApp();
+  prog.close(); await savePidLib(); route();
   toast(`🤖 ${n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} scanned${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
 }
 Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1') });
@@ -404,5 +413,49 @@ async function pidIxImport(zip) {
 }
 Object.assign(actions, {
   pidIxExport: () => pidIxExport(),
-  pidIxDel: async el => { const ix = await pidIxLoad(); const p = ix.packs[+el.dataset.i]; if (!p || !await confirmBox('Remove index', `Remove the search index “${p.name}” from this device?`, 'Remove')) return; ix.packs.splice(+el.dataset.i, 1); await DB.put('meta', ix); renderPidApp(); }
+  pidIxDel: async el => { const ix = await pidIxLoad(); const p = ix.packs[+el.dataset.i]; if (!p || !await confirmBox('Remove index', `Remove the search index “${p.name}” from this device?`, 'Remove')) return; ix.packs.splice(+el.dataset.i, 1); await DB.put('meta', ix); route(); }
 });
+
+/* ---------- pipe spec for a line number found on the P&IDs ---------- */
+const NPS_DN = { '1/2': 15, '3/4': 20, '1': 25, '11/4': 32, '1.25': 32, '11/2': 40, '1.5': 40, '2': 50, '21/2': 65, '2.5': 65, '3': 80, '4': 100, '5': 125, '6': 150, '8': 200, '10': 250, '12': 300, '14': 350, '16': 400, '18': 450, '20': 500, '22': 550, '24': 600, '26': 650, '28': 700, '30': 750, '32': 800, '36': 900, '42': 1050, '48': 1200 };
+const LINE_RE = /(?:^|[^A-Z0-9.\/])(\d{1,2}(?:\/\d|\.\d)?|\d\/\d)-([A-Z]{1,4})-(\d{3,6}[A-Z]?)-([A-Z]{0,2}\d{3,6}[A-Z]{0,2})(?![A-Z0-9])/g;
+function lineNosIn(str) { const out = []; let m; LINE_RE.lastIndex = 0; while ((m = LINE_RE.exec(str))) out.push({ raw: `${m[1]}"-${m[2]}-${m[3]}-${m[4]}`, size: m[1], svc: m[2], num: m[3], cls: m[4] }); return out; }
+function classFor(code) {
+  if (!PIPE_CLASSES?.length) return [];
+  const c = code.toUpperCase(); const ex = PIPE_CLASSES.filter(x => x.c.toUpperCase() === c); if (ex.length) return ex;
+  return PIPE_CLASSES.filter(x => x.c.toUpperCase().startsWith(c) && x.c.length - c.length <= 2).slice(0, 3);
+}
+const inRange = (txt, dn) => { const m = /DN\s*(\d+)\s*-\s*(\d+)/i.exec(txt || ''); return !m || (dn >= +m[1] && dn <= +m[2]); };
+function pidSpecHTML(q, res) {
+  const vars = pidQueryVariants(q).map(v => v[0]); const found = new Map(); const idx = PIDIDX || new Map();
+  const take = s => lineNosIn(s).forEach(l => { const k = pnorm(l.raw); if (vars.some(v => k.includes(v)) && !found.has(k)) found.set(k, l); });
+  for (const x of res) {
+    if (x.remote) { const ix = x.pack.items[+x.it.id.slice(3)]; (ix?.rows || []).forEach(take); (ix?.ai || []).forEach(take); continue; }
+    const P = idx.get(x.it.id); if (P) { x.boxes.forEach(i => take(P.norm[i])); P.rows.forEach(r => { if (vars.some(v => r.n.includes(v))) take(r.n); }); }
+    (x.it.ai?.lines || []).map(pnorm).forEach(take);
+  }
+  if (!found.size) return '';
+  const list = [...found.values()].sort((a, b) => a.cls.localeCompare(b.cls) || (NPS_DN[b.size] || 0) - (NPS_DN[a.size] || 0)).slice(0, 10);
+  const classes = [...new Set(list.map(l => l.cls.toUpperCase()))];
+  const summary = `<div class="pid-spec-sum">🔧 <b>${list.length}</b> line number${list.length > 1 ? 's' : ''} found · <b>${classes.length}</b> pipe class${classes.length > 1 ? 'es' : ''}: ${classes.map(esc).join(', ')}${classes.length > 1 ? ' – <b>spec change</b> along this line' : ''}</div>`;
+  return summary + list.map(l => {
+    const dn = NPS_DN[l.size.replace(/\s/g, '')] || null; const cands = classFor(l.cls);
+    const head = `<b>🔧 ${esc(l.raw)}</b><br><small>Size ${esc(l.size)}"${dn ? ` (DN${dn})` : ''} · service ${esc(l.svc)} · line ${esc(l.num)} · class <b>${esc(l.cls)}</b></small>`;
+    if (!PIPE_CLASSES?.length) return `<div class="pid-spec">${head}<br><small class="muted">Load the data pack (Settings) to see the pipe spec for class ${esc(l.cls)}.</small></div>`;
+    if (!cands.length) return `<div class="pid-spec">${head}<br><small class="pid-miss">Class ${esc(l.cls)} isn't in the data pack.</small></div>`;
+    return `<div class="pid-spec">${head}${cands.map(c => {
+      const L = dn ? lineData({ c: { general: { pipeClassId: c.id } } }, dn) : null;
+      const pipe = (c.pipe || []).find(t => inRange(t, dn)) || (c.pipe || [])[0] || ''; const gk = (c.gk || []).find(g => inRange(g[1], dn)) || (c.gk || [])[0];
+      const rows = [
+        ['Class', `${esc(c.c)}${c.c.toUpperCase() !== l.cls.toUpperCase() ? ' <small class="pid-miss">(closest match)</small>' : ''} · ${esc(c.s)}${c.rev ? ' rev ' + esc(c.rev) : ''}`],
+        ['Material', `${esc(c.m)} · Class ${esc(c.r)} · CA ${esc(c.ca)} mm`],
+        pipe ? ['Pipe', esc(pipe.replace(/^DN\s*\d+\s*-\s*\d+:\s*/i, ''))] : null,
+        L?.sch ? ['Wall', `Sch ${esc(L.sch)}${L.nwt != null ? ` · nominal ${L.nwt} mm` : ''}${L.ps != null ? ` · <b>PS min ${L.ps} mm</b>` : ''}${L.od ? ` · OD ${L.od} mm` : ''}`] : null,
+        dn && FLANGE_DIMS[c.r]?.[dn] ? ['Flange', (fd => `ASME B16.5 Class ${esc(c.r)} · OD ${fd.od} mm · thickness ${fd.tf} mm · bolt circle ${fd.bc} mm · ${fd.n} holes`)(FLANGE_DIMS[c.r][dn])] : null,
+        L?.bolt ? ['Fasteners', `${L.bolt.n} × ${esc(L.bolt.dia)}" (${L.bolt.diaMm} mm) studs, ${L.bolt.len} mm long, ${esc(L.bolt.thread)}${(c.studs || []).length ? ' · ' + c.studs.map(esc).join(' / ') : ''}<br>Nut A/F ${esc(L.bolt.afIn)} (${L.bolt.afMm} mm) · <b>reject below ${L.bolt.dia90} mm stud / ${L.bolt.af90} mm A/F</b> (90%)`] : null,
+        gk ? ['Gasket', `${esc(gk[0])} – ${esc(gk[2])}`] : null
+      ].filter(Boolean);
+      return `<table class="pid-spec-t">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table>`;
+    }).join('')}<small class="muted">Class read from the P&amp;ID line number – check it against the line list / ECH.</small></div>`;
+  }).join('');
+}
