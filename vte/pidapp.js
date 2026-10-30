@@ -97,6 +97,7 @@ function pidDescription(items, dwgNo) {
 async function pidDescExisting() {
   let n = 0;
   for (const it of S.pidlib.items) {
+    if (!it._nm) { it._nm = 1; if (it.dwgNo && pnorm(it.title).includes(pnorm(it.dwgNo))) it.title = it.dwgNo + ((it.title.match(/ – page \d+$/) || [''])[0]); }
     if (it._desc) continue; it._desc = 1;
     if (!it.desc && it.hasText) { const t = await DB.get('meta', 'pidtxt_' + it.id); if (t) it.desc = pidDescription(t.items, it.dwgNo); }
     if (!it.desc && it.ai?.title) it.desc = pidAiDesc(it.ai.title);
@@ -137,14 +138,14 @@ async function pidImport(files) {
         try { await doc.destroy(); } catch { }
       } else { prog.set(k, files.length, f.name); const img = await importImage(f, 3200); pages.push({ blob: img.blob, w: img.w, h: img.h, items: [], page: 1, of: 1 }); }
       for (const pg of pages) {
-        const tb = pidTitleBlock(pg.items, base); if (tidy.rev) tb.rev = tidy.rev; const title = base + (pg.of > 1 ? ` – page ${pg.page}` : '');
+        const tb = pidTitleBlock(pg.items, base); if (tidy.rev) tb.rev = tidy.rev; const title = (tb.dwgNo || base) + (pg.of > 1 ? ` – page ${pg.page}` : '');
         const old = S.pidlib.items.find(x => (tb.dwgNo && x.dwgNo === tb.dwgNo && (x.page || 1) === pg.page) || (x.src === f.name && (x.page || 1) === pg.page));
         const keepAi = old && old.ai && pnorm(old.rev) === pnorm(tb.rev) ? old.ai : null;
         if (old) { await pidDelete(old, true); updated++; } else added++;
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
         const hasText = pg.items.length > 2; if (!hasText) noText++;
         if (hasText) { await DB.put('meta', { id: 'pidtxt_' + id, items: pg.items }); PIDIDX.set(id, buildPidRows(pg.items)); }
-        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, desc: (hasText ? pidDescription(pg.items, tb.dwgNo) : '') || (keepAi ? pidAiDesc(keepAi.title) : ''), _desc: 1, hasText, ...(keepAi ? { ai: keepAi } : {}) });
+        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, desc: (hasText ? pidDescription(pg.items, tb.dwgNo) : '') || (keepAi ? pidAiDesc(keepAi.title) : ''), _desc: 1, _nm: 1, hasText, ...(keepAi ? { ai: keepAi } : {}) });
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
@@ -210,7 +211,7 @@ async function openPidViewer(id, boxes = [], q = '') {
   const blob = await getBlob(it.blobId); if (!blob) return toast('Drawing missing – re-import it');
   const url = URL.createObjectURL(blob); const P = (await pidIndex()).get(id);
   const ov = document.createElement('div'); ov.className = 'pidv';
-  ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
+  ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
       <span class="pidv-z"><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
@@ -237,17 +238,17 @@ async function openPidViewer(id, boxes = [], q = '') {
 /* ---------- the app screen ---------- */
 function pidRowHTML(x, opts = {}) {
   const it = x.it || x;
-  if (x.remote) return `<div class="pid-item remote"><div class="pid-noimg">📄</div><span><b>${esc(it.dwgNo || it.title)}</b>${it.page > 1 ? ` <small>(page ${it.page})</small>` : ''}${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${esc(it.title)}${it.rev ? ' · rev ' + esc(it.rev) : ''} · from index “${esc(x.pack.name)}”</small>
+  if (x.remote) return `<div class="pid-item remote"><div class="pid-noimg">📄</div><span><b>${esc(it.dwgNo || it.title)}</b>${it.page > 1 ? ` <small>(page ${it.page})</small>` : ''}${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${it.dwgNo && it.title && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? esc(it.title) + ' · ' : ''}${it.rev ? 'rev ' + esc(it.rev) : 'rev –'} · from index “${esc(x.pack.name)}”</small>
     <br><small class="pid-miss">⚠ Not in your P&amp;ID library – get the latest revision from document control.</small><br><small class="pid-hit">${x.rhits ? `on ${x.rhits} label${x.rhits > 1 ? 's' : ''} – ` : ''}${esc(x.why)}</small></span></div>`;
   return `<button class="pid-item" data-action="${opts.pick ? 'pickPid' : 'pidOpen'}" data-id="${it.id}" ${x.boxes ? `data-q="${esc(opts.q || '')}"` : ''}><img src="${it.thumb}" alt="">
-    <span><b>${esc(it.title)}</b>${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${[it.dwgNo, it.rev && 'rev ' + it.rev].filter(Boolean).map(esc).join(' · ') || esc(it.src || '')}${!it.hasText ? ' · <i>scanned – no text</i>' : ''}</small>
+    <span><b>${esc(it.title)}</b>${it.desc ? `<br><small class="pid-desc">${esc(it.desc)}</small>` : ''}<br><small>${[it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? it.dwgNo : '', it.rev ? 'rev ' + it.rev : 'rev –'].filter(Boolean).map(esc).join(' · ')}${!it.hasText ? ' · <i>scanned – no text</i>' : ''}</small>
     ${x.idxRev ? `<br><small class="pid-miss">⚠ Index “${esc(x.idxPack)}” lists rev ${esc(x.idxRev)} – your copy is rev ${esc(it.rev)}. Check document control for the latest.</small>` : ''}
     ${x.boxes ? `<br><small class="pid-hit">${x.hits ? `${x.hits} hit${x.hits > 1 ? 's' : ''} – ${esc(x.why)}` : 'matches the ' + esc(x.why)}</small>` : ''}</span></button>`;
 }
 let PIDRES = {};
 function renderPidApp() {
   if (S.pidlib.items.some(it => !it._tidy)) pidTidyExisting().then(n => { if (n) { toast(`✨ ${n} P&ID name${n > 1 ? 's' : ''} tidied (“_Publication” suffix moved to the revision)`, 4000); if (location.hash.startsWith('#/pids')) renderPidApp(); } });
-  if (S.pidlib.items.some(it => !it._desc)) pidDescExisting().then(n => { if (n) { toast(`📝 Descriptions read from ${n} P&ID title block${n > 1 ? 's' : ''}`, 3500); if (location.hash === '#/pids') renderPidApp(); } });
+  if (S.pidlib.items.some(it => !it._desc || !it._nm)) pidDescExisting().then(n => { if (n) { toast(`📝 Descriptions read from ${n} P&ID title block${n > 1 ? 's' : ''}`, 3500); if (location.hash === '#/pids') renderPidApp(); } });
   setTop('P&I Spy', `${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
@@ -583,3 +584,6 @@ async function assetImportRun(zip, a, pj, r) {
   if (res?.v === 'scan') await pidAiScan(true);
   route();
 }
+/* size the description boxes to their text whenever a P&ID list is drawn */
+const fitPidDesc = () => document.querySelectorAll('.pid-desc-in').forEach(t => { if (t.offsetParent && !t.dataset.fit) { t.dataset.fit = 1; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } });
+new MutationObserver(() => requestAnimationFrame(fitPidDesc)).observe(document.getElementById('main') || document.body, { childList: true, subtree: true });

@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.9.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -1319,8 +1319,8 @@ function pidListHTML(q, pick) {
   const items = S.pidlib.items.filter(x => !q || [x.title, x.src, x.dwgNo, x.desc].join(' ').toLowerCase().includes(q));
   if (!S.pidlib.items.length) return `<p class="small muted" style="padding:10px">Library is empty – import your P&IDs ${pick ? 'in Settings → P&ID library' : 'with the button above'}.</p>`;
   return items.map(x => pick
-    ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b>${x.desc ? `<br><small class="pid-desc">${esc(x.desc)}</small>` : ''}<br><small>${[x.dwgNo, x.rev && 'rev ' + x.rev].filter(Boolean).map(esc).join(' · ') || esc(x.src || '')}</small></span></button>`
-    : `<div class="pid-item"><img src="${x.thumb}" alt="" data-action="pidOpen" data-id="${x.id}" style="cursor:zoom-in"><span style="flex:1"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}"><input type="text" class="pid-desc-in" data-piddesc="${x.id}" value="${esc(x.desc || '')}" placeholder="Description (from the title block)"><small>${[x.dwgNo, x.rev && 'rev ' + x.rev].filter(Boolean).map(esc).join(' · ')}${x.dwgNo || x.rev ? ' · ' : ''}${esc(x.src || '')} · added ${esc((x.added || '').slice(0, 10))}${x.hasText === false ? ' · <i>scanned – no text</i>' : ''}</small></span><button class="btn ghost sm" data-action="pidOpen" data-id="${x.id}" aria-label="View">👁</button><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';
+    ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b>${x.desc ? `<br><small class="pid-desc">${esc(x.desc)}</small>` : ''}<br><small>${[x.dwgNo && !pnorm(x.title).startsWith(pnorm(x.dwgNo)) ? x.dwgNo : '', x.rev ? 'rev ' + x.rev : 'rev –'].filter(Boolean).map(esc).join(' · ')}</small></span></button>`
+    : `<div class="pid-item lib"><img src="${x.thumb}" alt="" data-action="pidOpen" data-id="${x.id}" style="cursor:zoom-in"><span class="pid-ed"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}" aria-label="P&ID name"><textarea class="pid-desc-in" data-piddesc="${x.id}" rows="${Math.max(1, Math.ceil((x.desc || '').length / 30))}" placeholder="Description (from the title block)" aria-label="Description">${esc(x.desc || '')}</textarea><small>${[x.dwgNo && !pnorm(x.title).startsWith(pnorm(x.dwgNo)) ? x.dwgNo : '', x.rev ? 'rev ' + x.rev : 'rev –'].filter(Boolean).map(esc).join(' · ')}${x.hasText === false ? ' · <i>scanned – no text</i>' : ''}</small></span><span class="pid-btns"><button class="btn ghost sm" data-action="pidOpen" data-id="${x.id}" aria-label="View">👁</button><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></span></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';
 }
 function pidPickerHTML() {
   return `<div class="card" style="margin-top:6px"><div class="pid-disc sm">⚠ <b>Uncontrolled copies</b> – check the latest revision. Library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}. The report gets its own copy; the library original stays clean.</div><div id="pidSuggest"></div><input type="search" id="pidQ" placeholder="Search line number, P&ID number or title" autocomplete="off"><div id="pidList" class="pidlist">${pidListHTML('', true)}</div></div>`;
@@ -1488,7 +1488,7 @@ document.addEventListener('input', e => {
   if (el.dataset.attrev) { const a = cur.report.att.find(x => x.id === el.dataset.attrev); if (a) { a.revOk = el.checked; persist('report'); } return; }
   if (el.id === 'pidQ') { $('#pidList').innerHTML = pidListHTML(el.value, true); const q = el.value; if (typeof pidSearch === 'function' && q.trim().length >= 3) { clearTimeout(cur._pq); cur._pq = setTimeout(async () => { const res = await pidSearch(q); if ($('#pidQ')?.value === q) $('#pidList').innerHTML = res.length ? res.slice(0, 40).map(x => pidRowHTML(x, { pick: true })).join('') : '<p class="small muted" style="padding:10px">No match.</p>'; }, 250); } return; }
   if (el.id === 'pidLibQ') { $('#pidLibList').innerHTML = pidListHTML(el.value, false); return; }
-  if (el.dataset.piddesc) { const it = S.pidlib.items.find(x => x.id === el.dataset.piddesc); if (it) { it.desc = el.value.trim(); savePidLib(); } return; }
+  if (el.dataset.piddesc) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; const it = S.pidlib.items.find(x => x.id === el.dataset.piddesc); if (it) { it.desc = el.value.replace(/\s+/g, ' ').trim(); savePidLib(); } return; }
   if (el.dataset.pidtitle) { const it = S.pidlib.items.find(x => x.id === el.dataset.pidtitle); if (it) { it.title = el.value; savePidLib(); } return; }
   if (el.id === 'classQ') { $('#classList').innerHTML = classListHTML(el.value); return; }
   if (!el.dataset.path) return;
