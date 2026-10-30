@@ -5,9 +5,17 @@ const ISO_AXES = { U: [1, 0], V: [0, 1], W: [1, 1] };   // lattice directions: U
 const ISO_COMPS = [
   ['valve', '⋈', 'Valve'], ['ball', '⦻', 'Ball valve'], ['check', '▶|', 'Check valve'], ['control', '⊼', 'Control valve'], ['psv', 'PSV', 'Relief valve'],
   ['flange', '‖', 'Flange'], ['blind', '▮', 'Blind / spade'], ['reducer', '◁', 'Reducer'], ['weld', '•', 'Weld'], ['support', '△', 'Support'],
-  ['cap', '⊣', 'Cap / end'], ['instr', '◯', 'Instrument'], ['flow', '➤', 'Flow arrow'], ['lineno', '▭', 'Line number'], ['text', 'T', 'Label'], ['mark', '⚠', 'Anomaly mark']
+  ['cap', '⊣', 'Cap / end'], ['deck', '▱', 'Deck / wall penetration'], ['offpage', '⇥', 'Continuation (off page / other drawing)'], ['instr', '◯', 'Instrument'], ['flow', '➤', 'Flow arrow'], ['lineno', '▭', 'Line number'], ['text', 'T', 'Label'], ['mark', '⚠', 'Anomaly mark']
 ];
 const ISO_LBL_ROT = [null, 0, 30, -30, 60, -60, 90];   // label rotation cycle (null = along the pipe)
+// tap-to-turn orientations (components stay snapped to the pipe); names shown as a toast
+const ISO_ORIENT = {
+  flow: ['Flow →', 'Flow reversed'], check: ['Check valve →', 'Check valve reversed'], cap: ['Cap', 'Cap flipped'], offpage: ['Continuation →', 'Continuation reversed'],
+  reducer: ['Concentric reducer', 'Concentric reducer (reversed)', 'Eccentric – flat one side', 'Eccentric – flat other side', 'Eccentric reversed – flat one side', 'Eccentric reversed – flat other side'],
+  control: ['Actuator up', 'Actuator down', 'Actuator to one side', 'Actuator to other side'], psv: ['Outlet up', 'Outlet down', 'Outlet to one side', 'Outlet to other side'],
+  instr: null, deck: null
+};
+const ISO_LS = { solid: 'Solid line', dashed: 'Dashed – runs off the page / continues', dotted: 'Dotted – existing / joins another drawing' };
 const isoKey = n => `${(+n[0]).toFixed(3)},${(+n[1]).toFixed(3)}`;
 
 function openIsoTool(r, att) {
@@ -21,15 +29,15 @@ function openIsoTool(r, att) {
     ov.innerHTML = `<div class="annot-top"><button class="btn ghost" data-a="cancel">Cancel</button><span>Isometric sketch – ${esc(r.h?.tagNo || '')}</span><button class="btn primary" data-a="save">Save</button></div>
       <div class="annot-stage"><canvas></canvas><div class="iso-zoom"><button class="tbtn sm" data-a="zin">＋</button><button class="tbtn sm" data-a="zout">－</button><button class="tbtn sm" data-a="fit">⤢</button></div></div>
       <div class="annot-tools">
-        <div class="row tools"><button class="tbtn" data-tool="pipe">━<small>Pipe</small></button><button class="tbtn" data-tool="pipe45">⟋<small>45° pipe</small></button><button class="tbtn" data-tool="bend">⤿<small>Bend</small></button><button class="tbtn" data-tool="select">☝<small>Select</small></button>
+        <div class="row tools"><button class="tbtn" data-tool="pipe">━<small>Pipe</small></button><button class="tbtn" data-tool="pipeD">┅<small>Dashed</small></button><button class="tbtn" data-tool="pipeO">┈<small>Dotted</small></button><button class="tbtn" data-tool="pipe45">⟋<small>45° pipe</small></button><button class="tbtn" data-tool="bend">⤿<small>Bend</small></button><button class="tbtn" data-tool="select">☝<small>Select</small></button>
           ${ISO_COMPS.map(([k, i, l]) => `<button class="tbtn" data-tool="${k}" title="${l}">${i}<small>${l.split(' ')[0]}</small></button>`).join('')}
           <span class="tsep">Markup</span>${drawToolBtns('m_')}</div>
         <div class="row colors">${colorWidthRow()}</div>
-        <div class="row acts"><button class="btn ghost sm" data-a="undo">↶ Undo</button><button class="btn ghost sm" data-a="del">🗑 Delete</button><button class="btn ghost sm" data-a="label">✎ Label</button><button class="btn ghost sm" data-a="rot" hidden>⟳ Rotate label</button><button class="btn ghost sm" data-a="clear">Clear all</button></div>
+        <div class="row acts"><button class="btn ghost sm" data-a="undo">↶ Undo</button><button class="btn ghost sm" data-a="del">🗑 Delete</button><button class="btn ghost sm" data-a="label">✎ Label</button><button class="btn ghost sm" data-a="turn" hidden>⟲ Turn</button><button class="btn ghost sm" data-a="ls" hidden>┅ Line style</button><button class="btn ghost sm" data-a="rot" hidden>⟳ Rotate label</button><button class="btn ghost sm" data-a="clear">Clear all</button></div>
         <div class="iso-hint small"></div>
       </div>`;
     document.body.append(ov); document.body.classList.add('noscroll');
-    ov._dbg = () => ({ doc, toScr, s, labelHits });   // used by automated tests
+    ov._dbg = () => ({ doc, toScr, s, labelHits, sel });   // used by automated tests
     const cv = $('canvas', ov), stage = $('.annot-stage', ov), ctx = cv.getContext('2d'), hint = $('.iso-hint', ov);
     let W = 0, H = 0, dpr = 1;
     const toScr = (i, j) => [ox + i * ISO_C30 * s, oy + (j - 0.5 * i) * s];
@@ -76,7 +84,7 @@ function openIsoTool(r, att) {
     function labelGeom(c, scr, sz) {
       const [x, y] = scr(c.i, c.j); const d = unit(dirScr(c.ax || 'U')); let n = perpOf(c.ax || 'U'); if (n[1] > 0 || (n[1] === 0 && n[0] < 0)) n = [-n[0], -n[1]];
       const atAnchor = ['text', 'instr'].includes(c.t);
-      const off = c.lx != null ? [c.lx, c.ly] : atAnchor ? [0, 0] : c.t === 'lineno' ? [n[0] * 0.42, n[1] * 0.42] : [n[0] * 0.62, n[1] * 0.62];
+      const off = c.lx != null ? [c.lx, c.ly] : atAnchor ? [0, 0] : c.t === 'lineno' ? [n[0] * 0.42, n[1] * 0.42] : c.t === 'deck' ? [n[0] * 1.0, n[1] * 1.0] : [n[0] * 0.62, n[1] * 0.62];
       let a = Math.atan2(d[1], d[0]); if (a > Math.PI / 2) a -= Math.PI; if (a < -Math.PI / 2) a += Math.PI;
       const rot = c.lr != null ? -c.lr * Math.PI / 180 : ['text', 'instr', 'mark'].includes(c.t) ? 0 : a;
       return { x, y, cx: x + off[0] * sz, cy: y + off[1] * sz, rot };
@@ -122,7 +130,8 @@ function openIsoTool(r, att) {
       doc.pipes.forEach((p, pi) => {
         const A = scr(...p.a), B = scr(...p.b), L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1, u = [(B[0] - A[0]) / L, (B[1] - A[1]) / L];
         if (p.d45 != null) hatch45(g, A, B, p.d45, sz);
-        g.beginPath(); g.moveTo(A[0] + u[0] * trim[pi].a, A[1] + u[1] * trim[pi].a); g.lineTo(B[0] - u[0] * trim[pi].b, B[1] - u[1] * trim[pi].b); g.stroke();
+        g.save(); if (p.ls === 'dashed') g.setLineDash([lw * 3.2, lw * 2]); else if (p.ls === 'dotted') { g.setLineDash([0.01, lw * 2]); g.lineWidth = lw * 1.15; }
+        g.beginPath(); g.moveTo(A[0] + u[0] * trim[pi].a, A[1] + u[1] * trim[pi].a); g.lineTo(B[0] - u[0] * trim[pi].b, B[1] - u[1] * trim[pi].b); g.stroke(); g.restore();
       });
       curves.forEach(c => {
         g.beginPath(); g.moveTo(...c.P1); g.quadraticCurveTo(...c.N, ...c.P2); g.stroke();
@@ -148,7 +157,11 @@ function openIsoTool(r, att) {
       g.restore();
     }
     function drawComp(g, c, scr, sz, isSel) {
-      const [x, y] = scr(c.i, c.j); const d = unit(dirScr(c.ax || 'U')); const n = perpOf(c.ax || 'U');
+      const [x, y] = scr(c.i, c.j); const ax = c.ax || 'U'; const o = c.o || 0; let d = unit(dirScr(ax)); let n = perpOf(ax);
+      const others = ['U', 'V', 'W'].filter(a => a !== ax);
+      if (['flow', 'check', 'cap', 'offpage'].includes(c.t) && o % 2) d = [-d[0], -d[1]];
+      if (c.t === 'reducer' && [1, 4, 5].includes(o)) d = [-d[0], -d[1]];
+      if (['control', 'psv'].includes(c.t)) { const alt = unit(dirScr(others.find(a => a !== (ax === 'V' ? 'U' : 'V')))); n = [[n[0], n[1]], [-n[0], -n[1]], [alt[0], alt[1]], [-alt[0], -alt[1]]][o % 4]; }
       const h = sz * 0.32, w = sz * 0.22; const P = (a, b) => [x + d[0] * a + n[0] * b, y + d[1] * a + n[1] * b];
       g.save(); g.lineWidth = Math.max(1.6, sz * 0.05); g.strokeStyle = '#111'; g.fillStyle = '#fff'; g.lineJoin = 'round';
       const bow = (fillL, fillR) => {
@@ -164,7 +177,22 @@ function openIsoTool(r, att) {
         case 'flange': g.lineWidth *= 1.4; [-0.07, 0.07].forEach(o => { g.beginPath(); g.moveTo(...P(o * sz, w * 1.2)); g.lineTo(...P(o * sz, -w * 1.2)); g.stroke(); }); break;
         case 'blind': g.beginPath(); g.moveTo(...P(-0.05 * sz, w * 1.3)); g.lineTo(...P(-0.05 * sz, -w * 1.3)); g.lineTo(...P(0.05 * sz, -w * 1.3)); g.lineTo(...P(0.05 * sz, w * 1.3)); g.closePath(); g.fillStyle = '#111'; g.fill(); break;
         case 'cap': g.lineWidth *= 2.2; g.beginPath(); g.moveTo(...P(0, w)); g.lineTo(...P(0, -w)); g.stroke(); break;
-        case 'reducer': g.beginPath(); g.moveTo(...P(-h, w)); g.lineTo(...P(-h, -w)); g.lineTo(...P(h, -w * 0.45)); g.lineTo(...P(h, w * 0.45)); g.closePath(); g.fill(); g.stroke(); break;
+        case 'reducer': { const ecc = o >= 2 ? ((o % 2) ? -1 : 1) : 0; g.beginPath(); g.moveTo(...P(-h, w)); g.lineTo(...P(-h, -w));
+          if (ecc) { g.lineTo(...P(h, ecc > 0 ? -w : -w * 0.1)); g.lineTo(...P(h, ecc > 0 ? w * 0.1 : w)); } else { g.lineTo(...P(h, -w * 0.45)); g.lineTo(...P(h, w * 0.45)); }
+          g.closePath(); g.fill(); g.stroke(); if (ecc) { g.font = `bold ${Math.max(8, sz * 0.15)}px Arial`; g.fillStyle = '#555'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('ECC', ...P(0, (ecc > 0 ? w : -w) * 2.1)); } break; }
+        case 'deck': {   // plane across the pipe, spanned by the other two iso axes; the pipe passes through it
+          const a1 = unit(dirScr(others[0])), a2 = unit(dirScr(others[1])); const r = sz * 0.62, lw = Math.max(2.5, sz * 0.09);
+          const C = (p, q) => [x + (a1[0] * p + a2[0] * q) * r, y + (a1[1] * p + a2[1] * q) * r];
+          g.beginPath(); g.moveTo(...C(-1, -1)); g.lineTo(...C(1, -1)); g.lineTo(...C(1, 1)); g.lineTo(...C(-1, 1)); g.closePath();
+          g.fillStyle = 'rgba(205,205,205,.92)'; g.fill(); g.save(); g.clip(); g.strokeStyle = 'rgba(80,80,80,.55)'; g.lineWidth = 1;
+          for (let k = -6; k <= 6; k++) { g.beginPath(); g.moveTo(...C(k / 3 - 2, -1.2)); g.lineTo(...C(k / 3 + 0.4, 1.2)); g.stroke(); } g.restore();
+          g.beginPath(); g.moveTo(...C(-1, -1)); g.lineTo(...C(1, -1)); g.lineTo(...C(1, 1)); g.lineTo(...C(-1, 1)); g.closePath(); g.strokeStyle = '#333'; g.lineWidth = Math.max(1.4, sz * 0.035); g.stroke();
+          const up = d[1] < 0 || (d[1] === 0 && d[0] > 0) ? d : [-d[0], -d[1]];   // the half of the pipe in front of the plane
+          g.lineWidth = lw; g.strokeStyle = '#111'; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + up[0] * r * 1.25, y + up[1] * r * 1.25); g.stroke();
+          g.beginPath(); g.ellipse(x, y, lw * 1.4, lw * 0.8, Math.atan2(a1[1], a1[0]), 0, 7); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 1.2; g.stroke(); break; }
+        case 'offpage': {   // open-ended continuation flag pointing along the pipe
+          const L = sz * 0.55; g.fillStyle = '#fff'; g.beginPath(); g.moveTo(...P(0, w * 1.1)); g.lineTo(...P(L * 0.7, w * 1.1)); g.lineTo(...P(L, 0)); g.lineTo(...P(L * 0.7, -w * 1.1)); g.lineTo(...P(0, -w * 1.1)); g.closePath(); g.fill(); g.lineWidth = Math.max(1.6, sz * 0.045); g.stroke();
+          g.setLineDash([3, 3]); g.beginPath(); g.moveTo(...P(0, w * 1.1)); g.lineTo(...P(0, -w * 1.1)); g.stroke(); break; }
         case 'weld': g.beginPath(); g.arc(x, y, Math.max(3, sz * 0.08), 0, 7); g.fillStyle = '#111'; g.fill(); break;
         case 'support': { const a = sz * 0.18; g.beginPath(); g.moveTo(x, y + sz * 0.06); g.lineTo(x - a, y + a * 1.8); g.lineTo(x + a, y + a * 1.8); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(x - a * 1.5, y + a * 1.8); g.lineTo(x + a * 1.5, y + a * 1.8); g.stroke(); break; }
         case 'instr': g.beginPath(); g.arc(x, y, sz * 0.28, 0, 7); g.fill(); g.stroke(); break;
@@ -188,11 +216,18 @@ function openIsoTool(r, att) {
       $('.row.colors', ov).hidden = !(tool.startsWith('m_') || sel?.type === 'mark');
       $('[data-a="label"]', ov).innerHTML = sel?.type === 'mark' ? '✎ Edit text' : '✎ Label';
       $('[data-a="rot"]', ov).hidden = !(sel?.type === 'label' || (sel?.type === 'comp' && doc.comps[sel.idx]?.label));
-      hint.textContent = tool.startsWith('m_') ? (TOOL_HINTS[tool.slice(2)] || 'Drag to draw. Pick a colour and thickness below.') + ' Two fingers to pan / zoom.' : tool === 'pipe' ? 'Drag from a grid point to draw a pipe run – it snaps to the 3 isometric directions. Drag from an end to continue. Two fingers to pan / zoom.'
+      $('[data-a="turn"]', ov).hidden = !(sel?.type === 'comp' && ISO_ORIENT[doc.comps[sel.idx]?.t]);
+      $('[data-a="ls"]', ov).hidden = sel?.type !== 'pipe';
+      hint.textContent = tool === 'pipeD' ? 'Dashed pipe – for a line that runs off the page or continues elsewhere. Add a ⇥ Continuation flag to say where it goes.'
+        : tool === 'pipeO' ? 'Dotted pipe – for existing / future pipework or a line that joins a different drawing.'
+        : tool === 'deck' ? 'Tap on a pipe where it goes through a deck or wall. The plane is drawn across the pipe.'
+        : tool === 'offpage' ? 'Tap near the end of a pipe to show where it continues (e.g. "Cont. on DWG 1234"). Tap it again in Select to flip it.'
+        : ['flow', 'reducer', 'check', 'control', 'psv'].includes(tool) ? 'Tap on a pipe to place – it snaps to the pipe. In Select, tap it again (or ⟲ Turn) to turn it round.'
+        : tool.startsWith('m_') ? (TOOL_HINTS[tool.slice(2)] || 'Drag to draw. Pick a colour and thickness below.') + ' Two fingers to pan / zoom.' : tool === 'pipe' ? 'Drag from a grid point to draw a pipe run – it snaps to the 3 isometric directions. Drag from an end to continue. Two fingers to pan / zoom.'
         : tool === 'pipe45' ? 'Drag to draw a 45° offset – the hatched triangle shows the plane it is in. Start from a pipe end to join it on.'
         : tool === 'bend' ? 'Tap a corner to choose elbow, pulled bend or sharp.'
         : tool === 'lineno' ? 'Tap on a pipe to add a line number – it sits beside the pipe and reads along it.'
-        : tool === 'select' ? 'Tap to select. Drag a label to move it (an arrow appears if it moves away), ⟳ to rotate it. Tap a corner to change the bend.' : 'Tap on a pipe to place – it lines up with the pipe direction. Drag its label in Select to move it.';
+        : tool === 'select' ? 'Tap to select – tap a selected fitting again to turn it (flow arrows, reducers, check valves…). Drag a label to move it, ⟳ to rotate it. Tap a corner to change the bend. Select a pipe for ┅ Line style.' : 'Tap on a pipe to place – it lines up with the pipe direction. Drag its label in Select to move it.';
     }
     const snapNode = (x, y) => {
       let best = null, bd = 16; doc.pipes.forEach(p => [p.a, p.b].forEach(n => { const [sx, sy] = toScr(...n); const d = Math.hypot(sx - x, sy - y); if (d < bd) { bd = d; best = n; } }));
@@ -238,6 +273,7 @@ function openIsoTool(r, att) {
       doc.pipes.forEach((p, idx) => { const A = toScr(...p.a), B = toScr(...p.b); const dd = distSeg(x, y, A[0], A[1], B[0], B[1]); if (!best || dd < best.d) best = { idx, d: dd, A, B, p }; });
       return best;
     }
+    function turnComp(c) { const st = ISO_ORIENT[c.t]; if (!st) return; snapState(); c.o = ((c.o || 0) + 1) % st.length; if (!c.o) delete c.o; toast(st[c.o || 0], 1100); }
     const snapState = () => { hist.push(JSON.stringify(doc)); if (hist.length > 80) hist.shift(); };
     function askLabel(initial, title) {
       return new Promise(res => {
@@ -254,7 +290,7 @@ function openIsoTool(r, att) {
       e.preventDefault(); cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, pos(e));
       if (pts.size === 2) { if (drag?.mode === 'mark') { doc.marks.pop(); hist.pop(); } drag = null; const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; draw(); return; }
       const [x, y] = pos(e);
-      if (tool === 'pipe') { drag = { mode: 'pipe', start: snapNode(x, y), end: null }; draw(); return; }
+      if (['pipe', 'pipeD', 'pipeO'].includes(tool)) { drag = { mode: 'pipe', ls: tool === 'pipeD' ? 'dashed' : tool === 'pipeO' ? 'dotted' : null, start: snapNode(x, y), end: null }; draw(); return; }
       if (tool === 'pipe45') { drag = { mode: 'pipe45', start: snapNode(x, y), end: null }; draw(); return; }
       if (tool === 'bend') { const k = cornerAt(x, y); if (k) await chooseBend(k); else toast('Tap on a corner where two pipes meet'); return; }
       const mp = toMk(x, y);
@@ -264,14 +300,15 @@ function openIsoTool(r, att) {
         snapState(); const sh = newShape(mt, mp[0], mp[1], color, wIdx); doc.marks.push(sh); sel = null; drag = { mode: 'mark', sh }; draw(); return;
       }
       if (tool === 'select') {
-        sel = null; let bestC = null;
+        const sel0 = sel; sel = null; let bestC = null;
         for (let k = doc.marks.length - 1; k >= 0; k--) if (hitShape(ctx, doc.marks[k], x - ox, y - oy, s * MK, s * MK, 14)) { sel = { type: 'mark', idx: k }; snapState(); drag = { mode: 'move', p: mp, moved: false }; draw(); return; }
-        const li = hitLabel(x, y);
+        const onComp = doc.comps.some(c => !['text', 'lineno'].includes(c.t) && Math.hypot(toScr(c.i, c.j)[0] - x, toScr(c.i, c.j)[1] - y) < s * 0.3);   // a tap right on a fitting beats a nearby label
+        const li = onComp ? -1 : hitLabel(x, y);
         if (li >= 0) { const c = doc.comps[li]; const G = labelGeom(c, toScr, s); sel = { type: 'label', idx: li }; snapState(); drag = { mode: 'lmove', c, start: [x, y], o: [(G.cx - G.x) / s, (G.cy - G.y) / s], moved: false }; draw(); return; }
         const ck = cornerAt(x, y);
         if (ck && !doc.comps.some(c => { const [cx, cy] = toScr(c.i, c.j); return Math.hypot(cx - x, cy - y) < s * 0.3; })) { await chooseBend(ck); return; }
         doc.comps.forEach((c, idx) => { const [cx, cy] = toScr(c.i, c.j); const dd = Math.hypot(cx - x, cy - y); if (dd < s * 0.5 && (!bestC || dd < bestC.d)) bestC = { idx, d: dd }; });
-        if (bestC) sel = { type: 'comp', idx: bestC.idx }; else { const np = nearestPipe(x, y); if (np && np.d < 18) sel = { type: 'pipe', idx: np.idx }; }
+        if (bestC) { const again = sel0?.type === 'comp' && sel0.idx === bestC.idx; sel = { type: 'comp', idx: bestC.idx }; if (again && ISO_ORIENT[doc.comps[bestC.idx].t]) turnComp(doc.comps[bestC.idx]); } else { const np = nearestPipe(x, y); if (np && np.d < 18) sel = { type: 'pipe', idx: np.idx }; }
         draw(); return;
       }
       // place a component
@@ -287,6 +324,8 @@ function openIsoTool(r, att) {
       let label = '';
       if (['text', 'instr', 'mark', 'lineno'].includes(tool)) { label = await askLabel('', tool === 'instr' ? 'Instrument tag' : tool === 'mark' ? 'Anomaly label (e.g. Area 1)' : tool === 'lineno' ? 'Line number' : 'Label text'); if (['text', 'lineno'].includes(tool) && !label) return; }
       if (['valve', 'ball', 'check', 'control', 'psv'].includes(tool)) label = (await askLabel('', 'Valve tag (optional)')) || '';
+      if (tool === 'deck') label = (await askLabel('', 'Deck / wall (optional, e.g. Cellar deck EL+21.0)')) || '';
+      if (tool === 'offpage') label = (await askLabel('', 'Continues on (e.g. Cont. on DWG 1234, or a line number)')) || '';
       snapState(); doc.comps.push({ t: tool, i, j, ax, label: label || '' }); sel = { type: 'comp', idx: doc.comps.length - 1 }; draw();
     });
     cv.addEventListener('pointermove', e => {
@@ -316,8 +355,8 @@ function openIsoTool(r, att) {
         }
         draw(); return;
       }
-      if (drag?.mode === 'pipe') { const { start, end: en } = drag; drag = null;
-        if (en && (en[0] !== start[0] || en[1] !== start[1])) { snapState(); doc.pipes.push({ a: start, b: en }); }
+      if (drag?.mode === 'pipe') { const { start, end: en, ls } = drag; drag = null;
+        if (en && (en[0] !== start[0] || en[1] !== start[1])) { snapState(); doc.pipes.push(ls ? { a: start, b: en, ls } : { a: start, b: en }); }
         draw(); }
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
@@ -347,6 +386,8 @@ function openIsoTool(r, att) {
       if (act === 'del' && sel?.type === 'label') { snapState(); const c = doc.comps[sel.idx]; if (['text', 'lineno'].includes(c.t)) doc.comps.splice(sel.idx, 1); else { c.label = ''; delete c.lx; delete c.ly; delete c.lr; } sel = null; draw(); return; }
       if (act === 'del' && sel?.type === 'bend') { toast('Use the corner menu to change a bend'); return; }
       if (act === 'del' && sel) { snapState(); (sel.type === 'pipe' ? doc.pipes : sel.type === 'mark' ? doc.marks : doc.comps).splice(sel.idx, 1); sel = null; draw(); }
+      if (act === 'turn' && sel?.type === 'comp') { turnComp(doc.comps[sel.idx]); draw(); return; }
+      if (act === 'ls' && sel?.type === 'pipe') { const p = doc.pipes[sel.idx]; const v = await askChoice('Line style', Object.entries(ISO_LS).map(([k, l]) => [k, l.split(' – ')[0], l.split(' – ')[1] || 'Normal pipe run']), p.ls || 'solid'); if (v) { snapState(); if (v === 'solid') delete p.ls; else p.ls = v; } draw(); return; }
       if (act === 'rot' && (sel?.type === 'label' || sel?.type === 'comp')) { const c = doc.comps[sel.idx]; snapState(); const i = ISO_LBL_ROT.indexOf(c.lr ?? null); c.lr = ISO_LBL_ROT[(i + 1) % ISO_LBL_ROT.length]; if (c.lr === null) delete c.lr; toast(c.lr == null ? 'Label along the pipe' : `Label at ${c.lr}°`, 1200); draw(); }
       if (act === 'label' && sel?.type === 'mark') { const m = doc.marks[sel.idx]; if (['text', 'callout'].includes(m.t)) { const t = await askAnnText(ov, m.text, tIdx, 'Edit text'); if (t?.text) { snapState(); m.text = t.text; m.s = TSIZES[m.t === 'callout' ? Math.min(t.tIdx, 1) : t.tIdx]; draw(); } } else toast('Only text and callouts have text to edit'); }
       if (act === 'label' && sel?.type === 'label') { const c = doc.comps[sel.idx]; const l = await askLabel(c.label, 'Label'); if (l != null) { snapState(); c.label = l; draw(); } }
@@ -365,5 +406,6 @@ function openIsoTool(r, att) {
       }
     });
     window.addEventListener('resize', layout); requestAnimationFrame(layout);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(() => { if (ov.isConnected) layout(); else ro.disconnect(); }); ro.observe(stage); }
   });
 }

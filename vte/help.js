@@ -1,13 +1,14 @@
 /* Help & manual (works offline) and the little ⓘ info buttons that link into it. */
 const HELP = [
   { id: 'overview', t: 'What\'s in the toolbox', b: `
-    <p>The <b>Inspection Toolbox</b> is a set of offline inspection apps on your phone. Everything works with no signal, everything stays on the device, and reports come out as Word or PDF.</p>
+    <p>The <b>Inspection Toolbox</b> is a growing suite of offline inspection apps on your phone, with more to come. Everything works with no signal, everything stays on the device, and reports come out as Word or PDF.</p>
     <ul><li><b>IMSn't</b> – the Pipework Visual Inspection Tool. Full VTE line reports, one per line number, following the IMS NAM piping checklist, in the EPE examination report format. For when IMS isn't working.</li>
     <li><b>Isometricks</b> – quick isometric sketches that snap to the iso grid, with elbows, pulled bends, 45° offsets, valves, labels and markup.</li>
     <li><b>Gasket Case</b> – flange &amp; bolting sheets: stud-by-stud, front and base A/F for every nut, PS 1.8 limits checked as you type.</li>
     <li><b>Face Off</b> – flange face inspection: defects assessed by radial projection across the gasket sealing face.</li>
     <li><b>Totally RAD</b> – an experimental feature. Read its disclaimer. All of it.</li></ul>
-    <p>They share one <a href="#/help/packs">data pack</a>, one <a href="#/help/refs">reference library</a> and one backup.</p>` },
+    <p>They share one <a href="#/help/packs">data pack</a>, one <a href="#/help/refs">reference library</a> and one backup.</p>
+    <div class="help-idea">💡 <b>Have an idea, an improvement, or a requirement for a specific tool or app?</b> Let me know – the best ones go into the next revision.</div>` },
   { id: 'setup', t: 'Getting started', b: `
     <ol><li><b>Open the link</b> on the phone you'll use on site, with signal: <code>chriswlittlewood.github.io/Test-Apps/vte/</code></li>
     <li><b>Install it.</b> Android: Chrome ⋮ → <i>Install app</i> / <i>Add to Home screen</i>. iPhone: Safari Share → <i>Add to Home Screen</i>. Locked-down work tablet: just bookmark it.</li>
@@ -37,9 +38,13 @@ const HELP = [
     <p>Set the <b>service / fluid</b> on the Header and the pipe class in stage 1. The <i>🔎 What to look for</i> step then lists the likely damage mechanisms (after API RP 571) with what to look for and where, and inspection tips (after API RP 574): dead legs, injection points, small-bore connections, supports, insulation and more. They're short prompts, not a replacement for the site RBI / corrosion management strategy.</p>` },
   { id: 'iso', t: 'Isometricks & the sketch tool', b: `
     <ul><li><b>━ Pipe</b>: drag along the grid – runs snap to the three iso directions. Start from a pipe end to continue it.</li>
+    <li><b>┅ Dashed</b> and <b>┈ Dotted</b> pipes: dashed for a line that runs off the page or continues elsewhere, dotted for existing pipework or a line that joins a different drawing. To change a pipe you've already drawn, select it and tap <i>┅ Line style</i>.</li>
+    <li><b>⇥ Continuation</b>: a flag at the end of a run that says where it goes (e.g. "Cont. on DWG 1234").</li>
+    <li><b>▱ Deck / wall penetration</b>: tap on a pipe where it passes through a deck or wall. The plane is drawn across the pipe and you can add the deck name or elevation.</li>
     <li><b>⟋ 45° pipe</b>: draws a 45° offset with the hatched triangle that shows its plane.</li>
     <li><b>Corners</b> draw as elbows (weld dots). Tap one with <b>⤿ Bend</b> (or in Select) to make it a <b>pulled bend</b> (PB) or a sharp corner.</li>
     <li><b>Components</b> (valves, flanges, supports, reducers…) snap onto the pipe and line up with it. Valves ask for a tag; <b>▭ Line number</b> adds a boxed line number.</li>
+    <li><b>Turning fittings</b>: in <b>☝ Select</b>, tap a fitting, then tap it again (or <i>⟲ Turn</i>) to turn it round while it stays on the pipe. Flow arrows and check valves reverse, reducers go concentric → reversed → eccentric (flat on either side), and control / relief valves move their actuator or outlet up, down or to either side.</li>
     <li><b>Labels</b> sit beside the pipe and read along it. In <b>☝ Select</b>, drag a label to move it – move it away and an arrow appears pointing back to the item. <i>⟳ Rotate label</i> turns it.</li>
     <li><b>Markup</b>: arrows, boxes, circles, revision clouds, highlighter, callouts and text, in colour.</li>
     <li>Two fingers to pan and zoom; ⤢ fits the drawing.</li></ul>
@@ -60,7 +65,7 @@ const HELP = [
     <p>The limits are <b>defaults until you confirm them</b> against ASME PCC-1 Appendix D or your site flange procedure (Face Off → Acceptance limits).</p>` },
   { id: 'packs', t: 'Data packs', b: `
     <p>A data pack is one file holding an asset's company data: piping classes (schedules, CA, bolting, gaskets), plot plans with FM areas, reference charts and the report logos. The app on the web contains no company data – it only ever lives in the pack, on the phone.</p>
-    <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. Packs are currently built from the piping class PDFs and plot plans by the toolbox owner – ask them for your asset's pack or an update.</p>` },
+    <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. Packs are built by hand from the piping class PDFs and plot plans by the toolbox owner – ask them for your asset's pack or an update. Packs for <b>Clipper</b> and the <b>NUIs</b> are on the way.</p>` },
   { id: 'refs', t: 'Reference library', b: `
     <p>The apps use data from standards such as ASME PCC-1, B16.5, B16.20 and API 571. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company).</p>
     <p>Toolbox → <b>📚 Reference library</b> lists each document, <b>why</b> each app needs it, and where to get it. Tap <i>Add your copy (PDF)</i>; then <i>📖 Open</i> reads it in the app, offline. Documents stay on the phone only and aren't in backups – add them again on a new phone. Company documents (PC005, PC007, IBMS, site procedures) come from document control.</p>` },

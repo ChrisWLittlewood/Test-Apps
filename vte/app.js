@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -552,8 +552,9 @@ function renderSettings() {
     <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
   <div class="card"><h3>About</h3>
     <p><b>Inspection Toolbox</b> v${APP_VERSION} – created by Chris Littlewood.</p>
-    <p class="small">Offline inspection apps for plant inspectors: <b>IMSn't</b> (Pipework Visual Inspection Tool – VTE line reports while IMS isn't working), <b>Isometricks</b> (iso sketches), <b>Gasket Case</b> (flange &amp; bolting sheets), <b>Face Off</b> (flange face inspection) and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
+    <p class="small">A growing suite of offline inspection apps for plant inspectors, with more to come: <b>IMSn't</b> (Pipework Visual Inspection Tool – VTE line reports while IMS isn't working), <b>Isometricks</b> (iso sketches), <b>Gasket Case</b> (flange &amp; bolting sheets), <b>Face Off</b> (flange face inspection) and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
     <p class="small">Everything is stored on this device only. Company data comes from your data pack; standards come from your own reference library. Calculations follow the Performance Standard (PC005 / PC007), ASME B16.5 / B16.20 / B16.21 / B36.10M and API 571 / 574 – hints and defaults are flagged where they need confirming against your procedures.</p>
+    <p class="small">💡 <b>Have an idea, an improvement or a requirement for a specific tool or app?</b> Let me know!</p>
     <a class="btn ghost block" href="#/help">📖 Help &amp; manual</a>
     <p class="muted small" style="margin-top:10px">Original notes: temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
