@@ -30,8 +30,8 @@ const HELP = [
   { id: 'classes', t: 'Pipe classes & the sums', b: `
     <p>In stage 1, pick the <b>pipe class</b> and tick every <b>line size</b>. The app then knows:</p>
     <ul><li>Schedule and nominal wall thickness (NWT, ASME B36.10M / B36.19M) and the corrosion allowance (CA).</li>
-    <li><b>Performance Standard (PC005) minimum wall</b> = (NWT − CA) × 0.67, × 0.9 at a bend intrados, never less than 2.5 mm for DN25 / DN40.</li>
-    <li>Bolting from the class: stud count, diameter, length, nut A/F (heavy hex) and the 90% reject sizes. Flange dimensions from ASME B16.5. Gasket type and colour code.</li></ul>
+    <li><b>Performance Standard (PC005) minimum wall</b> = (NWT − CA) × 0.67, × 0.9 at a bend intrados, never less than 2.5 mm for DN25 / DN40. These are the defaults – the values in use are set in 📚 Standard Issue.</li>
+    <li>Bolting from the class: stud count, diameter, length, nut A/F (heavy hex) and the reject sizes (90% of nominal by default, set in 📚 Standard Issue). Flange dimensions from ASME B16.5. Gasket type and colour code.</li></ul>
     <p>For each corrosion area enter the <b>MRWT</b> (UT, or UT of adjacent steel minus pit depth). The app shows the CA remaining and the margin to the PS minimum, coloured green / amber / red. Pit gauge readings are indicative only.</p>
     <p>For flanges with corrosion add a <b>flange sheet</b>: measured thickness, stud diameter and nut A/F against nominal, with loss in mm and %.</p>` },
   { id: 'lookfor', t: 'What to look for', b: `
@@ -82,7 +82,7 @@ const HELP = [
     <p>The quickest way to prep a whole piping system:</p>
     <ol><li><b>Import the line list</b> – IMSn't → <i>📥 Import line list from Excel</i> (the piping system export from IMS). One report is made per line.</li>
     <li><b>Export the previous ECHs</b> from IMS (R405 Condition History PDFs) – one per line, any file names.</li>
-    <li>On the system page tap <i>📚 Import previous ECHs – all PDFs at once</i> and select them all. The app offers this straight after importing the line list too.</li>
+    <li>On the system page tap <i>📑 Import previous ECHs – all PDFs at once</i> and select them all. The app offers this straight after importing the line list too.</li>
     <li>The phone reads each ECH and sorts it to its line by the <b>equipment number in the ECH header</b>, then the file name, then the ECH text. If there are two ECHs for one line, the newest wins. Nothing is sent anywhere.</li>
     <li><b>Check the list</b>: green = matched, amber = needs you. Change any line from the drop-down, skip it, or add an unknown one as a new line. Then <i>Attach</i>.</li>
     <li>Each line gets its ECH, photos and these filled in (only if empty): type and date of last inspection, design code, P&amp;ID number, pipe class, F/Loc, equipment description, "ECH reviewed" and the previous findings.</li>
@@ -109,7 +109,7 @@ const HELP = [
     <li>Then: <i>✎ EP numbers</i> (type them all in one table), <i>📋 Copilot summaries</i> for the ECHs, and tick "latest revision" on each P&amp;ID in ★ Line prep.</li>
     <li><i>📤 Export / send to device</i> saves the whole system as one file. Send it to the inspection device by Teams or OneDrive. On that device: Toolbox → <i>⬆ Import backup</i>.</li></ol>
     <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
-  { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Toolbox → 🎬 Promo & info</b> keeps the advert video and the owner's guide PDF on this device, so you can play or open them offline and share them with new users. Add each file once. They show company screenshots, so they are never put in the public app: they stay on this device and travel in the 📤 asset pack. Share internally only.</p>` },
+  { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Toolbox → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
@@ -138,7 +138,7 @@ const INFO = {
   iso: ['Isometricks', 'Pipes snap to the iso grid; components line up with the pipe; labels can be dragged and rotated.', 'iso'],
   flnom: ['Nominal data', 'From the pipe class and ASME B16.5: flange dimensions, bolting and the reject sizes for studs and nuts (90% of nominal).', 'gasket'],
   fronts: ['Front and base A/F', 'Front = across flats at the outer face of the nut. Base = at the bearing face against the flange, usually the most corroded. Record both nuts (side A and side B) on every stud.', 'gasket'],
-  flres: ['Result', 'Pass / reject against PS 1.8: studs and nuts below 90% of nominal, flange thickness loss over the limit, missing bolting, short engagement or the wrong gasket.', 'gasket'],
+  flres: ['Result', 'Pass / reject against PS 1.8: studs and nuts below the reject level (90% of nominal unless changed in Standard Issue), flange thickness loss over the limit, missing bolting, short engagement or the wrong gasket.', 'gasket'],
   maxdef: ['Max acceptable defect', 'The largest radial projection allowed across the gasket sealing face, for marks not below and below the serration root. Defaults until confirmed against your procedure.', 'face'],
   rp: ['Radial projection', 'How far a defect reaches across the face from the bore towards the outside. Length around the face and pit diameter don\'t count – crossing the sealing face does.', 'face'],
   facegk: ['Face & gasket data', 'Face geometry from ASME B16.5 and the sealing face from the gasket: the spiral wound sealing element (B16.20) or a flat gasket\'s ID to the raised-face edge (B16.21).', 'face'],

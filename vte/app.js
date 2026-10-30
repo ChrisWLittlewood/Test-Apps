@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.10.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -612,7 +612,7 @@ function renderSystem(id) {
         }).join('') || '<div class="empty">Nothing here.</div>'}`;
     })() : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
     <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
-    ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📚 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
+    ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📑 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
     ${lines.length ? `<div class="grid2"><button class="btn ghost" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button><button class="btn ghost" data-action="pidAuto" data-sys="${s2.id}">🔎 Find P&amp;IDs in the library</button></div>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
     ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Export / send to device</button><p class="small muted">Saves the whole system (lines, ECHs, photos, drawings) as one file – send it to another device by Teams or OneDrive, then on that device: Toolbox → ⬆ Import backup.</p>` : ''}
