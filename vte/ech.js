@@ -93,26 +93,46 @@ function parseEchLines(lines) {
   };
 }
 
-async function importEch(file, r) {
+/* Read an ECH PDF: text lines always, embedded photos optionally (photos are kept in memory until attached). */
+async function readEchPdf(file, withImages = true, onPage) {
   const lib = await getPdfjs();
   const buf = await file.arrayBuffer();
-  const pdfBlob = new Blob([buf], { type: 'application/pdf' });
   const doc = await lib.getDocument({ data: buf.slice(0) }).promise;
-  const lines = [], photos = [];
+  const lines = [], imgs = [];
   for (let i = 1; i <= doc.numPages; i++) {
-    toast(`Reading ECH page ${i}/${doc.numPages}…`, 20000);
+    if (onPage) onPage(i, doc.numPages);
     const page = await doc.getPage(i);
     const pl = await pdfPageLines(page); lines.push(...pl);
-    for (const im of await pdfPageImages(lib, page, pl.join(' '))) {
-      const sig = `${im.w}x${im.h}:${im.blob.size}`; if (photos.some(p => p.sig === sig)) continue;
-      photos.push({ blobId: await putBlob(im.blob), page: i, w: im.w, h: im.h, sig });
+    if (withImages) for (const im of await pdfPageImages(lib, page, pl.join(' '))) {
+      const sig = `${im.w}x${im.h}:${im.blob.size}`; if (imgs.some(p => p.sig === sig)) continue;
+      imgs.push({ ...im, page: i, sig });
     }
+    try { page.cleanup(); } catch { }
   }
-  const parsed = parseEchLines(lines);
+  const pages = doc.numPages; try { await doc.destroy(); } catch { }
+  return { buf, lines, imgs, pages };
+}
+/* Attach a read ECH to a line report (replacing any previous one) and pre-fill empty fields. */
+async function attachEch(r, file, rd) {
+  const photos = [];
+  for (const im of rd.imgs) photos.push({ blobId: await putBlob(im.blob), page: im.page, w: im.w, h: im.h, sig: im.sig });
+  const parsed = parseEchLines(rd.lines);
   if (r.ech) await removeEchBlobs(r.ech);
-  r.ech = { name: file.name, pdfId: await putBlob(pdfBlob), pages: doc.numPages, imported: new Date().toISOString(), text: lines.join('\n'), photos, ...parsed, ai: null };
-  const applied = prefillFromEch(r);
-  return applied;
+  r.ech = { name: file.name, pdfId: await putBlob(new Blob([rd.buf], { type: 'application/pdf' })), pages: rd.pages, imported: new Date().toISOString(), text: rd.lines.join('\n'), photos, ...parsed, ai: null };
+  r.noEch = false;
+  return prefillFromEch(r);
+}
+async function importEch(file, r) {
+  const rd = await readEchPdf(file, true, (i, n) => toast(`Reading ECH page ${i}/${n}…`, 20000));
+  return attachEch(r, file, rd);
+}
+/* Equipment / line number from the ECH header ("LAP.AD-FX-54003 - Diesel fill line…" -> id + description). */
+function echEquip(e) {
+  for (const k of ['Equipment', 'FLOC']) {
+    const v = (e.fields?.[k] || '').trim(); if (!v) continue;
+    const parts = v.split(/\s+-\s+/); return { id: parts[0].trim(), desc: (parts[1] || '').trim(), group: e.fields?.['Equipment Group'] || '' };
+  }
+  return { id: '', desc: '', group: e.fields?.['Equipment Group'] || '' };
 }
 async function removeEchBlobs(ech) {
   if (ech.pdfId) await DB.del('blobs', ech.pdfId);
@@ -125,20 +145,30 @@ function prefillFromEch(r) {
   const done = []; r.h = r.h || {}; r.c = r.c || {}; r.c.general = r.c.general || {}; r.pre = r.pre || {};
   const G = r.c.general;
   const setIf = (obj, k, v, label) => { if (v && !obj[k]) { obj[k] = v; done.push(label); } };
+  const eq = echEquip(e); const ai = e.ai || {}; const ld = ai.lineData || {};
   setIf(r.h, 'lastInspType', e.desc, 'Type of last inspection');
+  if (eq.id && !/SYSTEM/i.test(eq.group)) { setIf(r.h, 'floc', eq.id, 'F/Loc'); setIf(r.h, 'equipDesc', eq.desc, 'Equipment description'); }
   setIf(r.h, 'lastReportDate', e.date, 'Date of last report');
-  if (e.designCode) setIf(r.h, 'designCode', normDesignCode(e.designCode), 'Design code');
-  setIf(G, 'pidNumber', e.pid, 'P&ID number');
-  if (e.pipeClass && !G.pipeClassId && !G.classManual) {
-    const c = PIPE_CLASSES.find(x => x.c.toUpperCase() === e.pipeClass.toUpperCase().replace(/\s/g, ''));
+  const dc = e.designCode || ld.designCode; if (dc) setIf(r.h, 'designCode', normDesignCode(dc), 'Design code');
+  setIf(G, 'pidNumber', e.pid || ld.pidNumber, 'P&ID number');
+  const pc = e.pipeClass || ld.pipeClass;
+  if (pc && !G.pipeClassId && !G.classManual) {
+    const c = PIPE_CLASSES.find(x => x.c.toUpperCase() === String(pc).toUpperCase().replace(/\s/g, ''));
     if (c) { G.pipeClassId = c.id; G.pipeClass = c.c; done.push('Pipe class ' + c.c); }
-    else { G.pipeClass = G.pipeClass || e.pipeClass; }
+    else { G.pipeClass = G.pipeClass || pc; }
   }
+  if (ld.service && !r.h.service) { const f = FLUIDS.find(x => x[0].toLowerCase() === String(ld.service).toLowerCase().trim()); if (f) { r.h.service = f[0]; done.push('Service'); } }
   if (!r.pre.echReviewed) { r.pre.echReviewed = 'Yes'; done.push('ECH reviewed'); }
-  const hist = [`Previous ECH ${e.echNo || ''}${e.date ? ' (' + fmtDate(e.date) + ')' : ''}${e.desc ? ' – ' + e.desc : ''}.`, e.ai?.overview || e.aiComment].filter(Boolean).join(' ');
-  if (!r.pre.history) { r.pre.history = hist; done.push('Previous findings'); }
-  const ai = e.ai || {};
-  if (ai.lineData?.fmAreas?.length && !(r.fm?.areas || []).length) { r.fm = r.fm || {}; r.fm.areas = ai.lineData.fmAreas.slice(0, 12); done.push('FM areas'); }
+  const kf = (ai.keyFindings || []).filter(Boolean).slice(0, 6);
+  const hist = [`Previous ECH ${e.echNo || ''}${e.date ? ' (' + fmtDate(e.date) + ')' : ''}${e.desc ? ' – ' + e.desc : ''}.`, ai.overview || e.aiComment, kf.length ? 'Key findings: ' + kf.join('; ') + '.' : ''].filter(Boolean).join(' ');
+  if (!r.pre.history || r.pre.history === r.pre._histAuto) { if (r.pre.history !== hist) { r.pre.history = hist; done.push('Previous findings'); } r.pre._histAuto = hist; }   // refreshed when an AI summary arrives, unless the inspector has edited it
+  r.fm = r.fm || { areas: [] };
+  if (ld.fmAreas?.length && !(r.fm.areas || []).length) { r.fm.areas = ld.fmAreas.slice(0, 12); done.push('FM areas'); }
+  const numOf = v => { const m = /\d+(?:\.\d+)?/.exec(String(v ?? '')); return m ? m[0] : ''; };
+  setIf(r.fm, 'linear', numOf(ld.linearMetres), 'Linear meterage');
+  setIf(r.fm, 'valvesFlanges', numOf(ld.valvesFlanges), 'Valves & flanges');
+  setIf(r.fm, 'supports', numOf(ld.supports), 'Pipe supports No.');
+  if (typeof ld.isoAvailable === 'boolean' && !r.fm.isoAvailable) { r.fm.isoAvailable = ld.isoAvailable ? 'Yes' : 'No'; done.push('Iso available'); }
   if (ai.lineData?.isoAvailable === false && !(r.att || []).some(a => a.kind === 'iso')) { /* leave choice to the inspector, just hint */ }
   return done;
 }
@@ -153,11 +183,13 @@ const ECH_AI_SCHEMA = `{"overview":"2-3 plain-English sentences: overall conditi
 "actionsOrCairs":["CAIRs, SAP notifications, FM / repair actions, NDT recommended"],
 "nextInspection":"next due date(s) and type if stated",
 "checkThisTime":["specific things the inspector should look at on this inspection"],
-"lineData":{"pipeClass":"","pidNumber":"","designCode":"","isoAvailable":true,"fmAreas":["AD 10A"],"linearMetres":"","supports":""}}`;
-function echAiPrompt(e, withText = true) {
-  return `You are helping a UK offshore plant inspector prepare for a visual external inspection (VTE) of a piping line. Below is the previous Equipment Condition History (ECH) exported from IMS (report R405). The layout is often messy: tables may be split into fragments of a few letters, option lists may include every possible code (not just those selected), and different inspectors write differently.
+"lineData":{"pipeClass":"","pidNumber":"","designCode":"","service":"","isoAvailable":true,"fmAreas":["AD 10A"],"linearMetres":"","valvesFlanges":"","supports":""}}`;
+const ECH_AI_RULES = `The layout is often messy: tables may be split into fragments of a few letters, option lists may include every possible code (not just those selected), and different inspectors write differently.
 
 Extract ONLY the important points an inspector needs on site. Ignore generic option lists, boilerplate and the coating/corrosion reference charts. Do not invent anything; leave a field empty if it is not stated. Use UK English, short phrases.
+In "lineData": "linearMetres", "valvesFlanges" and "supports" are the numbers from the FM info (estimated linear meterage, valves & flanges, pipe supports No.); "fmAreas" are the work area locations; "service" must be one of these exactly, or empty: ${FLUIDS.map(f => f[0]).join(' | ')}.`;
+function echAiPrompt(e, withText = true) {
+  return `You are helping a UK offshore plant inspector prepare for a visual external inspection (VTE) of a piping line. Below is the previous Equipment Condition History (ECH) exported from IMS (report R405). ${ECH_AI_RULES}
 
 Reply with ONLY a JSON object in exactly this shape:
 ${ECH_AI_SCHEMA}

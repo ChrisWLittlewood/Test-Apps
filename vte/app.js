@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -605,6 +605,8 @@ function renderSystem(id) {
         }).join('') || '<div class="empty">Nothing here.</div>'}`;
     })() : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
     <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
+    ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📚 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
+    ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {
@@ -1414,7 +1416,7 @@ async function importLineList(file, systemId) {
   for (const x of res.picked) {
     const r = blankReport(target); r.h.tagNo = x.tag; r.h.equipDesc = x.desc; S.reports.push(r); await DB.put('reports', r);
   }
-  toast(`${res.picked.length} line(s) imported`); go('/system/' + target.id);
+  go('/system/' + target.id); setTimeout(() => offerEchBulk(target.id, res.picked.length), 300);
 }
 
 /* ================= theme ================= */

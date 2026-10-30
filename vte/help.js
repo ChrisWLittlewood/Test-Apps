@@ -76,6 +76,16 @@ const HELP = [
     <p><b>"What's that curly-bracket gobbledegook?"</b> It's <b>JSON</b> – a parts list written for the app, not for you. Each line is a label in quotes, a colon, then the answer; the app puts each answer in the right box. If the app says <i>"No JSON found"</i>, you missed a bracket – copy the reply again, or ask Copilot to <i>"reply with only the JSON"</i>. A chatty sentence before or after it is fine.</p>
     <p>The <b>Check &amp; AI</b> report review works the same way: copy the review pack → Copilot → paste the reply back, then accept or reject each suggestion. Measurements, findings and your conclusion are never changed automatically.</p>
     <p><b>In-app AI</b> (only if your company's information rules allow it): Settings → 🤖 AI → paste an Anthropic API key (<code>sk-ant-…</code>) and pick a model. <i>🤖 Summarise with AI now</i> then appears in Line prep. The key stays on the phone; use is billed to the key's account.</p>` },
+  { id: 'echbulk', t: 'All the ECHs at once (bulk import)', b: `
+    <p>The quickest way to prep a whole piping system:</p>
+    <ol><li><b>Import the line list</b> – IMSn't → <i>📥 Import line list from Excel</i> (the piping system export from IMS). One report is made per line.</li>
+    <li><b>Export the previous ECHs</b> from IMS (R405 Condition History PDFs) – one per line, any file names.</li>
+    <li>On the system page tap <i>📚 Import previous ECHs – all PDFs at once</i> and select them all. The app offers this straight after importing the line list too.</li>
+    <li>The phone reads each ECH and sorts it to its line by the <b>equipment number in the ECH header</b>, then the file name, then the ECH text. If there are two ECHs for one line, the newest wins. Nothing is sent anywhere.</li>
+    <li><b>Check the list</b>: green = matched, amber = needs you. Change any line from the drop-down, skip it, or add an unknown one as a new line. Then <i>Attach</i>.</li>
+    <li>Each line gets its ECH, photos and these filled in (only if empty): type and date of last inspection, design code, P&amp;ID number, pipe class, F/Loc, equipment description, "ECH reviewed" and the previous findings.</li>
+    <li><b>AI summaries</b> fill in the rest – previous findings, FM areas, linear meterage, valves &amp; flanges, supports and service: <i>📋 Copilot summaries</i> makes a few batches to copy into Copilot and paste back; with an authorised API key, <i>🤖 AI summaries</i> does them all in one go.</li></ol>
+    <p class="small">Nothing you've typed is ever overwritten. Previous findings are refreshed when an AI summary arrives, unless you've edited them.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
@@ -93,6 +103,7 @@ const INFO = {
   text: ['Report text', 'Written for you, in bullet points, from your checklist answers. Edit any box – edited boxes stop updating automatically.', 'imsnt'],
   aireview: ['AI review', 'Copy the review pack into Copilot, paste the reply back, then accept or reject each suggestion. Nothing is changed without you.', 'ai'],
   echai: ['AI summary of the previous ECH', 'Copy the ECH into Copilot and paste back the reply (the curly-bracket block). It sums up the last inspection and what to check this time.', 'ai'],
+  echbulk: ['Bulk ECH import', 'Select all the previous ECH PDFs for this system at once. The phone reads each one, matches it to its line by the equipment number in the ECH header (or the file name), attaches it and fills in empty report fields. Nothing is sent anywhere. Then summarise them all with Copilot in a few batches, or with the in-app AI.', 'echbulk'],
   pack: ['Data pack', 'One private file with your asset\'s piping classes, gaskets, plot plans, FM areas and report logos. The app itself holds no company data.', 'packs'],
   aikey: ['AI key', 'Only if your company allows it. Without a key, use the copy / paste route with Copilot.', 'ai'],
   classes: ['Pipe class & sizes', 'Pick the class and tick every size on the line. The app then knows the schedule, NWT, CA, PS minimum wall, bolting, flange dimensions and gasket.', 'classes'],
