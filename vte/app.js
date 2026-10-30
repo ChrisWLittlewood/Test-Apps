@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.7.2';
+const APP_VERSION = '2.8.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -546,7 +546,7 @@ function renderSettings() {
     ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
-    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack</button>${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
+    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack / asset pack</button>${PACK ? '<button class="btn ghost" data-action="assetExport">📤 Export asset pack</button>' : ''}${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
   <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
@@ -1443,10 +1443,14 @@ async function loadPack() {
   if (p) for (const k of p.images || []) { const b = await getBlob('pack_' + k); if (b) PACK_URLS[k] = URL.createObjectURL(b); }
 }
 async function importPack(file) {
+  if (/\.zip$/i.test(file.name)) return pidImport([file]);   // asset pack (data pack + P&IDs + index)
   let j; try { j = JSON.parse(await file.text()); } catch { throw new Error('File is not a data pack'); }
+  return importPackJson(j);
+}
+async function importPackJson(j, quiet) {
   if (j.format !== 'vte-datapack') throw new Error('Not a VTE data pack file');
-  const ok = await modal('Import data pack', `<p><b>${esc(j.name)}</b> v${esc(j.packVersion || '')}<br>${(j.pipeClasses || []).length} piping classes, ${(j.plot?.drawings || []).length} plot plans.</p>${PACK ? `<p>This replaces <b>${esc(PACK.name)}</b>.</p>` : ''}`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
-  if (!ok) return;
+  if (!quiet) { const ok = await modal('Import data pack', `<p><b>${esc(j.name)}</b> v${esc(j.packVersion || '')}<br>${(j.pipeClasses || []).length} piping classes, ${(j.plot?.drawings || []).length} plot plans.</p>${PACK ? `<p>This replaces <b>${esc(PACK.name)}</b>.</p>` : ''}`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
+    if (!ok) return; }
   toast('Importing data pack…', 15000);
   const old = await DB.get('meta', 'pack');
   if (old) for (const k of old.images || []) await DB.del('blobs', 'pack_' + k);
@@ -1456,7 +1460,14 @@ async function importPack(file) {
   await DB.put('meta', { ...meta, id: 'pack', images, importedAt: new Date().toISOString() });
   await loadPack();
   if (!S.settings.defaultSite && j.defaults?.site) { S.settings.defaultSite = j.defaults.site; persist('settings'); }
-  toast('Data pack imported'); route();
+  if (!quiet) { toast('Data pack imported'); route(); }
+}
+/* Rebuild the data pack file (with its images) from what's stored on this device – for the asset pack export. */
+async function exportPackJson() {
+  const m = await DB.get('meta', 'pack'); if (!m) return null;
+  const { id: _i, images: keys, importedAt: _a, ...meta } = m; const images = {};
+  for (const k of keys || []) { const b = await getBlob('pack_' + k); if (b) images[k] = await b64.enc(b); }
+  return { ...meta, images };
 }
 
 /* ================= event handling ================= */

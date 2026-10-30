@@ -81,7 +81,7 @@ async function pidIndex() {
 async function pidImport(files) {
   files = files.filter(f => /\.(pdf|jpe?g|png|webp|zip)$/i.test(f.name) && f.size > 0);
   const packs = files.filter(f => /\.zip$/i.test(f.name)); files = files.filter(f => !/\.zip$/i.test(f.name));
-  for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('pidindex.json')) await pidIxImport(z); else await pidPackImport(p); }
+  for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('asset.json')) await assetImport(z); else if (z.file('pidindex.json') && !z.file('pidpack.json')) await pidIxImport(z); else await pidPackImport(p); }
   if (!files.length) return;
   const lib = await getPdfjs(); await pidIndex();
   const prog = progressModal(`Reading ${files.length} P&ID file${files.length > 1 ? 's' : ''}…`, true); let added = 0, updated = 0, noText = 0;
@@ -98,20 +98,22 @@ async function pidImport(files) {
       for (const pg of pages) {
         const tb = pidTitleBlock(pg.items, base); if (tidy.rev) tb.rev = tidy.rev; const title = base + (pg.of > 1 ? ` – page ${pg.page}` : '');
         const old = S.pidlib.items.find(x => (tb.dwgNo && x.dwgNo === tb.dwgNo && (x.page || 1) === pg.page) || (x.src === f.name && (x.page || 1) === pg.page));
+        const keepAi = old && old.ai && pnorm(old.rev) === pnorm(tb.rev) ? old.ai : null;
         if (old) { await pidDelete(old, true); updated++; } else added++;
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
         const hasText = pg.items.length > 2; if (!hasText) noText++;
         if (hasText) { await DB.put('meta', { id: 'pidtxt_' + id, items: pg.items }); PIDIDX.set(id, buildPidRows(pg.items)); }
-        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText });
+        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText, ...(keepAi ? { ai: keepAi } : {}) });
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
   prog.close();
   S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = new Date().toISOString();
   await savePidLib();
-  await modal('P&IDs imported', `<p><b>${added}</b> page${added === 1 ? '' : 's'} added${updated ? `, <b>${updated}</b> updated (same drawing number – the old copy was replaced)` : ''}.</p>
-    ${noText ? `<p class="small">⚠ ${noText} page${noText === 1 ? ' has' : 's have'} no text layer (scanned drawings), so ${noText === 1 ? 'it' : 'they'} can only be found by title.</p>` : ''}
-    <p class="small muted">Reports that already use a P&amp;ID keep their own copy.</p>`, [['OK', '', 'primary']]);
+  const r = await modal('P&IDs imported', `<p><b>${added}</b> page${added === 1 ? '' : 's'} added${updated ? `, <b>${updated}</b> updated (same drawing number – the old copy was replaced)` : ''}.</p>
+    ${noText ? `<p class="small">⚠ ${noText} page${noText === 1 ? ' has' : 's have'} no text layer (scanned drawings), so ${noText === 1 ? 'it' : 'they'} can only be found by title until AI-scanned.</p>` : ''}
+    ${pidScanPromptHTML()}<p class="small muted">Reports that already use a P&amp;ID keep their own copy.</p>`, pidScanBtns());
+  if (r?.v === 'scan') await pidAiScan(true);
 }
 async function pidDelete(it, quiet) {
   await DB.del('blobs', it.blobId); await DB.del('meta', 'pidtxt_' + it.id); PIDIDX?.delete(it.id);
@@ -224,8 +226,8 @@ function renderPidSettings() {
     <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one. Library packs and shared indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
     ${pidAiHTML() || `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${!n ? 'Nothing to scan yet – import some P&amp;IDs first.' : S.settings.aiKey ? 'Every P&amp;ID has been AI-scanned.' : 'Add an authorised AI key in the main <a href="#/settings">Settings</a> to read scanned P&amp;IDs and add anything the drawing text missed.'}</p></div>`}
     <div class="card"><h3>📤 Export / send to device</h3>
-      <p class="small muted">Saves the whole library (drawings, text index and AI scans) as one .zip. Send it to another device by Teams / OneDrive and import it there.</p>
-      <div class="grid2">${n ? '<button class="btn primary" data-action="pidSendPack">📤 Export / send to device</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import library pack (.zip)</button></div></div>
+      <p class="small muted">Saves one <b>asset pack</b> (.zip): the data pack (piping classes, plot plans, logos), every P&amp;ID with its text and AI scans, and the P&amp;ID search index. Send it by Teams / OneDrive and import it on the other device – drawings already there at the same revision are skipped, newer revisions replace the old copy.</p>
+      <div class="grid2">${n ? '<button class="btn primary" data-action="pidSendPack">📤 Export / send to device</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import asset pack (.zip)</button></div></div>
     <div class="card"><h3>📇 Shared search index ${iBtn('pidindex')}</h3>
       <p class="small muted">A small file with every drawing's number, revision and the line numbers / tags on it (from the text and AI scans) – <b>no drawings</b>. Share it so others can search; drawings they don't have point them to document control.</p>
       <div id="pidIxList" class="small"></div>
@@ -325,7 +327,8 @@ document.addEventListener('dragover', e => { if (location.hash.startsWith('#/pid
 document.addEventListener('dragleave', e => { if (location.hash.startsWith('#/pids') && !e.relatedTarget) document.body.classList.remove('dragging'); });
 Object.assign(actions, {
   pidPickFiles: () => pidInput.click(),
-  pidSendPack: () => pidPackExport(),
+  pidSendPack: () => assetExport(),
+  assetExport: () => assetExport(),
   pidOpen: el => { const r = PIDRES[el.dataset.id]; openPidViewer(el.dataset.id, el.dataset.q != null && r ? r.boxes : [], el.dataset.q || ''); },
   pidAuto: el => pidAutoForSystem(el.dataset.sys || cur.system?.id)
 });
@@ -459,4 +462,78 @@ function pidSpecHTML(q, res) {
       return `<table class="pid-spec-t">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table>`;
     }).join('')}<small class="muted">Class read from the P&amp;ID line number – check it against the line list / ECH.</small></div>`;
   }).join('');
+}
+
+/* ---------- asset pack: data pack + all P&IDs + P&ID index in one file ---------- */
+function pidNotIndexed() { return S.pidlib.items.filter(it => !it.ai); }
+function pidScanPromptHTML() {
+  const w = pidNotIndexed(); if (!w.length) return '';
+  const sc = w.filter(it => !it.hasText).length;
+  return `<p>🤖 <b>${w.length}</b> P&amp;ID page${w.length === 1 ? ' hasn’t' : 's haven’t'} been AI-indexed${sc ? ` (${sc} scanned, with no searchable text)` : ''}. ${S.settings.aiKey ? 'Do you want to scan now? (needs signal, uses your AI key)' : 'Add an authorised AI key in Settings to scan them.'}</p>`;
+}
+function pidScanBtns() { const w = pidNotIndexed().length; return w && S.settings.aiKey ? [['Later', ''], [`🤖 Scan now (${w})`, 'scan', 'primary']] : [['OK', '', 'primary']]; }
+function pidIndexItems(idx) {
+  return S.pidlib.items.map(it => { const P = idx.get(it.id);
+    return { dwgNo: it.dwgNo || '', rev: it.rev || '', title: it.title, page: it.page || 1, src: it.src || '', rows: P ? [...new Set(P.rows.map(x => x.n).filter(x => x.length >= 3))] : [], ai: it.ai ? [...new Set([...(it.ai.lines || []), ...(it.ai.tags || [])].map(pnorm))] : [] }; });
+}
+async function assetExport() {
+  const dp = await exportPackJson(); const n = S.pidlib.items.length;
+  if (!dp && !n) return toast('Nothing to export – import a data pack or some P&IDs first');
+  const def = (dp?.name || PACK?.name || S.settings.defaultSite || 'Platform').replace(/\s*data\s*pack\s*/i, ' ').trim();
+  const r = await modal('Export asset pack', `<p>One file with:</p><ul class="ticks">${dp ? `<li>Data pack <b>${esc(dp.name)}</b> v${esc(dp.packVersion || '')} (piping classes, plot plans, logos)</li>` : '<li class="muted">No data pack on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with text and AI scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li></ul>
+    <label class="field"><span>Asset name</span><input type="text" name="name" value="${esc(def)}"></label>
+    <p class="small muted">Company data – internal only, company devices / Workspace Connect only.</p>`, [['Cancel', ''], ['📤 Export', 'ok', 'primary']]);
+  if (!r) return;
+  const name = (r.vals.name || def).trim(); const idx = await pidIndex(); const zip = new JSZip(); const J = { compression: 'DEFLATE' };
+  const prog = progressModal('Building the asset pack…', false);
+  if (dp) zip.file('datapack.json', JSON.stringify(dp), J);
+  for (const [k, it] of S.pidlib.items.entries()) {
+    prog.set(k, Math.max(1, n), it.title); if (k % 10 === 0) await tick();
+    const b = await getBlob(it.blobId); if (b) zip.file(`img/${it.id}.jpg`, b);
+    if (it.hasText) { const t = await DB.get('meta', 'pidtxt_' + it.id); if (t) zip.file(`txt/${it.id}.json`, JSON.stringify(t.items), J); }
+  }
+  const created = new Date().toISOString(), by = S.settings.inspectorName || '';
+  zip.file('pidpack.json', JSON.stringify({ format: 'pid-pack', version: 1, exported: created, updated: S.pidlib.updated || '', items: S.pidlib.items }), J);
+  zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name: name + ' P&IDs', created, by, libraryUpdated: S.pidlib.updated || '', items: pidIndexItems(idx) }), J);
+  zip.file('asset.json', JSON.stringify({ format: 'vte-asset-pack', version: 1, name, created, by, datapack: dp ? { name: dp.name, packVersion: dp.packVersion || '' } : null, pids: n, aiIndexed: n - pidNotIndexed().length, libraryUpdated: S.pidlib.updated || '' }));
+  const blob = await zip.generateAsync({ type: 'blob' }); prog.close();
+  shareBlob(blob, `${safeName(name)}_AssetPack_${todayISO()}.zip`, `${name} asset pack`);
+}
+document.addEventListener('click', e => { const b = e.target.closest('.modal [data-v]'); if (!b) return; const m = b.closest('.modal'); const dp = m.querySelector('input[name=dp]'), pid = m.querySelector('input[name=pid]'); if (dp || pid) assetImportRun._want = { dp: dp ? dp.checked : false, pid: pid ? pid.checked : true }; }, true);
+async function assetImport(zip) {
+  const a = JSON.parse(await zip.file('asset.json').async('string')); if (a.format !== 'vte-asset-pack') throw new Error('Not an asset pack');
+  const pj = zip.file('pidpack.json') ? JSON.parse(await zip.file('pidpack.json').async('string')) : { items: [] };
+  const dpf = zip.file('datapack.json');
+  const r = await modal('Import asset pack', `<p>📦 <b>${esc(a.name)}</b> – made ${fmtDate((a.created || '').slice(0, 10))}${a.by ? ' by ' + esc(a.by) : ''}.</p>
+    ${dpf ? `<label class="imp-row" style="border:0"><input type="checkbox" name="dp" checked><span>Data pack <b>${esc(a.datapack?.name || '')}</b> v${esc(a.datapack?.packVersion || '')}${PACK ? ` – replaces ${esc(PACK.name)} v${esc(PACK.packVersion || '')}` : ''}</span></label>` : ''}
+    <label class="imp-row" style="border:0"><input type="checkbox" name="pid" checked><span><b>${pj.items.length}</b> P&amp;ID page${pj.items.length === 1 ? '' : 's'} – same revision already here is skipped, a new revision replaces the old copy</span></label>
+    <p class="small muted">Report copies of P&amp;IDs are never changed.</p>`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
+  if (!r) return;
+  return assetImportRun(zip, a, pj, r);
+}
+async function assetImportRun(zip, a, pj, r) {
+  // modal() only returns text values, so the checkbox states were captured by the click handler below
+  const want = assetImportRun._want || { dp: true, pid: true }; assetImportRun._want = null;
+  const sum = { dp: false, added: 0, updated: [], same: 0 };
+  if (want.dp && zip.file('datapack.json')) { await importPackJson(JSON.parse(await zip.file('datapack.json').async('string')), true); sum.dp = true; }
+  if (want.pid && pj.items.length) {
+    await pidIndex(); const prog = progressModal('Importing P&IDs…', false);
+    for (const [k, it] of pj.items.entries()) {
+      prog.set(k, pj.items.length, it.title); if (k % 10 === 0) await tick();
+      const old = S.pidlib.items.find(x => x.id === it.id || (it.dwgNo && pnorm(x.dwgNo) === pnorm(it.dwgNo) && (x.page || 1) === (it.page || 1)) || (!it.dwgNo && x.title === it.title));
+      if (old && pnorm(old.rev) === pnorm(it.rev) && (old.ai || !it.ai)) { sum.same++; continue; }
+      const img = zip.file(`img/${it.id}.jpg`); if (!img) continue;
+      if (old) { sum.updated.push(`${it.dwgNo || it.title}${old.rev !== it.rev ? ` rev ${old.rev || '?'} → ${it.rev || '?'}` : ''}`); await pidDelete(old, true); } else sum.added++;
+      await DB.put('blobs', { id: it.blobId, blob: new Blob([await img.async('arraybuffer')], { type: 'image/jpeg' }) });
+      const tx = zip.file(`txt/${it.id}.json`); if (tx) { const items = JSON.parse(await tx.async('string')); await DB.put('meta', { id: 'pidtxt_' + it.id, items }); PIDIDX.set(it.id, buildPidRows(items)); }
+      S.pidlib.items.push({ ...it, _tidy: 1 });
+    }
+    prog.close();
+    S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = pj.updated || new Date().toISOString(); await savePidLib();
+  }
+  const res = await modal('Asset pack imported', `<ul class="ticks">${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}
+    ${want.pid ? `<li><b>${sum.added}</b> new P&amp;ID page${sum.added === 1 ? '' : 's'}</li><li><b>${sum.updated.length}</b> updated${sum.updated.length ? ': ' + sum.updated.slice(0, 8).map(esc).join(', ') + (sum.updated.length > 8 ? '…' : '') : ''}</li><li><b>${sum.same}</b> already up to date</li>` : ''}</ul>
+    ${pidScanPromptHTML()}`, pidScanBtns());
+  if (res?.v === 'scan') await pidAiScan(true);
+  route();
 }
