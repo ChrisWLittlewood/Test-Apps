@@ -86,6 +86,14 @@ const HELP = [
     <li>Each line gets its ECH, photos and these filled in (only if empty): type and date of last inspection, design code, P&amp;ID number, pipe class, F/Loc, equipment description, "ECH reviewed" and the previous findings.</li>
     <li><b>AI summaries</b> fill in the rest – previous findings, FM areas, linear meterage, valves &amp; flanges, supports and service: <i>📋 Copilot summaries</i> makes a few batches to copy into Copilot and paste back; with an authorised API key, <i>🤖 AI summaries</i> does them all in one go.</li></ol>
     <p class="small">Nothing you've typed is ever overwritten. Previous findings are refreshed when an AI summary arrives, unless you've edited them.</p>` },
+  { id: 'pids', t: 'P&I Spy – the P&ID library', b: `
+    <p><b>⚠ Uncontrolled copies.</b> The library is a local reference copy. Always check you have the latest revision in document control before relying on a P&amp;ID – the screen shows when the library was last updated.</p>
+    <ol><li><b>Import once, on a PC</b>: download all the platform P&amp;IDs into a folder and drag it onto <i>📥 Drop P&amp;IDs here</i>. Every page is rendered, all the text on it is read, and the drawing number and revision are picked up from the file name / title block. A newer copy of the same drawing number replaces the old one.</li>
+    <li><b>Search</b>: type a line number, tag or drawing number. You get every P&amp;ID page it's on – tap one to open it zoomed in on the hits (‹ › steps through them). If the full line number isn't found, try just the service and number, e.g. <code>PX-20189</code>.</li>
+    <li><b>📤 Send library to phone</b> saves the whole library as one .zip – send it by Teams / OneDrive and import it in P&amp;I Spy on the phone.</li>
+    <li><b>In IMSn't</b>, ★ Line prep → <i>Choose from P&amp;ID library</i> suggests the P&amp;IDs the line appears on, and <i>🔎 Find P&amp;IDs in the library</i> on the system page does every line at once.</li></ol>
+    <p>Choosing a P&amp;ID for a report makes a <b>separate copy</b> for that report – mark it up as much as you like; the original in the library stays clean. Tick "latest revision confirmed" on each copy.</p>
+    <p class="small">Scanned P&amp;IDs (pictures with no text layer) can only be found by title or drawing number.</p>` },
   { id: 'desktop', t: 'Prep on a PC, inspect on the phone', b: `
     <p>The line prep is quicker on a company PC with a big screen, and the inspection then happens on the phone.</p>
     <ol><li>On a <b>company PC</b>, open the same link in Chrome or Edge: <code>chriswlittlewood.github.io/Test-Apps/vte/</code> → IMSn't.</li>
@@ -112,6 +120,7 @@ const INFO = {
   text: ['Report text', 'Written for you, in bullet points, from your checklist answers. Edit any box – edited boxes stop updating automatically.', 'imsnt'],
   aireview: ['AI review', 'Copy the review pack into Copilot, paste the reply back, then accept or reject each suggestion. Nothing is changed without you.', 'ai'],
   echai: ['AI summary of the previous ECH', 'Copy the ECH into Copilot and paste back the reply (the curly-bracket block). It sums up the last inspection and what to check this time.', 'ai'],
+  pidspy: ['P&I Spy', 'Searches every word on every P&ID in the library. Type a line number (or just the service and number, e.g. PX-20189) to see every drawing it appears on, with the hits highlighted. Uncontrolled copies – always check the latest revision.', 'pids'],
   prepdrop: ['Prep drop box', 'Drop everything for a piping system – line list, previous ECHs, isometrics, P&IDs, or a whole folder – and the app sorts each file to the right line. Built for a PC; then 📤 Send to phone.', 'desktop'],
   echbulk: ['Bulk ECH import', 'Select all the previous ECH PDFs for this system at once. The phone reads each one, matches it to its line by the equipment number in the ECH header (or the file name), attaches it and fills in empty report fields. Nothing is sent anywhere. Then summarise them all with Copilot in a few batches, or with the in-app AI.', 'echbulk'],
   pack: ['Data pack', 'One private file with your asset\'s piping classes, gaskets, plot plans, FM areas and report logos. The app itself holds no company data.', 'packs'],

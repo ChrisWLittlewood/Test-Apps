@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -464,7 +464,7 @@ async function route() {
   if (p[0] === 'xray') return renderXrayLanding();
   if (p[0] === 'help') return renderHelp(p[1]);
   if (p[0] === 'settings') return renderSettings();
-  if (p[0] === 'pids') return renderPidLib();
+  if (p[0] === 'pids') return typeof renderPidApp === 'function' ? renderPidApp() : renderPidLib();
   if (p[0] === 'system') return renderSystem(p[1]);
   if (p[0] === 'report') return renderReport(p[1], p[2] || 'header');
   renderToolbox();
@@ -535,7 +535,7 @@ function renderSettings() {
     <label class="field"><span>Photo size</span><select data-bind="settings" data-path="photoMax">
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
-  <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this phone.</p><a class="btn primary block" href="#/pids">Open P&ID library</a></div>
+  <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
   <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
     <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules.</small></label>
@@ -608,7 +608,7 @@ function renderSystem(id) {
     })() : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
     <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
     ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📚 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
-    ${lines.length ? `<button class="btn ghost block" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button>` : ''}
+    ${lines.length ? `<div class="grid2"><button class="btn ghost" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button><button class="btn ghost" data-action="pidAuto" data-sys="${s2.id}">🔎 Find P&amp;IDs in the library</button></div>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
     ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Send to phone (prep pack)</button><p class="small muted">Prepped on a PC? This saves the whole system as one file – send it to the inspection phone by Teams or OneDrive, then on the phone: Toolbox → ⬆ Import backup.</p>` : ''}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
@@ -1312,14 +1312,14 @@ async function loadPidLib() { S.pidlib = (await DB.get('meta', 'pidlib')) || { i
 function savePidLib() { return DB.put('meta', S.pidlib); }
 function pidListHTML(q, pick) {
   q = String(q || '').toLowerCase().trim();
-  const items = S.pidlib.items.filter(x => !q || x.title.toLowerCase().includes(q) || (x.src || '').toLowerCase().includes(q));
+  const items = S.pidlib.items.filter(x => !q || [x.title, x.src, x.dwgNo].join(' ').toLowerCase().includes(q));
   if (!S.pidlib.items.length) return `<p class="small muted" style="padding:10px">Library is empty – import your P&IDs ${pick ? 'in Settings → P&ID library' : 'with the button above'}.</p>`;
   return items.map(x => pick
-    ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b><br><small>${esc(x.src || '')}</small></span></button>`
-    : `<div class="pid-item"><img src="${x.thumb}" alt=""><span style="flex:1"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}"><small>${esc(x.src || '')} · added ${esc((x.added || '').slice(0, 10))}</small></span><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';
+    ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b><br><small>${[x.dwgNo, x.rev && 'rev ' + x.rev].filter(Boolean).map(esc).join(' · ') || esc(x.src || '')}</small></span></button>`
+    : `<div class="pid-item"><img src="${x.thumb}" alt="" data-action="pidOpen" data-id="${x.id}" style="cursor:zoom-in"><span style="flex:1"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}"><small>${[x.dwgNo, x.rev && 'rev ' + x.rev].filter(Boolean).map(esc).join(' · ')}${x.dwgNo || x.rev ? ' · ' : ''}${esc(x.src || '')} · added ${esc((x.added || '').slice(0, 10))}${x.hasText === false ? ' · <i>scanned – no text</i>' : ''}</small></span><button class="btn ghost sm" data-action="pidOpen" data-id="${x.id}" aria-label="View">👁</button><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';
 }
 function pidPickerHTML() {
-  return `<div class="card" style="margin-top:6px"><input type="search" id="pidQ" placeholder="Search P&ID number / title" autocomplete="off"><div id="pidList" class="pidlist">${pidListHTML('', true)}</div></div>`;
+  return `<div class="card" style="margin-top:6px"><div class="pid-disc sm">⚠ <b>Uncontrolled copies</b> – check the latest revision. Library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}. The report gets its own copy; the library original stays clean.</div><div id="pidSuggest"></div><input type="search" id="pidQ" placeholder="Search line number, P&ID number or title" autocomplete="off"><div id="pidList" class="pidlist">${pidListHTML('', true)}</div></div>`;
 }
 function renderPidLib() {
   setTop('P&ID library', `${S.pidlib.items.length} drawing page(s) on this phone`, '/settings');
@@ -1471,7 +1471,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.attcap) { const a = cur.report.att.find(x => x.id === el.dataset.attcap); if (a) { a.caption = el.value; persist('report'); } return; }
   if (el.dataset.attrev) { const a = cur.report.att.find(x => x.id === el.dataset.attrev); if (a) { a.revOk = el.checked; persist('report'); } return; }
-  if (el.id === 'pidQ') { $('#pidList').innerHTML = pidListHTML(el.value, true); return; }
+  if (el.id === 'pidQ') { $('#pidList').innerHTML = pidListHTML(el.value, true); const q = el.value; if (typeof pidSearch === 'function' && q.trim().length >= 3) { clearTimeout(cur._pq); cur._pq = setTimeout(async () => { const res = await pidSearch(q); if ($('#pidQ')?.value === q) $('#pidList').innerHTML = res.length ? res.slice(0, 40).map(x => pidRowHTML(x, { pick: true })).join('') : '<p class="small muted" style="padding:10px">No match.</p>'; }, 250); } return; }
   if (el.id === 'pidLibQ') { $('#pidLibList').innerHTML = pidListHTML(el.value, false); return; }
   if (el.dataset.pidtitle) { const it = S.pidlib.items.find(x => x.id === el.dataset.pidtitle); if (it) { it.title = el.value; savePidLib(); } return; }
   if (el.id === 'classQ') { $('#classList').innerHTML = classListHTML(el.value); return; }
@@ -1667,20 +1667,18 @@ const actions = {
   openViewer: () => cur.report && openViewer(cur.report),
   importLines: el => { pending = { lineSys: el.dataset.sys || null }; $('#fileLines').click(); },
   importPids: () => $('#filePids').click(),
-  pidPickToggle: () => { cur.pidPick = !cur.pidPick; rerender(); },
+  pidPickToggle: () => { cur.pidPick = !cur.pidPick; rerender(); if (cur.pidPick && typeof pidSuggestFill === 'function') setTimeout(() => pidSuggestFill(cur.report), 0); },
   pickPid: async el => {
     const it = S.pidlib.items.find(x => x.id === el.dataset.id); if (!it) return; const r = cur.report;
-    const b = await getBlob(it.blobId); if (!b) return toast('Drawing missing – re-import it');
-    const a = { id: 'a_' + uid(), kind: 'pid', group: 'pid', libId: it.id, caption: it.title, blobId: await putBlob(b), w: it.w, h: it.h, ann: [], revOk: false };
-    r.att.push(a); if (!r.c.general) r.c.general = {}; if (!r.c.general.pidNumber) r.c.general.pidNumber = it.title.replace(/ – page \d+$/, '');
+    const a = await pidCopyToReport(r, it.id); if (!a) return toast('Drawing missing – re-import it');
     cur.pidPick = false; persist('report'); rerender();
     toast('⚠ Check this is the latest revision – then mark it up', 3500);
     if (await openAnnotator(a)) rerender();
   },
   delPid: async el => { const it = S.pidlib.items.find(x => x.id === el.dataset.id); if (!it || !await confirmBox('Remove P&ID', `Remove "${it.title}" from the library? Reports keep their own copies.`, 'Remove')) return;
-    await DB.del('blobs', it.blobId); S.pidlib.items = S.pidlib.items.filter(x => x.id !== it.id); await savePidLib(); renderPidLib(); },
+    await pidDelete(it); route(); },
   clearPids: async () => { if (!await confirmBox('Remove all P&IDs', 'Remove every P&ID from the library on this phone? Reports keep their own copies.', 'Remove all')) return;
-    for (const it of S.pidlib.items) await DB.del('blobs', it.blobId); S.pidlib.items = []; await savePidLib(); renderPidLib(); },
+    for (const it of [...S.pidlib.items]) await pidDelete(it, true); S.pidlib.updated = new Date().toISOString(); await savePidLib(); route(); },
   toggleTheme: () => {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
     S.settings.theme = dark ? 'light' : 'dark'; persist('settings'); applyTheme();

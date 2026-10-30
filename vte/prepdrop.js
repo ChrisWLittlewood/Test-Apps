@@ -135,6 +135,7 @@ async function prepSummary(sysId, s) {
   const btns = [['Done', '']];
   if (waiting) { btns.push(['📋 Copilot summaries', 'copilot']); if (S.settings.aiKey) btns.push(['🤖 AI summaries', 'api']); }
   if (noEp) btns.push(['✎ EP numbers', 'ep']);
+  const noPid = lines.filter(r => !(r.att || []).some(a => a.kind === 'pid')).length; if (noPid && S.pidlib.items.length) btns.push(['🔎 P&IDs from library', 'pid']);
   btns.push(['📤 Send to phone', 'send', 'primary']);
   const li = (n, t) => n ? `<li><b>${n}</b> ${t}</li>` : '';
   const res = await modal('Prep done', `<ul class="ticks">${li(s.lines, 'line(s) imported')}${li(s.ech, `ECH(s) attached, ${s.filled} field(s) filled`)}${li(s.iso, 'isometric(s) added')}${li(s.pid, 'P&ID(s) added to their lines')}${li(s.lib, 'P&ID(s) added to the library')}</ul>
@@ -144,6 +145,7 @@ async function prepSummary(sysId, s) {
     <p class="small muted">📤 Send to phone saves this whole system (lines, ECHs, photos, drawings) as one file. Send it to the inspection phone by Teams or OneDrive, then on the phone: Toolbox → ⬆ Import backup.</p>`, btns);
   if (res?.v === 'copilot') { await echBulkCopilot(sysId); return prepSummary(sysId, {}); }
   if (res?.v === 'api') { await echBulkApi(sysId); return prepSummary(sysId, {}); }
+  if (res?.v === 'pid') { await pidAutoForSystem(sysId); return prepSummary(sysId, {}); }
   if (res?.v === 'ep') { await epNumbersModal(sysId); return prepSummary(sysId, {}); }
   if (res?.v === 'send') { cur.system = S.systems.find(x => x.id === sysId); await actions.sendToPhone(); }
 }
@@ -161,7 +163,7 @@ prepInput.addEventListener('change', e => { const files = [...e.target.files]; e
 Object.assign(actions, { prepPick: el => { prepInput._sys = el.dataset.sys || null; prepInput.click(); } });
 const prepTarget = () => { const h = location.hash; const m = /^#\/system\/([^/]+)/.exec(h); return m ? { sysId: m[1] } : /^#\/imsnt/.test(h) ? { sysId: null } : null; };
 let dragDepth = 0;
-document.addEventListener('dragenter', e => { if (!prepTarget() || !e.dataTransfer?.types?.includes('Files')) return; dragDepth++; document.body.classList.add('dragging'); });
+document.addEventListener('dragenter', e => { if (!prepTarget() || !e.dataTransfer?.types?.includes('Files')) return; dragDepth++; document.body.dataset.drop = 'Drop to sort the files into this system'; document.body.classList.add('dragging'); });
 document.addEventListener('dragleave', () => { if (dragDepth && --dragDepth === 0) document.body.classList.remove('dragging'); });
 document.addEventListener('dragover', e => { if (prepTarget() && e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', async e => {
