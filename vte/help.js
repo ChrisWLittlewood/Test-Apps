@@ -86,6 +86,15 @@ const HELP = [
     <li>Each line gets its ECH, photos and these filled in (only if empty): type and date of last inspection, design code, P&amp;ID number, pipe class, F/Loc, equipment description, "ECH reviewed" and the previous findings.</li>
     <li><b>AI summaries</b> fill in the rest – previous findings, FM areas, linear meterage, valves &amp; flanges, supports and service: <i>📋 Copilot summaries</i> makes a few batches to copy into Copilot and paste back; with an authorised API key, <i>🤖 AI summaries</i> does them all in one go.</li></ol>
     <p class="small">Nothing you've typed is ever overwritten. Previous findings are refreshed when an AI summary arrives, unless you've edited them.</p>` },
+  { id: 'desktop', t: 'Prep on a PC, inspect on the phone', b: `
+    <p>The line prep is quicker on a company PC with a big screen, and the inspection then happens on the phone.</p>
+    <ol><li>On a <b>company PC</b>, open the same link in Chrome or Edge: <code>chriswlittlewood.github.io/Test-Apps/vte/</code> → IMSn't.</li>
+    <li>Download everything for the piping system into one folder: the <b>line list</b> (Excel export from IMS), the <b>previous ECHs</b> (R405 PDFs), the <b>isometrics</b> and the <b>P&amp;IDs</b>.</li>
+    <li><b>Drag the folder</b> (or the files) onto the <i>📥 Drop the prep files here</i> box. On a system page, drop just the ECHs and drawings.</li>
+    <li>The app sorts everything: the Excel file becomes the line reports; each ECH goes to its line by equipment number; an isometric goes to its line (line number in the file name or on the drawing); a P&amp;ID goes to <b>every line that uses it</b> (P&amp;ID number from the ECHs). Check the lists – anything it isn't sure about is amber – and change any that are wrong.</li>
+    <li>Then: <i>✎ EP numbers</i> (type them all in one table), <i>📋 Copilot summaries</i> for the ECHs, and tick "latest revision" on each P&amp;ID in ★ Line prep.</li>
+    <li><i>📤 Send to phone</i> saves the whole system as one file. Send it to the inspection phone by Teams or OneDrive. On the phone: Toolbox → <i>⬆ Import backup</i>.</li></ol>
+    <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
@@ -103,6 +112,7 @@ const INFO = {
   text: ['Report text', 'Written for you, in bullet points, from your checklist answers. Edit any box – edited boxes stop updating automatically.', 'imsnt'],
   aireview: ['AI review', 'Copy the review pack into Copilot, paste the reply back, then accept or reject each suggestion. Nothing is changed without you.', 'ai'],
   echai: ['AI summary of the previous ECH', 'Copy the ECH into Copilot and paste back the reply (the curly-bracket block). It sums up the last inspection and what to check this time.', 'ai'],
+  prepdrop: ['Prep drop box', 'Drop everything for a piping system – line list, previous ECHs, isometrics, P&IDs, or a whole folder – and the app sorts each file to the right line. Built for a PC; then 📤 Send to phone.', 'desktop'],
   echbulk: ['Bulk ECH import', 'Select all the previous ECH PDFs for this system at once. The phone reads each one, matches it to its line by the equipment number in the ECH header (or the file name), attaches it and fills in empty report fields. Nothing is sent anywhere. Then summarise them all with Copilot in a few batches, or with the in-app AI.', 'echbulk'],
   pack: ['Data pack', 'One private file with your asset\'s piping classes, gaskets, plot plans, FM areas and report logos. The app itself holds no company data.', 'packs'],
   aikey: ['AI key', 'Only if your company allows it. Without a key, use the copy / paste route with Copilot.', 'ai'],

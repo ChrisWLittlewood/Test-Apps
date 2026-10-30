@@ -45,7 +45,7 @@ function progressModal(title, canStop) {
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /* ---------- 1. read + sort ---------- */
-async function echBulkStart(sysId, files) {
+async function echBulkStart(sysId, files, opts = {}) {
   const sys = S.systems.find(x => x.id === sysId); if (!sys) return;
   let lines = S.reports.filter(r => r.systemId === sysId);
   const prog = progressModal(`Reading ${files.length} ECH${files.length > 1 ? 's' : ''}…`, true); const items = [];
@@ -82,8 +82,8 @@ async function echBulkStart(sysId, files) {
       else it.note = 'Replaces the older ECH on this line';
     }
   }
-  const res = await echBulkReview(sys, lines, items); if (!res) return;
-  await echBulkApply(sys, res.chosen, res.photos);
+  const res = await echBulkReview(sys, lines, items); if (!res) return null;
+  return echBulkApply(sys, res.chosen, res.photos, opts);
 }
 
 /* ---------- 2. review screen ---------- */
@@ -119,8 +119,8 @@ function echBulkReview(sys, lines, items) {
 }
 
 /* ---------- 3. attach + pre-fill ---------- */
-async function echBulkApply(sys, chosen, photos) {
-  if (!chosen.length) return;
+async function echBulkApply(sys, chosen, photos, opts = {}) {
+  if (!chosen.length) return { n: 0, filled: 0, fails: [] };
   // if the inspector pointed two ECHs at the same line, keep the newest
   const seen = {}; chosen.sort((a, b) => (b.it.parsed.date || '').localeCompare(a.it.parsed.date || ''));
   const list = chosen.filter(c => c.target === 'new' || (seen[c.target] ? false : (seen[c.target] = true)));
@@ -139,7 +139,8 @@ async function echBulkApply(sys, chosen, photos) {
   }
   prog.close();
   renderSystem(sys.id);
-  await echBulkAfter(sys.id, n, filled, fails);
+  if (!opts.quiet) await echBulkAfter(sys.id, n, filled, fails);
+  return { n, filled, fails };
 }
 function linesNeedingAi(sysId) { return S.reports.filter(r => r.systemId === sysId && r.ech && !r.ech.ai); }
 async function echBulkAfter(sysId, n, filled, fails = []) {

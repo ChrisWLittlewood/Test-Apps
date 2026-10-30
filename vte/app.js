@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -504,6 +504,7 @@ function renderHome() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install app on this phone</button>` : ''}
     ${!PACK ? `<div class="card notice">📦 No data pack loaded – import your asset's data pack in <a href="#/settings">Settings</a> to enable pipe classes, plot plans and FM areas.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="section-title"><h2>Piping systems ${iBtn('systems')}</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
+    ${typeof prepDropHTML === "function" ? prepDropHTML(null) : ""}
     <button class="btn ghost block" data-action="importLines">📥 Import line list from Excel (new system)</button>
     ${sys.length ? sys.map(s2 => {
       const lines = S.reports.filter(r => r.systemId === s2.id);
@@ -583,6 +584,7 @@ function renderSystem(id) {
       <label class="field"><span>Design code</span><select data-bind="sys" data-path="designCode"><option value="">– (per line / from ECH)</option>${STAGES[0].fields[2].opts.map(o => `<option ${s2.designCode === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
       <label class="field"><span>Description / notes</span><textarea data-bind="sys" data-path="description" rows="2">${esc(s2.description)}</textarea></label>
     </div>
+    ${typeof prepDropHTML === "function" ? prepDropHTML(s2.id) : ""}
     <div class="section-title"><h2>Line reports</h2><button class="btn primary" data-action="newLine">+ Add line</button></div>
     ${lines.length ? (() => {
       const groups = { prep: [], ready: [], prog: [], done: [] };
@@ -606,7 +608,9 @@ function renderSystem(id) {
     })() : `<div class="empty">No lines yet. Add one report per line number in the IMS schedule.</div>`}
     <button class="btn ghost block" data-action="importLines" data-sys="${s2.id}">📥 Import lines from Excel</button>
     ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📚 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
+    ${lines.length ? `<button class="btn ghost block" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
+    ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Send to phone (prep pack)</button><p class="small muted">Prepped on a PC? This saves the whole system as one file – send it to the inspection phone by Teams or OneDrive, then on the phone: Toolbox → ⬆ Import backup.</p>` : ''}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {
@@ -1390,7 +1394,7 @@ function parseLineRows(rows) {
   }
   return out;
 }
-async function importLineList(file, systemId) {
+async function importLineList(file, systemId, opts = {}) {
   const rows = parseLineRows(await readSheetRows(file));
   if (!rows.length) throw new Error('No line numbers found in the first sheet');
   const sys = systemId ? S.systems.find(x => x.id === systemId) : null;
@@ -1410,13 +1414,15 @@ async function importLineList(file, systemId) {
     const picked = $$('input[data-i]:checked', m).map(c => rows[+c.dataset.i]); const name = $('[name=sysName]', m)?.value;
     m.remove(); resolve(b.dataset.v ? { picked, name } : null);
   }));
-  if (!res || !res.picked.length) return;
+  if (!res || !res.picked.length) return null;
   let target = sys;
   if (!target) { target = { id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
   for (const x of res.picked) {
     const r = blankReport(target); r.h.tagNo = x.tag; r.h.equipDesc = x.desc; S.reports.push(r); await DB.put('reports', r);
   }
-  go('/system/' + target.id); setTimeout(() => offerEchBulk(target.id, res.picked.length), 300);
+  go('/system/' + target.id);
+  if (opts.quiet) return { sysId: target.id, n: res.picked.length };
+  setTimeout(() => offerEchBulk(target.id, res.picked.length), 300);
 }
 
 /* ================= theme ================= */
@@ -1621,6 +1627,7 @@ const actions = {
   shareDocx: () => shareBlob(cur.docx.blob, cur.docx.name, cur.docx.name),
   saveDocx: () => downloadBlob(cur.docx.blob, cur.docx.name),
   exportReport: async () => { const r = cur.report; toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
+  sendToPhone: async () => { toast('Packing this system…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection prep pack'); },
   exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   forceUpdate: () => forceUpdate(),
   checkUpdate: async el => {

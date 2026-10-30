@@ -539,3 +539,16 @@ input.ok{background:#e7f6ea!important;border-color:#43a047!important}input.bad{b
 .eb-bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin:10px 0}.eb-bar i{display:block;height:100%;width:0;background:#2e7d6b;transition:width .2s}
 .eb-btnrow{display:flex;gap:8px;align-items:center;margin-top:8px}.eb-btnrow .btn{flex:1;margin:0}
 @media (max-width:520px){.eb-row{flex-direction:column;align-items:stretch}.eb-row select{max-width:none}}
+
+.dropbox{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;border:2.5px dashed #6b9bb8;border-radius:16px;padding:18px 14px;margin:12px 0;background:rgba(80,150,200,.07);cursor:pointer;transition:background .15s,border-color .15s}
+.dropbox b{font-size:1.05rem}.dropbox span{font-size:.9rem}.dropbox small{color:var(--muted,#6b7785);font-size:.78rem}
+.dropbox:hover,.dropbox:focus-visible{background:rgba(80,150,200,.14);border-color:#2f7fb0;outline:none}
+body.dragging .dropbox{background:rgba(46,158,91,.16);border-color:#2e9e5b;border-style:solid}
+body.dragging::after{content:'Drop to sort the files into this system';position:fixed;inset:12px;border:4px dashed #2e9e5b;border-radius:20px;background:rgba(46,158,91,.10);display:flex;align-items:center;justify-content:center;font:700 1.4rem system-ui,sans-serif;color:#1f6b3e;z-index:200;pointer-events:none}
+@media (min-width:900px){.dropbox{padding:34px 20px}.dropbox b{font-size:1.25rem}}
+
+.ep-grid{display:grid;gap:6px;max-height:55vh;overflow:auto}
+.ep-grid label{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:8px;align-items:center;font-size:.86rem}
+.ep-grid span{overflow-wrap:anywhere;font-weight:600}.ep-grid input{min-height:38px}
+
+.modal-btns{flex-wrap:wrap}.modal-btns .btn{flex:1 1 auto}
