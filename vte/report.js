@@ -131,7 +131,7 @@ async function buildDocx(r, sys, settings, H) {
   const gL = [1800, 1300, 1500, 1500, 1300, 3066];
   const lineTbl = sizes.length ? T([
     hd(['Size', 'OD (mm)', 'Schedule', 'NWT (mm)', 'CA (mm)', 'PS min. wall (mm) straight / intrados'], gL),
-    ...sizes.map(L => R(sm(sizeLabel(L.dn), { bold: true }), sm(L.od), sm(L.sch), sm(L.nwt != null ? L.nwt + (L.nwtOverride ? ' *' : '') : '–'), sm(L.ca), sm(L.ps != null ? `${L.ps} / ${L.psIntrados}${L.psSmallBore ? ' (2.5 min)' : ''}` : '–')))
+    ...sizes.map(L => R(sm(sizeLabel(L.dn), { bold: true }), sm(L.od), sm(L.sch), sm(L.nwt != null ? L.nwt + (L.nwtOverride ? ' *' : '') : '–'), sm(L.ca), sm(L.ps != null ? `${L.ps} / ${L.psIntrados}${L.psSmallBore ? ' (' + crit('psSmallMin') + ' min)' : ''}` : '–')))
   ], gL) : P('Line size(s) not selected.');
   const bl = sizes.filter(L => L.bolt);
   const gB = [1500, 2300, 1500, 1800, 1650, 1716];
@@ -276,11 +276,11 @@ async function buildDocx(r, sys, settings, H) {
   sections.push({ properties: portrait, children: [
     Hd('1. Inspection details'), det,
     Hd('Line data & Performance Standard (PC005) minimum wall thickness', 2), lineTbl,
-    P('Performance Standard (PC005) 1.4: PS minimum wall = (NWT − CA) × 0.67 (× 0.9 at bend intrados); DN25 & DN40 not less than 2.5 mm. NWT per ASME B36.10/B36.19 for the class schedule' + (sizes.some(L => L.nwtOverride) ? '; * NWT entered manually' : '') + '. Below the PS minimum, continued operation only after FFS by the Mechanical Static TA.', { size: 15, color: '555555', before: 40 }),
+    P(`Performance Standard (PC005) 1.4: ${critPsTxt()}. NWT per`+' ASME B36.10/B36.19 for the class schedule' + (sizes.some(L => L.nwtOverride) ? '; * NWT entered manually' : '') + '. Below the PS minimum, continued operation only after FFS by the Mechanical Static TA.', { size: 15, color: '555555', before: 40 }),
     ...(g(r, 'c.corrosion.generalCondition') ? [Hd('General condition of line', 2), P(g(r, 'c.corrosion.generalCondition'))] : []),
     ...(measTbl ? [Hd('Corrosion assessment', 2), measTbl, P((hasPit ? '* ' + PIT_DISCLAIMER + ' Estimated MRWT = UT of adjacent steel − max pit depth. ' : '') + 'CA remaining = CA − metal loss; remaining to PS = MRWT − PS minimum.', { size: 15, color: hasPit ? '7A4B00' : '555555', before: 40, bold: hasPit })] : []),
-    ...(flBlocks.length ? [Hd('Flange / fastener assessment', 2), ...flBlocks, P('Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes 1.6 mm raised face; Class 400+ excludes 6.4 mm raised face). PS 1.8: reject studs/nuts < 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).', { size: 15, color: '555555', before: 40 })] : []),
-    ...(boltTbl ? [Hd('Flange bolting reference (from piping class)', 2), boltTbl, P('Nut A/F per ASME B18.2.2 heavy hex. PS 1.8: reject studs/nuts < 90% of nominal after removal of corrosion product.', { size: 15, color: '555555', before: 40 })] : []),
+    ...(flBlocks.length ? [Hd('Flange / fastener assessment', 2), ...flBlocks, P(`Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes 1.6 mm raised face; Class 400+ excludes 6.4 mm raised face). PS 1.8: ${critBoltTxt()}; ${critFlTxt()}.`, { size: 15, color: '555555', before: 40 })] : []),
+    ...(boltTbl ? [Hd('Flange bolting reference (from piping class)', 2), boltTbl, P(`Nut A/F per ASME B18.2.2 heavy hex. PS 1.8: ${critBoltTxt()} after removal of corrosion product.`, { size: 15, color: '555555', before: 40 })] : []),
     Hd('2. IMS piping system checklist', 2), checklist,
     Hd('3. CAIR items', 2), findTbl
   ] });

@@ -101,7 +101,7 @@ function renderFaceLib() {
   const items = [...TB.face.items].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $('#main').innerHTML = `<div class="card"><h2>🔍 Face Off</h2><p class="muted small">Flange face inspection when a joint is broken. Pick the class and size and you get a to-scale face from ASME B16.5 with the gasket sealing face shaded. Drag across the face to record a scratch, tap to record a pit, and each defect is checked by its radial projection across the seating band (ASME PCC-1 Appendix D method).</p>
       <button class="btn primary block big" data-fc="new">＋ New face inspection</button></div>
-    ${!TB.face.limits.confirmed ? `<div class="card notice small">⚠ The acceptance limits are <b>defaults</b> – check them against PCC-1 Appendix D or your site flange procedure in <a href="#/face-limits">Face Off limits</a>.</div>` : ''}
+    ${!TB.face.limits.confirmed ? `<div class="card notice small">⚠ The acceptance limits are <b>defaults</b> – check them against PCC-1 Appendix D or your site flange procedure in <a href="#/face-limits">Face Off limits</a>, or set them from your documents in <a href="#/refs">📚 Standard Issue</a>.</div>` : ''}
     ${items.length ? items.map(it => { const c = faceCtx(it), ev = faceEval(it, c); const nd = ['A', 'B'].reduce((a, k) => a + (it.sides?.[k]?.defects || []).length, 0);
       return `<a class="card link" href="#/face/${it.id}"><div class="card-title">${esc(it.line || 'No line number')}${it.flangeNo ? ' – Flange ' + esc(it.flangeNo) : ''}</div>
         <div class="muted small">${[c.cls ? 'Class ' + c.cls.c : '', c.dn ? sizeLabel(c.dn) : '', c.rating ? c.rating + '#' : '', fmtDate(it.date)].filter(Boolean).join(' · ')}</div>

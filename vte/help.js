@@ -65,10 +65,12 @@ const HELP = [
     <p>The limits are <b>defaults until you confirm them</b> against ASME PCC-1 Appendix D or your site flange procedure (Face Off → Acceptance limits).</p>` },
   { id: 'packs', t: 'Data packs', b: `
     <p>A data pack is one file holding an asset's company data: piping classes (schedules, CA, bolting, gaskets), plot plans with FM areas, reference charts and the report logos. The app on the web contains no company data – it only ever lives in the pack, on the phone.</p>
-    <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. Packs are built by hand from the piping class PDFs and plot plans by the toolbox owner – ask them for your asset's pack or an update. Packs for <b>Clipper</b> and the <b>NUIs</b> are on the way.</p>` },
-  { id: 'refs', t: 'Reference library', b: `
-    <p>The apps use data from standards such as ASME PCC-1, B16.5, B16.20 and API 571. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company).</p>
-    <p>Toolbox → <b>📚 Reference library</b> lists each document, <b>why</b> each app needs it, and where to get it. Tap <i>Add your copy (PDF)</i>; then <i>📖 Open</i> reads it in the app, offline. Documents stay on the phone only and aren't in backups – add them again on a new phone. Company documents (PC005, PC007, IBMS, site procedures) come from document control.</p>` },
+    <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. To get a pack for your asset, or an update, <b>request a new data pack for your asset</b> from the toolbox owner.</p>
+    <p><b>📍 More than one asset?</b> Tap the asset bar on the front page (or in Settings) to switch or add one. Each asset keeps its own data pack, P&amp;ID library and search indexes, and IMSn't systems; importing an asset pack for a different asset offers to create it. Reference documents in 📚 Standard Issue and the acceptance criteria are shared by every asset.</p>` },
+  { id: 'refs', t: 'Standard Issue – the reference library', b: `
+    <p><b>📚 Standard Issue</b> (on the front page) is the one place for every reference document – standards such as ASME PCC-1, B16.5 and API 571, and company documents such as PC005, PC007 and site procedures. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company); company documents come from document control. Add your own with <i>＋ Add another document</i>. Files stay on this device only and aren't in backups.</p>
+    <p><b>🎯 Acceptance criteria.</b> IMSn't, Gasket Case and Face Off take their limits from here: PS minimum wall factor, bend intrados factor, small-bore minimum, stud / nut reject level, flange thickness loss limits and the flange face defect limits. Each shows where it came from – built-in default, a document (AI scan) or set manually.</p>
+    <p><b>🤖 AI scan.</b> Reads a document and pulls out those values plus up to 25 key facts. <b>Company policy, information-security rules and licence terms may restrict sending these documents to an AI service – including Copilot. Only run a scan if you are authorised to do so. If in doubt, ask!</b> If not, use <i>✎ Set data manually</i>. Every AI value is shown with its clause and a quote, and nothing is used until you tick it.</p>` },
   { id: 'ai', t: 'AI & the previous ECH', b: `
     <p>AI is optional and only runs in the office when you tap a button. On site everything works without it.</p>
     <p><b>1. Scan (no AI)</b> – in ★ Line prep tap <i>📄 Import previous ECH</i> and pick the R405 Condition History PDF. The phone reads the text, old photos and drawings, and fills empty fields where it can.</p>
@@ -132,7 +134,7 @@ const INFO = {
   pack: ['Data pack', 'One private file with your asset\'s piping classes, gaskets, plot plans, FM areas and report logos. The app itself holds no company data.', 'packs'],
   aikey: ['AI key', 'Only if your company allows it. Without a key, use the copy / paste route with Copilot.', 'ai'],
   classes: ['Pipe class & sizes', 'Pick the class and tick every size on the line. The app then knows the schedule, NWT, CA, PS minimum wall, bolting, flange dimensions and gasket.', 'classes'],
-  refs: ['Reference library', 'Your own licensed copies of the standards the apps use, stored on this phone only.', 'refs'],
+  refs: ['Standard Issue', 'One place for every reference document. The apps take their acceptance criteria from here – set by AI scan (only if authorised – if in doubt, ask!) or manually.', 'refs'],
   iso: ['Isometricks', 'Pipes snap to the iso grid; components line up with the pipe; labels can be dragged and rotated.', 'iso'],
   flnom: ['Nominal data', 'From the pipe class and ASME B16.5: flange dimensions, bolting and the reject sizes for studs and nuts (90% of nominal).', 'gasket'],
   fronts: ['Front and base A/F', 'Front = across flats at the outer face of the nut. Base = at the bearing face against the flange, usually the most corroded. Record both nuts (side A and side B) on every stud.', 'gasket'],

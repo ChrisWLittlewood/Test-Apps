@@ -1,5 +1,5 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v2.9.1';
+const VERSION = 'vte-v2.10.0';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './checklist.js', './dm.js', './launch.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js', './tools.js', './face.js', './refs.js', './xray.js', './help.js', './echbulk.js', './prepdrop.js', './pidapp.js', './promo.js',
   './manifest.webmanifest', './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
@@ -18,6 +18,7 @@ const put = (req, res) => { if (res.ok) { const copy = res.clone(); caches.open(
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url); if (url.origin !== location.origin) return;
+  if (/\/media\//.test(url.pathname)) return;   // the advert video streams (range requests); 'Save for offline' keeps a copy in the app
   const fromCache = () => caches.match(req, { ignoreSearch: true }).then(h => h || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error()));
   // big libraries and images: cache first
   if (/\/vendor\/|\/img\//.test(url.pathname)) { e.respondWith(caches.match(req, { ignoreSearch: true }).then(h => h || fetch(req).then(r => put(req, r)))); return; }

@@ -18,11 +18,13 @@ function renderToolbox() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install Inspection Toolbox on this phone</button>` : ''}
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Add your name in <a href="#/settings">Settings</a> – it is used on every report and sheet.</div>` : ''}
     <div class="tb-hero"><h2>Inspection Toolbox</h2><p>A growing suite of offline tools for plant inspection – work without signal, export Word / PDF.</p></div>
+    ${assetBarHTML()}
     ${tile('#/imsnt', '<img src="img/imsnt-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}
     ${tile('#/flange', flIconSVG(), 'Gasket Case', 'Flange & bolting inspection sheets – stud by stud', nFl ? `${nFl} sheet${nFl === 1 ? '' : 's'}` : '')}
     ${tile('#/pids', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3b4f8a"/><rect x="11" y="13" width="34" height="40" rx="3" fill="#f4e7c9"/><path d="M16 22h10v8h12M26 30v12h10" stroke="#3b4f8a" stroke-width="3" fill="none"/><circle cx="38" cy="42" r="3.5" fill="#c8402f"/><circle cx="44" cy="40" r="10" fill="none" stroke="#e9b23a" stroke-width="4"/><path d="M51 47l7 7" stroke="#e9b23a" stroke-width="5" stroke-linecap="round"/></svg>`, 'P&amp;I Spy', 'Every P&amp;ID on the platform, searchable – type a line number, find the drawing', S.pidlib.items.length ? `${S.pidlib.items.length} P&amp;ID page${S.pidlib.items.length === 1 ? '' : 's'}` : '')}
     ${tile('#/face', faceIconSVG(), 'Face Off', 'Flange face inspection – scratches & pits vs the gasket seating band', TB.face.items.length ? `${TB.face.items.length} inspection${TB.face.items.length === 1 ? '' : 's'}` : '')}
+    ${tile('#/refs', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#5a3d2b"/><rect x="10" y="14" width="9" height="38" rx="2" fill="#e9b23a"/><rect x="21" y="10" width="9" height="42" rx="2" fill="#c8402f"/><rect x="32" y="16" width="8" height="36" rx="2" fill="#4f8fc0"/><rect x="41" y="13" width="10" height="39" rx="2" transform="rotate(12 46 32)" fill="#f4e7c9"/><rect x="8" y="52" width="48" height="4" rx="2" fill="#f4e7c9"/></svg>`, 'Standard Issue', 'Reference library – every standard &amp; procedure in one place; the apps take their acceptance criteria from here', `${Object.keys(TB.refs.items).length} document${Object.keys(TB.refs.items).length === 1 ? '' : 's'}`)}
     <div class="section-title"><h2>Experimental features</h2></div>
     ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'Totally RAD <small class="xr-exp">EXPERIMENTAL</small>', 'Radiographic Assessment Device – see through cladding for CUI. Do not point at people.', '')}
     <div class="tb-idea">💡 <b>More apps to come.</b> Have an idea, an improvement or a requirement for a specific tool or app? Let me know!</div>
@@ -35,7 +37,7 @@ function renderToolbox() {
     </div>
     <a class="btn primary block" href="#/help" style="margin-top:8px">📖 Help &amp; manual</a>
     <a class="btn ghost block" href="#/promo" style="margin-top:8px">🎬 Promo &amp; info – advert video &amp; guide</a>
-    <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Reference library <span class="pill-s">${Object.keys(TB.refs.items).length}/${REF_DOCS.length} on this phone</span></a>
+    <a class="btn ghost block" href="#/refs" style="margin-top:8px">📚 Standard Issue – reference library <span class="pill-s">${Object.keys(TB.refs.items).length} on this device</span></a>
     ${!PACK ? `<p class="small muted">📦 No data pack loaded – pipe classes, gaskets and plot plans need one (<a href="#/settings">Settings</a>).</p>` : `<p class="small muted">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="ver-row"><span>Inspection Toolbox v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
 }
@@ -195,7 +197,7 @@ function renderFlange(id) {
       ${gasketHTML(c.gk)}${gasketWarnHTML(c.gkWarn)}
       <button class="btn ${c.gk ? 'ghost' : 'primary'} sm" data-tb="flGasket">🔘 ${c.gk ? (c.gk.manual ? 'Change gasket' : 'Different gasket fitted?') : 'Choose gasket'}</button>
       ${refInlineHTML('pc005', 'flange', 'the PS 1.8 limits come from it.')}
-      <small class="muted">ASME B16.5 flange dims (Class 150/300 tf incl. 1.6 mm RF; 400+ excl. 6.4 mm RF). Heavy hex nut A/F per ASME B18.2.2. PS 1.8: reject studs / nuts &lt; 90% nominal after removing loose corrosion product.</small></div>` : ''}
+      <small class="muted">ASME B16.5 flange dims (Class 150/300 tf incl. 1.6 mm RF; 400+ excl. 6.4 mm RF). Heavy hex nut A/F per ASME B18.2.2. PS 1.8: ${critBoltTxt().replace('<', '&lt;')} after removing loose corrosion product.</small></div>` : ''}
 
     <div class="card"><h2>Measurements</h2>
       <div class="flc-wrap"><div id="flCircle">${boltCircleSVG(it, c, ev)}</div></div>
@@ -204,7 +206,7 @@ function renderFlange(id) {
       <h3>Studs & nuts <small class="muted">(min. after removing loose scale)</small> ${iBtn('fronts')}</h3>
       <div class="studtbl"><div class="sr sh"><span>Stud</span><span>Stud Ø</span><span>Nut A front</span><span>Nut A base</span><span>Nut B front</span><span>Nut B base</span></div>
         ${studs.map((_, i) => `<div class="sr"><b>${i + 1}</b>${cell(i, 'd')}${cell(i, 'af')}${cell(i, 'ab')}${cell(i, 'bf')}${cell(i, 'bb')}</div>`).join('')}</div>
-      <p class="small muted">Front = outer face of the nut; base = bearing face against the flange (usually worst). Leave blank if not measured. Red = below 90% of nominal.</p>
+      <p class="small muted">Front = outer face of the nut; base = bearing face against the flange (usually worst). Leave blank if not measured. Red = below ${crit('boltReject')}% of nominal.</p>
       ${pill('engage', it.engage, ['Yes', 'No'], 'Full nut engagement on all studs (threads through nut)?', yn(true))}
       ${pill('missing', it.missing, ['Yes', 'No'], 'Missing or loose bolting?', yn(false))}
       ${pill('gasketOk', it.gasketOk, ['Yes', 'No', 'Not visible'], 'Gasket fitted matches the class?', yn(true))}
@@ -292,7 +294,7 @@ async function buildFlangeDocx(it, H) {
   const bad = ev.studStatus.map((s2, i) => s2 === 'bad' ? i + 1 : 0).filter(Boolean);
   const kids = [Hd('Flange details'), det, Hd('Nominal data'), nom,
     Hd('Bolt circle & stud measurements'), ...(svgImg ? [new Paragraph({ children: [svgImg], alignment: AlignmentType.CENTER })] : []), studTbl,
-    P('Front = outer face of the nut; base = bearing face against the flange. PS (PC005) 1.8: reject studs / nuts < 90% of nominal after removing loose corrosion product; flange thickness loss limit as stated.', { size: 15, color: '555555', before: 40 }),
+    P(`Front = outer face of the nut; base = bearing face against the flange. PS (PC005) 1.8: ${critBoltTxt()} after removing loose corrosion product; ${critFlTxt()}.`, { size: 15, color: '555555', before: 40 }),
     Hd('Checks'), checks,
     Hd('Result'), P(ev.reject ? `Does not meet PS 1.8 – ${why.join('; ')}.` : (ev.measured ? 'Within PS 1.8 limits for the items measured.' : 'Not measured.'), { bold: true, color: ev.reject ? 'C00000' : '1A7F37' }),
     ...Object.entries(ev.worst).map(([k, w]) => P(`${k}: worst ${w.m} mm (loss ${w.loss} mm / ${w.pct}%)`, { size: 17 })),

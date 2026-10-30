@@ -129,7 +129,7 @@ const STAGES = [
     key: 'additional', no: 8, title: 'Additional', heading: 'Additional checks (Performance Standard (PC005) / IBMS attention list)', photos: true, extra: true,
     hint: 'Not part of the IMS checklist – optional checks from Performance Standard (PC005) and IBMS external attention list. Leave as "–" if not used.',
     fields: [
-      { k: 'flanges', t: 'acc', label: 'Flanges, clamp connectors & bolting', hint: 'Correct size, full engagement, none missing/loose. Reject studs/nuts < 90% nominal after scale removal. Flange thickness loss ≤ 3 mm (≥18" & ≤600#) else ≤ 3 mm or 10% (max 6 mm).' },
+      { k: 'flanges', t: 'acc', label: 'Flanges, clamp connectors & bolting', get hint() { return `Correct size, full engagement, none missing/loose. ${typeof critBoltTxt === 'function' ? critBoltTxt().replace(/^r/, 'R') : 'Reject studs/nuts < 90% nominal'} after scale removal. ${typeof critFlTxt === 'function' ? critFlTxt().replace(/^f/, 'F') : 'Flange thickness loss ≤ 3 mm (or 10%, max 6 mm)'}.`; } },
       { k: 'sbc', t: 'acc', label: 'Small bore connections', hint: 'Bracing, heavy loads, vibration/fretting.' },
       { k: 'tubing', t: 'acc', label: 'Instrument tubing', hint: 'Not corroded/distorted, matching fittings, supported, not vibrating (PS 1.10).' },
       { k: 'hoses', t: 'acc', label: 'Flexible hoses', hint: 'Certificates in date; no cuts, blisters, kinks, corrosion; bend radius OK (PS 1.11).' },

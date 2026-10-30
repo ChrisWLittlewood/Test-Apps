@@ -249,7 +249,7 @@ let PIDRES = {};
 function renderPidApp() {
   if (S.pidlib.items.some(it => !it._tidy)) pidTidyExisting().then(n => { if (n) { toast(`✨ ${n} P&ID name${n > 1 ? 's' : ''} tidied (“_Publication” suffix moved to the revision)`, 4000); if (location.hash.startsWith('#/pids')) renderPidApp(); } });
   if (S.pidlib.items.some(it => !it._desc || !it._nm)) pidDescExisting().then(n => { if (n) { toast(`📝 Descriptions read from ${n} P&ID title block${n > 1 ? 's' : ''}`, 3500); if (location.hash === '#/pids') renderPidApp(); } });
-  setTop('P&I Spy', `${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
+  setTop('P&I Spy', `${assetName()} · ${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
     <div class="card"><div class="pid-headrow"><h2>🔎 Which P&amp;IDs is it on? ${iBtn('pidspy')}</h2><a class="btn ghost sm" href="#/pids/settings">⚙ Settings</a></div>
@@ -433,7 +433,7 @@ Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1') });
 
 /* ---------- shared search index (no drawings) ---------- */
 let PIDIX = null;
-async function pidIxLoad() { if (!PIDIX) PIDIX = (await DB.get('meta', 'pidindex')) || { id: 'pidindex', packs: [] }; return PIDIX; }
+async function pidIxLoad() { if (!PIDIX) PIDIX = (await DB.get('meta', AK('pidindex'))) || { id: AK('pidindex'), packs: [] }; return PIDIX; }
 async function pidIxExport() {
   const def = PACK?.name || S.settings.defaultSite || 'Platform';
   const r = await modal('Share the P&ID search index', `<p class="small">Saves the drawing numbers, revisions and every line number / tag found on each P&amp;ID (text + AI scans) – no drawings. Send it to colleagues by Teams / OneDrive; they import it in P&amp;I Spy.</p>
@@ -525,7 +525,7 @@ async function assetExport() {
   const np = typeof promoLoad === 'function' ? Object.keys((await promoLoad()).items).length : 0;
   if (!dp && !n && !np) return toast('Nothing to export – import a data pack or some P&IDs first');
   const def = (dp?.name || PACK?.name || S.settings.defaultSite || 'Platform').replace(/\s*data\s*pack\s*/i, ' ').trim();
-  const r = await modal('Export asset pack', `<p>One file with:</p><ul class="ticks">${dp ? `<li>Data pack <b>${esc(dp.name)}</b> v${esc(dp.packVersion || '')} (piping classes, plot plans, logos)</li>` : '<li class="muted">No data pack on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with text and AI scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li><li>Promo video &amp; guide, if they're on this device</li></ul>
+  const r = await modal('Export asset pack', `<p>One file with:</p><ul class="ticks">${dp ? `<li>Data pack <b>${esc(dp.name)}</b> v${esc(dp.packVersion || '')} (piping classes, plot plans, logos)</li>` : '<li class="muted">No data pack on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with text and AI scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li><li>Owner's guide (🎬 Promo &amp; info), if it's on this device</li></ul>
     <label class="field"><span>Asset name</span><input type="text" name="name" value="${esc(def)}"></label>
     <p class="small muted">Company data – internal only, company devices / Workspace Connect only.</p>`, [['Cancel', ''], ['📤 Export', 'ok', 'primary']]);
   if (!r) return;
@@ -550,6 +550,17 @@ async function assetImport(zip) {
   const a = JSON.parse(await zip.file('asset.json').async('string')); if (a.format !== 'vte-asset-pack') throw new Error('Not an asset pack');
   const pj = zip.file('pidpack.json') ? JSON.parse(await zip.file('pidpack.json').async('string')) : { items: [] };
   const dpf = zip.file('datapack.json');
+  { // which asset does it go into?
+    const nm = s => String(s || '').toLowerCase().replace(/\s*(data|asset)\s*pack\s*/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+    const packs = {}; for (const x of ASSETS.list) packs[x.id] = (await DB.get('meta', AK('pack', x.id)))?.name || '';
+    const same = (u, v) => { u = nm(u); v = nm(v); return !!u && !!v && (u === v || u.includes(v) || v.includes(u)); };
+    const match = ASSETS.list.find(x => (a.datapack?.name && packs[x.id] && nm(packs[x.id]) === nm(a.datapack.name)) || same(assetName(x.id), a.name));
+    if (match && match.id !== ASSET) { await setAsset(match.id); toast('📍 Switched to ' + assetName()); }
+    else if (!match && PACK) {
+      const w = await modal('Which asset?', `<p>This asset pack is <b>${esc(a.name)}</b>. You're on <b>${esc(assetName())}</b>.</p><p class="small">Each asset keeps its own data pack, P&amp;IDs and systems.</p>`, [['Cancel', ''], [`Into ${assetName()}`, 'cur'], [`＋ New asset “${a.name}”`, 'new', 'primary']]);
+      if (!w) return; if (w.v === 'new') { const na = await newAsset(a.name); await setAsset(na.id); }
+    } else if (!match) { const cur0 = ASSETS.list.find(x => x.id === ASSET); if (cur0 && !cur0.name) { cur0.name = a.name; await DB.put('meta', ASSETS); } }
+  }
   const r = await modal('Import asset pack', `<p>📦 <b>${esc(a.name)}</b> – made ${fmtDate((a.created || '').slice(0, 10))}${a.by ? ' by ' + esc(a.by) : ''}.</p>
     ${dpf ? `<label class="imp-row" style="border:0"><input type="checkbox" name="dp" checked><span>Data pack <b>${esc(a.datapack?.name || '')}</b> v${esc(a.datapack?.packVersion || '')}${PACK ? ` – replaces ${esc(PACK.name)} v${esc(PACK.packVersion || '')}` : ''}</span></label>` : ''}
     <label class="imp-row" style="border:0"><input type="checkbox" name="pid" checked><span><b>${pj.items.length}</b> P&amp;ID page${pj.items.length === 1 ? '' : 's'} – same revision already here is skipped, a new revision replaces the old copy</span></label>

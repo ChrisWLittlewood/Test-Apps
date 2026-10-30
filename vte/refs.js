@@ -40,12 +40,13 @@ const REF_DOCS = [
     why: { face: 'If it sets its own face-damage acceptance table, it governs over PCC-1 – use it to set the Face Off limits.', flange: 'Site requirements for bolted joint inspection.' }, links: [] }
 ];
 TB.refs = { id: 'stdlib', items: {} };
-async function loadRefs() { TB.refs = (await DB.get('meta', 'stdlib')) || { id: 'stdlib', items: {} }; }
+async function loadRefs() { TB.refs = (await DB.get('meta', 'stdlib')) || { id: 'stdlib', items: {} }; if (typeof loadCrit === 'function') await loadCrit(); }
+const allDocs = () => [...REF_DOCS, ...(TB.refs.custom || []).map(c => ({ ...c, why: {}, links: [], custom: true }))];
 const refHas = k => !!TB.refs.items[k];
 function refsFor(app) { return REF_DOCS.filter(d => d.why[app]); }
 function refsChipHTML(app) {
   const ds = refsFor(app); const n = ds.filter(d => refHas(d.key)).length;
-  return `<a class="btn ghost block" href="#/refs/${app}">📚 Reference documents <span class="pill-s ${n === ds.length ? 'ok' : ''}">${n}/${ds.length} on this phone</span></a>`;
+  return `<a class="btn ghost block" href="#/refs/${app}">📚 Standard Issue – documents <span class="pill-s ${n === ds.length ? 'ok' : ''}">${n}/${ds.length} on this phone</span></a>`;
 }
 function refInlineHTML(key, app, msg) {
   const d = REF_DOCS.find(x => x.key === key); if (!d) return '';
@@ -54,21 +55,36 @@ function refInlineHTML(key, app, msg) {
 
 function renderRefs(app) {
   cur.report = null;
-  const list = app ? refsFor(app) : REF_DOCS;
-  setTop('Reference library', app ? APP_NAMES[app] : 'Standards & documents', app ? ({ imsnt: '/imsnt', iso: '/iso', flange: '/flange', face: '/face' }[app] || '/') : '/');
-  const card = d => { const it = TB.refs.items[d.key]; const apps = Object.keys(d.why);
-    return `<div class="card refcard ${it ? 'have' : ''}"><div class="ref-head"><div><b>${esc(d.name)}</b>${d.company ? ' <span class="pill-s">Company</span>' : ''}<br><span class="small muted">${esc(d.title)}</span></div><span class="pill-s ${it ? 'ok' : ''}">${it ? '✓ On this phone' : 'Not added'}</span></div>
-      <ul class="small refwhy">${(app ? [app] : apps).map(a => `<li><b>${APP_NAMES[a]}:</b> ${esc(d.why[a])}</li>`).join('')}</ul>
+  const list = app ? refsFor(app) : allDocs();
+  setTop('Standard Issue', app ? 'Documents for ' + APP_NAMES[app] : 'Reference library', app ? ({ imsnt: '/imsnt', iso: '/iso', flange: '/flange', face: '/face' }[app] || '/') : '/');
+  const card = d => { const it = TB.refs.items[d.key]; const apps = Object.keys(d.why); const defs = refDefsFor(d);
+    return `<div class="card refcard ${it ? 'have' : ''}" data-refcard><div class="ref-head"><div><b>${esc(d.name)}</b>${d.company ? ' <span class="pill-s">Company</span>' : ''}<br><span class="small muted">${esc(d.title || '')}</span></div><span class="pill-s ${it ? 'ok' : ''}">${it ? '✓ On this device' : 'Not added'}</span></div>
+      ${apps.length ? `<ul class="small refwhy">${(app ? [app] : apps).map(a => `<li><b>${APP_NAMES[a]}:</b> ${esc(d.why[a])}</li>`).join('')}</ul>` : '<p class="small muted">Your own document.</p>'}
+      ${defs.length && !d.custom ? `<p class="small">🎯 Sets: ${defs.map(x => esc(x.label)).join(', ')}</p>` : ''}
       ${it ? `<p class="small muted">${esc(it.name)} · ${(it.size / 1048576).toFixed(1)} MB · added ${fmtDate((it.addedAt || '').slice(0, 10))}</p>` : ''}
-      <div class="grid2">${it ? `<button class="btn primary sm" data-ref="open" data-k="${d.key}">📖 Open</button><button class="btn ghost sm" data-ref="del" data-k="${d.key}">Remove</button>` : `<button class="btn primary sm" data-ref="add" data-k="${d.key}">⬆ Add your copy (PDF)</button>`}</div>
+      ${refFactsHTML(d.key)}
+      <div class="grid2">${it ? `<button class="btn primary sm" data-ref="open" data-k="${d.key}">📖 Open</button>` : `<button class="btn primary sm" data-ref="add" data-k="${d.key}">⬆ Add your copy (PDF)</button>`}
+        <button class="btn ghost sm" data-ref="ai" data-k="${d.key}">🤖 AI scan</button>
+        ${defs.length ? `<button class="btn ghost sm" data-ref="manual" data-k="${d.key}">✎ Set data manually</button>` : ''}
+        ${it ? `<button class="btn ghost sm danger-t" data-ref="del" data-k="${d.key}">Remove file</button>` : ''}${d.custom ? `<button class="btn ghost sm danger-t" data-ref="custDel" data-k="${d.key}">Delete entry</button>` : ''}</div>
       ${d.links.length ? `<div class="reflinks small">${d.links.map(([l, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join(' · ')}</div>` : d.company ? '<div class="reflinks small muted">Get the current revision from document control.</div>' : ''}</div>`; };
-  $('#main').innerHTML = `<div class="card"><h2>📚 Reference library ${iBtn('refs')}</h2>
-      <p class="small">The apps use data from these documents. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company). Files stay on this phone only – they are not uploaded anywhere and are not included in backups.</p>
-      ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}</div>
+  const nHave = allDocs().filter(d => TB.refs.items[d.key]).length;
+  $('#main').innerHTML = `<div class="card"><h2>📚 Standard Issue ${iBtn('refs')}</h2>
+      <p class="small">One place for every reference document – standards, performance standards and site procedures. <b>The apps take their acceptance criteria from here.</b> Each user adds their own licensed copy (or one supplied by the company). Files stay on this device only – never uploaded, not in backups.</p>
+      <div class="pid-disc sm">⚠ Company policy and licence terms may restrict sending these documents to an AI service. Only use 🤖 AI scan if you're authorised – <b>if in doubt, ask!</b> Otherwise set the data manually.</div>
+      <input type="search" id="refQ" placeholder="Search documents and key facts" autocomplete="off">
+      ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}
+      <p class="small muted">${nHave} of ${allDocs().length} documents on this device.</p></div>
+    ${app ? '' : critCardHTML()}
+    <div class="section-title"><h2>Standards</h2></div>
     ${list.filter(d => !d.company).map(card).join('')}
     <div class="section-title"><h2>Company documents</h2></div>
-    ${list.filter(d => d.company).map(card).join('') || '<p class="muted small">None needed for this app.</p>'}`;
+    ${list.filter(d => d.company).map(card).join('') || '<p class="muted small">None needed for this app.</p>'}
+    ${app ? '' : '<button class="btn ghost block" data-ref="custom" data-k="">＋ Add another document</button>'}
+    <div class="card"><h3>Also in the toolbox</h3><p class="small">P&amp;IDs live in <a href="#/pids">P&amp;I Spy</a>; piping classes and plot plans come from the data pack in <a href="#/settings">Settings</a>.</p></div>`;
 }
+document.addEventListener('input', e => { if (e.target.id !== 'refQ') return; const q = e.target.value.toLowerCase().trim();
+  $$('[data-refcard]').forEach(c => { const hit = !q || c.textContent.toLowerCase().includes(q); c.hidden = !hit; const det = $('details', c); if (det) det.open = !!q && hit && $('details', c).textContent.toLowerCase().includes(q); }); });
 async function addRef(key) {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,.pdf';
   inp.onchange = async () => {
@@ -76,13 +92,13 @@ async function addRef(key) {
     const old = TB.refs.items[key]; if (old) await DB.del('blobs', old.blobId);
     const blobId = 'std_' + key + '_' + uid(); await DB.put('blobs', { id: blobId, blob: f });
     TB.refs.items[key] = { blobId, name: f.name, size: f.size, addedAt: new Date().toISOString() };
-    await DB.put('meta', TB.refs); toast(`${REF_DOCS.find(d => d.key === key)?.name || 'Document'} added`); route();
+    await DB.put('meta', TB.refs); toast(`${allDocs().find(d => d.key === key)?.name || 'Document'} added`); route();
   };
   inp.click();
 }
 async function openRef(key) {
   const it = TB.refs.items[key]; if (!it) return; const b = await getBlob(it.blobId); if (!b) return toast('File missing – add it again');
-  const d = REF_DOCS.find(x => x.key === key);
+  const d = allDocs().find(x => x.key === key);
   const ov = document.createElement('div'); ov.className = 'refview';
   ov.innerHTML = `<div class="annot-top"><button class="btn ghost" data-rv="close">✕ Close</button><span>${esc(d?.name || it.name)}</span><span class="rv-z"><button class="btn ghost sm" data-rv="zout">－</button><button class="btn ghost sm" data-rv="zin">＋</button></span></div>
     <div class="rv-pages"><p class="muted" style="padding:20px">Loading…</p></div>`;
@@ -112,5 +128,165 @@ document.addEventListener('click', async e => {
   const b = e.target.closest('[data-ref]'); if (!b) return; e.preventDefault(); const k = b.dataset.k;
   if (b.dataset.ref === 'add') return addRef(k);
   if (b.dataset.ref === 'open') return openRef(k);
+  if (b.dataset.ref === 'ai') return refAiScan(k);
+  if (b.dataset.ref === 'manual') return critManual(k);
+  if (b.dataset.ref === 'custom') return refAddCustom();
+  if (b.dataset.ref === 'critReset') { if (!await confirmBox('Reset criteria', 'Put every acceptance value back to the built-in defaults?', 'Reset')) return; TB.crit.items = {}; await critSaved(); if (TB.face) { TB.face.limits = clone(FACE_LIMIT_DEFAULTS); saveFace(); } return route(); }
+  if (b.dataset.ref === 'factsDel') { delete TB.refs.ai[k]; await DB.put('meta', TB.refs); return route(); }
+  if (b.dataset.ref === 'custDel') { if (!await confirmBox('Delete entry', 'Delete this document entry (and its file and facts) from the library?', 'Delete')) return; const it = TB.refs.items[k]; if (it) await DB.del('blobs', it.blobId); delete TB.refs.items[k]; if (TB.refs.ai) delete TB.refs.ai[k]; TB.refs.custom = (TB.refs.custom || []).filter(c => c.key !== k); await DB.put('meta', TB.refs); return route(); }
   if (b.dataset.ref === 'del') { if (!await confirmBox('Remove document', 'Remove this document from the phone?', 'Remove')) return; await DB.del('blobs', TB.refs.items[k].blobId); delete TB.refs.items[k]; await DB.put('meta', TB.refs); route(); }
 });
+
+/* ================= Standard Issue: acceptance criteria the apps pull from the library ================= */
+const CRIT_DEFS = [
+  { k: 'psFactor', label: 'PS minimum wall factor', unit: '× (NWT − CA)', def: 0.67, min: 0.3, max: 1, docs: ['pc005'], apps: "IMSn't", ask: 'performance-standard minimum allowable wall thickness of piping, as a factor of (nominal wall thickness minus corrosion allowance), e.g. 0.67' },
+  { k: 'psIntrados', label: 'Bend intrados factor', unit: '× (NWT − CA)', def: 0.9, min: 0.3, max: 1, docs: ['pc005'], apps: "IMSn't", ask: 'minimum wall factor at the intrados (inside radius) of pipe bends, as a factor of (NWT − CA)' },
+  { k: 'psSmallMin', label: 'Small-bore (DN25 / DN40) minimum wall', unit: 'mm', def: 2.5, min: 0.5, max: 10, docs: ['pc005'], apps: "IMSn't", ask: 'absolute minimum wall thickness for small-bore pipe (DN25 / DN40), in mm' },
+  { k: 'boltReject', label: 'Reject studs / nuts below', unit: '% of nominal', def: 90, min: 50, max: 100, docs: ['pc005', 'flangeproc', 'eibolt'], apps: "IMSn't, Gasket Case", ask: 'reject level for stud diameter and nut across-flats as a percentage of nominal (e.g. 90 means reject below 90%)' },
+  { k: 'flLossMin', label: 'Flange thickness loss limit', unit: 'mm', def: 3, min: 0.5, max: 20, docs: ['pc005', 'flangeproc'], apps: "IMSn't, Gasket Case", ask: 'basic allowable flange thickness loss in mm' },
+  { k: 'flLossPct', label: 'Flange loss – percentage rule', unit: '% of thickness', def: 10, min: 1, max: 50, docs: ['pc005', 'flangeproc'], apps: "IMSn't, Gasket Case", ask: 'allowable flange thickness loss as a percentage of flange thickness, if stated' },
+  { k: 'flLossMax', label: 'Flange loss – maximum', unit: 'mm', def: 6, min: 1, max: 30, docs: ['pc005', 'flangeproc'], apps: "IMSn't, Gasket Case", ask: 'upper cap on allowable flange thickness loss in mm, if stated' },
+  { k: 'faceSoftShallow', label: 'Face defect – soft gasket, not below serration root', unit: '× sealing width', def: 0.5, min: 0.05, max: 1, face: ['soft', 'shallow'], docs: ['flangeproc', 'pcc1'], apps: 'Face Off', ask: 'flange face defect acceptance for SOFT-faced gaskets (spiral wound, flat): maximum radial projection of a defect NOT deeper than the serration root, as a FRACTION of the gasket sealing width' },
+  { k: 'faceSoftDeep', label: 'Face defect – soft gasket, below serration root', unit: '× sealing width', def: 0.25, min: 0.02, max: 1, face: ['soft', 'deep'], docs: ['flangeproc', 'pcc1'], apps: 'Face Off', ask: 'as above for SOFT-faced gaskets, defect DEEPER than the serration root, as a FRACTION of the sealing width' },
+  { k: 'faceHardShallow', label: 'Face defect – hard gasket, not below serration root', unit: '× sealing width', def: 0.25, min: 0.02, max: 1, face: ['hard', 'shallow'], docs: ['flangeproc', 'pcc1'], apps: 'Face Off', ask: 'as above for HARD-faced gaskets (metal, RTJ, kammprofile), defect NOT deeper than the serration root, as a FRACTION of the sealing width' },
+  { k: 'faceHardDeep', label: 'Face defect – hard gasket, below serration root', unit: '× sealing width', def: 0.125, min: 0.01, max: 1, face: ['hard', 'deep'], docs: ['flangeproc', 'pcc1'], apps: 'Face Off', ask: 'as above for HARD-faced gaskets, defect DEEPER than the serration root, as a FRACTION of the sealing width' }
+];
+TB.crit = { id: 'criteria', items: {} };
+async function loadCrit() { TB.crit = (await DB.get('meta', 'criteria')) || { id: 'criteria', items: {} }; }
+const critDef = k => CRIT_DEFS.find(x => x.k === k);
+function crit(k) {
+  const d = critDef(k); if (!d) return null;
+  if (d.face && TB.face?.limits?.[d.face[0]]) return +TB.face.limits[d.face[0]][d.face[1]];
+  const it = TB.crit?.items?.[k]; return it && it.v != null && isFinite(+it.v) ? +it.v : d.def;
+}
+async function critSet(k, v, info) {
+  const d = critDef(k); v = +v; if (!d || !isFinite(v)) return;
+  TB.crit.items[k] = { v, ...info, at: new Date().toISOString(), by: S.settings.inspectorName || '' };
+  if (d.face && TB.face?.limits) { TB.face.limits[d.face[0]][d.face[1]] = v; TB.face.limits.confirmed = true; if (typeof saveFace === 'function') saveFace(); }
+}
+const critSaved = () => DB.put('meta', TB.crit);
+function critSrcHTML(k) {
+  const d = critDef(k), it = TB.crit.items[k];
+  if (it && (!d.face || +it.v === crit(k))) { const doc = allDocs().find(x => x.key === it.doc);
+    return `<span class="pill-s ok">${it.src === 'ai' ? '🤖' : '✎'} ${esc(doc?.name || (it.src === 'ai' ? 'AI scan' : 'Manual'))}${it.ref ? ' · ' + esc(it.ref) : ''}</span><br><small class="muted">${it.src === 'ai' ? 'AI-extracted, confirmed' : 'Set manually'}${it.by ? ' by ' + esc(it.by) : ''} ${fmtDate((it.at || '').slice(0, 10))}</small>`; }
+  if (d.face && TB.face?.limits?.confirmed) return '<span class="pill-s ok">Set in Face Off</span>';
+  return '<span class="pill-s warn">Default – not confirmed</span>';
+}
+/* text snippets used by the apps and reports */
+const critPsTxt = () => `PS minimum wall = (NWT − CA) × ${crit('psFactor')}; bend intrados × ${crit('psIntrados')}; DN25/DN40 not less than ${crit('psSmallMin')} mm`;
+const critBoltTxt = () => `reject studs/nuts < ${crit('boltReject')}% of nominal`;
+const critFlTxt = () => `flange thickness loss ≤ ${crit('flLossMin')} mm (DN ≥ 450, ≤ 600#) else ${crit('flLossMin')} mm or ${crit('flLossPct')}% (max ${crit('flLossMax')} mm)`;
+function critCardHTML() {
+  const nDef = CRIT_DEFS.filter(d => critSrcHTML(d.k).includes('Default')).length;
+  return `<div class="card"><h3>🎯 Acceptance criteria used by the apps</h3>
+    <p class="small muted">IMSn't, Gasket Case and Face Off take these values from here. Set them from your documents – by 🤖 AI scan (where authorised) or ✎ manually.${nDef ? ` <b>${nDef}</b> still on built-in defaults – confirm them against the current documents.` : ''}</p>
+    <div class="crit-tbl">${CRIT_DEFS.map(d => `<div class="crit-row"><div><b>${esc(d.label)}</b><br><small class="muted">${esc(d.apps)}</small></div><div class="crit-v"><b>${crit(d.k)}</b> <small>${esc(d.unit)}</small><br>${critSrcHTML(d.k)}</div></div>`).join('')}</div>
+    <div class="grid2"><button class="btn primary" data-ref="manual" data-k="">✎ Set data manually</button><button class="btn ghost" data-ref="critReset">↺ Reset to defaults</button></div></div>`;
+}
+document.addEventListener('change', e => { if (e.target.matches('input[type=checkbox][data-cv]')) e.target.value = e.target.checked ? 'yes' : ''; });
+
+async function critManual(docKey) {
+  const doc = allDocs().find(x => x.key === docKey);
+  const defs = docKey ? CRIT_DEFS.filter(d => d.docs.includes(docKey) || doc?.custom) : CRIT_DEFS; if (!defs.length) return toast('No app values come from this document');
+  const r = await modal(`✎ Set data manually${doc ? ' – ' + doc.name : ''}`, `<p class="small">Type the values from the current revision of the document. The apps use them straight away. Only values you change are re-labelled${docKey ? ' (unchanged defaults are marked as confirmed from this document)' : ''}.</p>
+    ${defs.map(d => `<label class="field"><span>${esc(d.label)} <small class="muted">(${esc(d.unit)}; default ${d.def})</small></span><input type="text" inputmode="decimal" name="v_${d.k}" value="${crit(d.k)}"></label>`).join('')}
+    <label class="field"><span>Source document</span><select name="doc"><option value="">–</option>${allDocs().map(x => `<option value="${x.key}" ${x.key === docKey ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+    <label class="field"><span>Clause / table / revision</span><input type="text" name="ref" placeholder="e.g. 1.4, rev 5"></label>`, [['Cancel', ''], ['Save', 'ok', 'primary']]);
+  if (!r) return;
+  let n = 0;
+  for (const d of defs) { const v = num(r.vals['v_' + d.k]); if (v == null) continue; if (v < d.min || v > d.max) { toast(`⚠ ${d.label}: ${v} looks wrong (expected ${d.min}–${d.max}) – not saved`, 5000); continue; }
+    if (v !== crit(d.k) || (docKey && !TB.crit.items[d.k])) { await critSet(d.k, v, { src: 'manual', doc: r.vals.doc || '', ref: r.vals.ref || '' }); n++; } }
+  await critSaved(); toast(`✓ ${n} value${n === 1 ? '' : 's'} saved`); route();
+}
+
+/* ----- AI scan of a reference document ----- */
+function refAiPrompt(d, defs, viaAttachment) {
+  return `You are reading the document "${d.name}${d.title ? ' – ' + d.title : ''}" for a UK offshore piping / plant inspector's app.${viaAttachment ? ' The document is attached.' : ''}
+1. Find these values IF THIS DOCUMENT STATES THEM. Do not guess and do not use values from other documents or general knowledge – use null if this document does not state it. For each give "value" (a number in the unit asked), "ref" (clause / table and page), "quote" (short exact quote, max 25 words) and optional "note".
+${defs.map(x => `- ${x.k}: ${x.ask} [unit: ${x.unit}]`).join('\n')}
+2. List up to 25 key facts useful to a plant inspector from this document (acceptance criteria, limits, inspection requirements and intervals, reporting rules), each paraphrased in max 40 words with its clause / page.
+Reply with ONLY a JSON object in exactly this shape:
+{"docRev":"revision / edition / date if stated","values":{${defs.map(x => `"${x.k}":{"value":null,"ref":"","quote":"","note":""}`).join(',')}},"facts":[{"topic":"","text":"","ref":""}]}`;
+}
+async function refReadText(blob) {
+  const pdfjs = await getPdfjs(); const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise; const pages = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pg = await doc.getPage(i); const tc = await pg.getTextContent(); let s = '', y0 = null;
+    for (const t of tc.items) { if (!t.str) continue; const y = t.transform[5]; s += (y0 != null && Math.abs(y - y0) > 2) ? '\n' : (s && !/\s$/.test(s) ? ' ' : ''); s += t.str; y0 = y; }
+    pages.push(s.replace(/[ \t]+/g, ' ').trim()); try { pg.cleanup(); } catch { } if (i % 10 === 0) await tick();
+  }
+  const n = doc.numPages; try { await doc.destroy(); } catch { } return { pages, n };
+}
+const REF_KW = /minimum wall|wall thickness|intrados|small[- ]bore|DN ?25|DN ?40|stud|nut|across flats|bolt|flange|thickness loss|radial projection|serration|gasket|appendix d|acceptance|accept|reject|shall|limit|interval|inspect/gi;
+function refPickPages(pages, cap = 150000) {
+  const tot = pages.reduce((a, p) => a + p.length, 0); if (tot <= cap) return pages.map((p, i) => i);
+  const sc = pages.map((p, i) => [i, (p.match(REF_KW) || []).length / Math.sqrt(1 + p.length / 2000)]).sort((a, b) => b[1] - a[1]); const out = []; let n = 0;
+  for (const [i] of sc) { if (n + pages[i].length > cap) continue; out.push(i); n += pages[i].length; }
+  return out.sort((a, b) => a - b);
+}
+async function refAiCall(d, defs, blob) {
+  const key = S.settings.aiKey; if (!key) throw new Error('No API key set (Settings → AI)');
+  const { pages, n } = await refReadText(blob); const textLen = pages.join('').length; let content;
+  if (textLen > 300) { const pick = refPickPages(pages);
+    content = [{ type: 'text', text: `${pick.length < n ? `Selected pages (${pick.length} of ${n}, chosen by keyword):` : `Full text (${n} pages):`}\n\n${pick.map(i => `=== Page ${i + 1} ===\n${pages[i]}`).join('\n\n')}` }, { type: 'text', text: refAiPrompt(d, defs, false) }]; }
+  else if (blob.size < 20 * 1048576 && n <= 100) content = [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: (await b64.enc(blob)).split(',')[1] } }, { type: 'text', text: refAiPrompt(d, defs, true) }];
+  else throw new Error('This PDF has no text layer and is too big to send as pictures – set the data manually');
+  const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: S.settings.aiModel || 'claude-sonnet-5-5', max_tokens: 6000, messages: [{ role: 'user', content }] }) });
+  if (!res.ok) throw new Error(`AI request failed (${res.status}) ${(await res.text()).slice(0, 120)}`);
+  return parseAiJson(((await res.json()).content || []).map(c => c.text || '').join(''));
+}
+const refDefsFor = d => CRIT_DEFS.filter(x => x.docs.includes(d.key) || d.custom);
+async function refAiScan(key) {
+  const d = allDocs().find(x => x.key === key); if (!d) return; const it = TB.refs.items[key]; const defs = refDefsFor(d);
+  const hasKey = !!S.settings.aiKey;
+  const r = await modal('🤖 AI scan – ' + d.name, `<div class="pid-disc"><b>⚠ Are you authorised?</b> Company policy, information-security rules and the document's licence terms may restrict sending this document to an AI service (including Copilot). Standards are copyright; company documents may be confidential.</div>
+    <p><b>Only run the scan if you are authorised to do so. If in doubt, ask!</b> – your line manager, TA or information security.</p>
+    <p class="small">Not authorised, or not sure? ${defs.length ? '<b>Set the data manually</b> instead – it takes a minute and works offline.' : 'Read the document in the app instead – nothing in the apps depends on it.'}</p>
+    <label class="imp-row"><input type="checkbox" name="auth" value="" data-cv> <span>I'm authorised to send <b>${esc(d.name)}</b> to the AI service</span></label>
+    <p class="small muted">${hasKey && it ? '🤖 <b>Scan now</b> sends the document text (or pages) with your API key. ' : ''}📋 <b>Copilot</b> copies a prompt – attach the document in Copilot yourself and paste the reply back. You check every value before it's used.</p>`,
+    [['Cancel', ''], ...(defs.length ? [['✎ Set manually', 'manual']] : []), ['📋 Copilot', 'copilot'], ...(hasKey && it ? [['🤖 Scan now', 'api', 'primary']] : [])]);
+  if (!r) return; if (r.v === 'manual') return critManual(key);
+  if (r.vals.auth !== 'yes') { toast('Tick to confirm you are authorised – or set the data manually', 4500); return refAiScan(key); }
+  const auth = { by: S.settings.inspectorName || '', at: new Date().toISOString(), via: r.v };
+  let j;
+  if (r.v === 'copilot') {
+    try { await navigator.clipboard.writeText(refAiPrompt(d, defs, true)); toast('Prompt copied – paste it into Copilot with the document attached', 5000); } catch { }
+    const p = await modal('📋 Paste the Copilot reply', `<ol class="small"><li>Open Copilot, <b>attach ${esc(d.name)}</b> and paste the prompt (already copied).</li><li>Copy <b>all</b> of the reply – the block with { } brackets – and paste it here.</li></ol>
+      <textarea name="reply" rows="8" placeholder="Paste the reply here"></textarea><button class="btn ghost sm" type="button" onclick="navigator.clipboard.writeText(${esc(JSON.stringify(refAiPrompt(d, defs, true)))})">📋 Copy the prompt again</button>`, [['Cancel', ''], ['Check values', 'ok', 'primary']]);
+    if (!p) return; try { j = parseAiJson(p.vals.reply || ''); } catch (e) { return toast('⚠ ' + e.message, 5000); }
+  } else {
+    const prog = progressModal('Reading ' + d.name + '…', false); prog.set(0, 1, 'Sending to the AI service – this can take a minute');
+    try { j = await refAiCall(d, defs, await getBlob(it.blobId)); } catch (e) { prog.close(); return modal('AI scan failed', `<p>${esc(e.message)}</p>`, [['OK', '']]); }
+    prog.close();
+  }
+  return refAiReview(d, defs, j, auth);
+}
+async function refAiReview(d, defs, j, auth) {
+  const vals = j.values || {}; const facts = (j.facts || []).filter(f => f && f.text).slice(0, 40);
+  const found = defs.map(x => [x, vals[x.k]]).filter(([, v]) => v && v.value != null && isFinite(+v.value));
+  const r = await modal('Check the AI results', `<p class="small">From <b>${esc(d.name)}</b>${j.docRev ? ' (' + esc(j.docRev) + ')' : ''}. AI can misread tables – check each value against the document before ticking it.</p>
+    ${found.length ? found.map(([x, v]) => { const ok = +v.value >= x.min && +v.value <= x.max; return `<div class="crit-rev ${ok ? '' : 'bad'}"><label class="imp-row"><input type="checkbox" name="c_${x.k}" value="${ok ? 'yes' : ''}" data-cv ${ok ? 'checked' : ''}><span><b>${esc(x.label)}</b> <small class="muted">now ${crit(x.k)} ${esc(x.unit)}</small></span></label>
+      <input type="text" inputmode="decimal" name="v_${x.k}" value="${esc(String(v.value))}"><small>${esc(v.ref || '')}${v.quote ? ` – “${esc(v.quote)}”` : ''}${v.note ? ' · ' + esc(v.note) : ''}${ok ? '' : ` · <b>outside the expected ${x.min}–${x.max}</b>`}</small></div>`; }).join('')
+    : `<p class="small muted">${defs.length ? 'None of the app values were found in this document – set them manually if they are elsewhere.' : 'No app values come from this document.'}</p>`}
+    <p class="small"><b>${facts.length}</b> key fact${facts.length === 1 ? '' : 's'} will be saved with the document (marked as AI-extracted).</p>`, [['Cancel', ''], ['✓ Use ticked values', 'ok', 'primary']]);
+  if (!r) return;
+  let n = 0; for (const [x, v] of found) { if (r.vals['c_' + x.k] !== 'yes') continue; const nv = num(r.vals['v_' + x.k]); if (nv == null || nv < x.min || nv > x.max) continue; await critSet(x.k, nv, { src: 'ai', doc: d.key, ref: v.ref || '', quote: v.quote || '' }); n++; }
+  await critSaved();
+  TB.refs.ai = TB.refs.ai || {}; TB.refs.ai[d.key] = { at: new Date().toISOString(), docRev: j.docRev || '', facts, auth, model: auth.via === 'copilot' ? 'Copilot' : (S.settings.aiModel || 'AI') };
+  await DB.put('meta', TB.refs); toast(`✓ ${n} value${n === 1 ? '' : 's'} applied · ${facts.length} facts saved`, 4000); route();
+}
+function refFactsHTML(key) {
+  const a = TB.refs.ai?.[key]; if (!a?.facts?.length) return '';
+  return `<details class="ref-facts"><summary>🤖 ${a.facts.length} key facts${a.docRev ? ' · ' + esc(a.docRev) : ''} <small class="muted">(AI-extracted ${fmtDate(a.at.slice(0, 10))} – check against the document)</small></summary>
+    <ul class="small">${a.facts.map(f => `<li>${f.topic ? `<b>${esc(f.topic)}:</b> ` : ''}${esc(f.text)}${f.ref ? ` <small class="muted">(${esc(f.ref)})</small>` : ''}</li>`).join('')}</ul>
+    <button class="btn ghost sm danger-t" data-ref="factsDel" data-k="${key}">Remove these facts</button></details>`;
+}
+async function refAddCustom() {
+  const r = await modal('＋ Add a document', `<label class="field"><span>Short name</span><input type="text" name="name" placeholder="e.g. DEP 31.38.01.31"></label><label class="field"><span>Title</span><input type="text" name="title" placeholder="e.g. Piping – general requirements"></label>
+    <label class="imp-row"><input type="checkbox" name="company" value="" data-cv> <span>Company document</span></label>`, [['Cancel', ''], ['Add', 'ok', 'primary']]);
+  if (!r || !r.vals.name?.trim()) return;
+  TB.refs.custom = TB.refs.custom || []; const key = 'cu_' + uid(); TB.refs.custom.push({ key, name: r.vals.name.trim(), title: (r.vals.title || '').trim(), company: r.vals.company === 'yes' });
+  await DB.put('meta', TB.refs); route(); setTimeout(() => addRef(key), 50);
+}

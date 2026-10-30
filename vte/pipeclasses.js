@@ -39,14 +39,16 @@ function lineData(r, dn) {
   if (num(ov.nwt) != null) { out.nwt = num(ov.nwt); out.nwtOverride = true; }
   if (out.nwt != null && out.ca != null) {
     const base = out.nwt - out.ca;
-    out.ps = r2(base * 0.67); out.psIntrados = r2(base * 0.9);
-    if (out.dn === 25 || out.dn === 40) { out.ps = Math.max(out.ps, 2.5); out.psIntrados = Math.max(out.psIntrados, 2.5); out.psSmallBore = true; }
+    const C = k => (typeof crit === 'function' ? crit(k) : { psFactor: 0.67, psIntrados: 0.9, psSmallMin: 2.5 }[k]);
+    out.ps = r2(base * C('psFactor')); out.psIntrados = r2(base * C('psIntrados'));
+    if (out.dn === 25 || out.dn === 40) { const m = C('psSmallMin'); out.ps = Math.max(out.ps, m); out.psIntrados = Math.max(out.psIntrados, m); out.psSmallBore = true; }
   }
   return out;
 }
 function boltData(n, dia, len) {
   const d = inchToNum(dia), af = 1.5 * d + 0.125;   // ASME B18.2.2 heavy hex nut: F = 1.5D + 1/8"
-  return { n, dia, len, diaMm: r2(d * 25.4), dia90: r2(d * 25.4 * 0.9), af, afIn: afInch(af), afMm: r2(af * 25.4), af90: r2(af * 25.4 * 0.9), thread: d <= 1 ? 'UNC' : '8UN' };
+  const rj = (typeof crit === 'function' ? crit('boltReject') : 90) / 100;   // reject level from Standard Issue (PS 1.8 default 90%)
+  return { n, dia, len, diaMm: r2(d * 25.4), dia90: r2(d * 25.4 * rj), af, afIn: afInch(af), afMm: r2(af * 25.4), af90: r2(af * 25.4 * rj), thread: d <= 1 ? 'UNC' : '8UN' };
 }
 function afInch(x) {   // format inches as mixed fraction (1/16 precision)
   const w = Math.floor(x + 1e-9); let f = Math.round((x - w) * 16);
@@ -108,12 +110,14 @@ function flangeData(r, f, idx) {
     out.rows.push(o); return o;
   };
   if (fd) {
-    const allow = (+dn >= 450 && rating <= 600) ? 3 : r2(Math.max(3, Math.min(0.1 * fd.tf, 6)));
+    const C = k => (typeof crit === 'function' ? crit(k) : { flLossMin: 3, flLossPct: 10, flLossMax: 6 }[k]);
+    const allow = (+dn >= 450 && rating <= 600) ? C('flLossMin') : r2(Math.max(C('flLossMin'), Math.min(C('flLossPct') / 100 * fd.tf, C('flLossMax'))));
     row('tf', 'Flange thickness', fd.tf, f.tf, allow, `PS: loss ≤ ${allow} mm`);
   } else row('tf', 'Flange thickness', null, f.tf, null, 'Nominal not available for this size/rating');
   if (bolt) {
-    row('stud', 'Stud diameter', bolt.diaMm, f.stud, r2(bolt.diaMm * 0.1), 'Reject if < 90% nominal');
-    row('nut', 'Nut across flats', bolt.afMm, f.nut, r2(bolt.afMm * 0.1), 'Reject if < 90% nominal');
+    const rp = typeof crit === 'function' ? crit('boltReject') : 90;
+    row('stud', 'Stud diameter', bolt.diaMm, f.stud, r2(bolt.diaMm * (1 - rp / 100)), `Reject if < ${rp}% nominal`);
+    row('nut', 'Nut across flats', bolt.afMm, f.nut, r2(bolt.afMm * (1 - rp / 100)), `Reject if < ${rp}% nominal`);
   } else { row('stud', 'Stud diameter', null, f.stud, null, 'Select nominal stud size'); row('nut', 'Nut across flats', null, f.nut, null, 'Select nominal stud size'); }
   out.fail = out.rows.some(x => x.fail) || f.missing === 'Yes' || f.engagement === 'No';
   out.measured = out.rows.some(x => x.meas != null);

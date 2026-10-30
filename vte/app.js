@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.9.1';
+const APP_VERSION = '2.10.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -497,7 +497,7 @@ function reportStatus(r) {
 }
 function renderHome() {
   cur.system = null; cur.report = null;
-  setTop("IMSn't", 'Pipework Visual Inspection Tool', '/');
+  setTop("IMSn't", 'Pipework Visual Inspection Tool · ' + assetName(), '/');
   try { showLaunch(APP_VERSION); } catch { }
   const sys = [...S.systems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $('#main').innerHTML = `
@@ -543,7 +543,8 @@ function renderSettings() {
     <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules.</small></label>
     <label class="field"><span>Model</span><select data-bind="settings" data-path="aiModel">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommended)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (faster, cheaper)'], ['claude-opus-5-5', 'Claude Opus 5.5 (most thorough)']].map(([v, l]) => `<option value="${v}" ${(st.aiModel || 'claude-sonnet-5-5') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
-  <div class="card"><h3>📦 Data pack ${iBtn('pack')}</h3>
+  ${assetBarHTML()}
+  <div class="card"><h3>📦 Data pack – ${esc(assetName())} ${iBtn('pack')}</h3>
     ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
       : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
@@ -570,7 +571,7 @@ function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
 /* ================= system screen ================= */
 async function newSystem() {
   const s2 = { id: 's_' + uid(), name: '', site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: '', createdAt: Date.now() };
-  S.systems.push(s2); await DB.put('systems', s2); go('/system/' + s2.id);
+  s2.asset = ASSET; S.systems.push(s2); await DB.put('systems', s2); go('/system/' + s2.id);
 }
 function renderSystem(id) {
   const s2 = S.systems.find(x => x.id === id); if (!s2) return go('/imsnt');
@@ -775,11 +776,11 @@ function lineTableHTML(r) {
     const nwtCell = (G.classManual || L.nwt == null || L.nwtOverride)
       ? `<input type="text" inputmode="decimal" class="cell-inp" data-path="c.general.ovr.${dn}.nwt" data-rerender value="${esc(G.ovr?.[dn]?.nwt ?? '')}" placeholder="${L.nwt ?? 'mm'}">` : (L.nwt ?? '–');
     return `<tr><td><b>${sizeLabel(dn)}</b>${L.od ? `<br><small>OD ${L.od}</small>` : ''}</td><td>${esc(L.sch || '–')}</td><td>${nwtCell}</td><td>${L.ca ?? '–'}</td>
-      <td class="ps">${L.ps ?? '–'}${L.psIntrados != null ? `<br><small>intrados ${L.psIntrados}</small>` : ''}${L.psSmallBore ? '<br><small>min 2.5</small>' : ''}</td></tr>`;
+      <td class="ps">${L.ps ?? '–'}${L.psIntrados != null ? `<br><small>intrados ${L.psIntrados}</small>` : ''}${L.psSmallBore ? `<br><small>min ${crit('psSmallMin')}</small>` : ''}</td></tr>`;
   }).join('');
   return `<div class="field"><span>Line data & PS minimum wall <em>(mm)</em></span><div class="tbl-wrap"><table class="mini data">
     <tr><th>Size</th><th>Sch</th><th>NWT</th><th>CA</th><th>PS min. wall</th></tr>${rows}</table></div>
-    <small>Performance Standard (PC005) 1.4: PS minimum wall = (NWT − CA) × 0.67; bend intrados × 0.9; DN25/DN40 not less than 2.5 mm. NWT from ASME B36.10/B36.19 for the class schedule (mill tolerance not deducted).</small></div>`;
+    <small>Performance Standard (PC005) 1.4: ${critPsTxt()}. NWT from ASME B36.10/B36.19 for the class schedule (mill tolerance not deducted).</small></div>`;
 }
 function boltingHTML(r, compact) {
   const G = r.c?.general || {}; const cls = G.classManual ? null : findClass(G.pipeClassId);
@@ -788,7 +789,7 @@ function boltingHTML(r, compact) {
   return `<details class="ref bolt" ${compact ? '' : 'open'}><summary>🔩 Flange bolting – ${esc(cls.c)} (${cls.r}#)</summary>
     <div class="tbl-wrap"><table class="mini data"><tr><th>Size</th><th>Studs</th><th>Stud Ø</th><th>Nut A/F</th><th>Reject stud &lt;</th><th>Reject nut A/F &lt;</th></tr>
     ${sizes.map(L => { const b = L.bolt; return `<tr><td><b>${sizeLabel(L.dn)}</b></td><td>${b.n} × ${esc(b.dia)}" × ${b.len} mm</td><td>${b.diaMm} mm<br><small>${b.thread}</small></td><td>${b.afIn}<br><small>${b.afMm} mm</small></td><td>${b.dia90} mm</td><td>${b.af90} mm</td></tr>`; }).join('')}
-    </table></div><small>Studs/sets from the class bolting table (standard flanged joint). Nut A/F for ASME B18.2.2 heavy hex (1.5D + 1/8"). PS 1.8: reject studs/nuts &lt; 90% of nominal after removal of corrosion product; no missing/loose bolts, full engagement. Flange thickness loss ≤ 3 mm (DN ≥ 450, ≤ 600#) else 3 mm or 10% (max 6 mm).${cls.studs[0] ? ' Material: ' + esc(cls.studs.join(' / ')) : ''}</small></details>`;
+    </table></div><small>Studs/sets from the class bolting table (standard flanged joint). Nut A/F for ASME B18.2.2 heavy hex (1.5D + 1/8"). PS 1.8: ${critBoltTxt().replace('<', '&lt;')} after removal of corrosion product; no missing/loose bolts, full engagement. F${critFlTxt().slice(1)}.${cls.studs[0] ? ' Material: ' + esc(cls.studs.join(' / ')) : ''}</small></details>`;
 }
 
 /* ---------- corrosion measurements ---------- */
@@ -868,7 +869,7 @@ function flangeSheetHTML(r, i) {
     ${pillsHTML('report', base + '.missing', f.missing, ['Yes', 'No'], 'Missing or loose bolting?', '', ynColor('bad'))}
     ${pillsHTML('report', base + '.engagement', f.engagement, ['Yes', 'No'], 'Full nut engagement (threads through nut)?', '', ynColor('good'))}
     <label class="field"><span>Notes</span><textarea rows="2" data-path="${base}.notes">${esc(f.notes)}</textarea></label>
-    <small class="muted">Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes the 1.6 mm raised face; Class 400+ excludes the 6.4 mm raised face). Stud/nut per class bolting table and ASME B18.2.2. PS 1.8: reject studs/nuts &lt; 90% nominal; flange thickness loss ≤ 3 mm (DN ≥ 450 & ≤ 600#) else 3 mm or 10% (max 6 mm).</small>
+    <small class="muted">Nominal flange dimensions ASME B16.5 (Class 150/300 thickness includes the 1.6 mm raised face; Class 400+ excludes the 6.4 mm raised face). Stud/nut per class bolting table and ASME B18.2.2. PS 1.8: ${critBoltTxt().replace('<', '&lt;')}; ${critFlTxt()}.</small>
     <div style="margin-top:10px"><button class="btn ghost" data-action="camera" data-group="corrosion" data-cap="Flange ${i + 1}${f.where ? ' – ' + esc(f.where) : ''}">📷 Photo of Flange ${i + 1}</button></div>
   </div>`;
 }
@@ -1215,10 +1216,10 @@ ACCEPTANCE CRITERIA (Performance Standard (PC005) Piping Systems – 'PS' – / 
 - No leaks (gas 20% LEL at 100 mm downwind; liquid 4 drips/min or 1 L/24 h; below = weep/seep).
 - No cracks, gouges, arc strikes, weld defects, dents or gross deformation.
 - Pit gauge / visual measurements are indicative only.
-- MRWT means MEASURED remaining wall thickness. PS minimum wall = (NWT − DCA) × 0.67 (× 0.9 at bend intrados); DN25/DN40 not less than 2.5 mm; below → FFS by Mechanical Static TA.
+- MRWT means MEASURED remaining wall thickness. ${critPsTxt()}; below → FFS by Mechanical Static TA.
 - Supports perform intended function; spring supports within limits; sliding supports free; support metal loss ≤ 20%.
 - Vibration RMS < 12.5 mm/s or PVM green.
-- Bolting: correct size, full engagement, none missing/loose; reject studs/nuts < 90% nominal. Flange thickness loss ≤ 3 mm (or 10%, max 6 mm, see PS).
+- Bolting: correct size, full engagement, none missing/loose; ${critBoltTxt()}. F${critFlTxt().slice(1)}.
 - SS/duplex coating against CSCC: no damage, cracking, flaking or disbonding. Coating Re 1–2 good, 3–4 minor, 5–6 moderate, 7–9 poor.
 - Report must cover: reason/scope, method and access, restrictions/omissions, findings with locations, actions with completion dates, conclusion and next inspection date.
 
@@ -1304,15 +1305,16 @@ async function importBackup(file) {
   const exists = j.reports.filter(r => S.reports.some(x => x.id === r.id)).length;
   if (!(await modal('Import backup', `<p>${j.systems.length} system(s), ${j.reports.length} report(s), ${j.blobs.length} image(s).${exists ? `<br><b>${exists} report(s) already exist on this phone and will be overwritten.</b>` : ''}</p>`, [['Cancel', ''], ['Import', 'ok', 'primary']]))) return;
   for (const b of j.blobs) await DB.put('blobs', { id: b.id, blob: await b64.dec(b.data) });
-  for (const s2 of j.systems) { await DB.put('systems', s2); S.systems = S.systems.filter(x => x.id !== s2.id).concat(s2); }
-  for (const r of j.reports) { await DB.put('reports', r); S.reports = S.reports.filter(x => x.id !== r.id).concat(r); }
+  for (const s2 of j.systems) { const la = s2.assetName && ASSETS.list.find(a => assetName(a.id).toLowerCase() === s2.assetName.toLowerCase()); s2.asset = la ? la.id : ASSET; delete s2.assetName; await DB.put('systems', s2); S.systems = S.systems.filter(x => x.id !== s2.id); if (inAsset(s2)) S.systems.push(s2); }
+  { const ids = new Set(S.systems.map(s => s.id)); j.reports.forEach(r => r._here = ids.has(r.systemId)); }
+  for (const r of j.reports) { const here = r._here; delete r._here; await DB.put('reports', r); S.reports = S.reports.filter(x => x.id !== r.id); if (here) S.reports.push(r); }
   for (const [k, key] of [['iso', 'isolib'], ['fl', 'flangelib'], ['face', 'facelib']]) for (const it of j[key] || []) TB[k].items = TB[k].items.filter(x => x.id !== it.id).concat(it);
   if (j.isolib || j.flangelib || j.facelib) { await flushTB(); await DB.put('meta', TB.face); }
   imgCache.clear(); toast('Backup imported'); route();
 }
 
 /* ================= P&ID library ================= */
-async function loadPidLib() { S.pidlib = (await DB.get('meta', 'pidlib')) || { id: 'pidlib', items: [] }; }
+async function loadPidLib() { S.pidlib = (await DB.get('meta', AK('pidlib'))) || { id: AK('pidlib'), items: [] }; }
 function savePidLib() { return DB.put('meta', S.pidlib); }
 function pidListHTML(q, pick) {
   q = String(q || '').toLowerCase().trim();
@@ -1420,7 +1422,7 @@ async function importLineList(file, systemId, opts = {}) {
   }));
   if (!res || !res.picked.length) return null;
   let target = sys;
-  if (!target) { target = { id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
+  if (!target) { target = { asset: ASSET, id: 's_' + uid(), name: res.name || sysName, site: S.settings.defaultSite, floc: '', sce: '', designCode: '', description: `Imported from ${file.name}`, createdAt: Date.now() }; S.systems.push(target); await DB.put('systems', target); }
   for (const x of res.picked) {
     const r = blankReport(target); r.h.tagNo = x.tag; r.h.equipDesc = x.desc; S.reports.push(r); await DB.put('reports', r);
   }
@@ -1438,12 +1440,52 @@ function applyTheme() {
   document.querySelector('meta[name=theme-color]').content = dark ? '#0b1b2b' : '#12385c';
 }
 
+/* ================= assets: each has its own data pack, P&ID library / indexes and IMSn't systems ================= */
+let ASSET = 'a0', ASSETS = { id: 'assets', list: [{ id: 'a0', name: '' }], active: 'a0' };
+const AK = (k, id = ASSET) => id === 'a0' ? k : k + '@' + id;   // storage key for this asset (the first asset keeps the original keys)
+async function loadAssets() { ASSETS = (await DB.get('meta', 'assets')) || ASSETS; ASSET = ASSETS.list.some(a => a.id === ASSETS.active) ? ASSETS.active : ASSETS.list[0].id; }
+const assetName = (id = ASSET) => { const a = ASSETS.list.find(x => x.id === id); return a?.name || (id === ASSET && PACK?.name ? PACK.name.replace(/\s*data\s*pack\s*/i, ' ').trim() : '') || 'My asset'; };
+const inAsset = s => (s.asset || 'a0') === ASSET;
+async function loadAssetData() {
+  const sys = await DB.all('systems'); S.systems = sys.filter(inAsset); const ids = new Set(S.systems.map(s => s.id)), all = new Set(sys.map(s => s.id));
+  S.reports = (await DB.all('reports')).filter(r => ids.has(r.systemId) || (ASSET === ASSETS.list[0].id && !all.has(r.systemId)));
+  await loadPack(); await loadPidLib(); if (typeof PIDIDX !== 'undefined') PIDIDX = null; if (typeof PIDIX !== 'undefined') PIDIX = null;
+}
+async function setAsset(id) { ASSET = id; ASSETS.active = id; await DB.put('meta', ASSETS); await loadAssetData(); }
+async function newAsset(name) { const a = { id: 'a_' + uid(), name: (name || '').trim() || 'New asset' }; ASSETS.list.push(a); await DB.put('meta', ASSETS); return a; }
+function assetBarHTML() {
+  return `<button class="asset-bar" data-action="assetPick"><span>📍 <b>${esc(assetName())}</b></span><small>${ASSETS.list.length > 1 ? `${ASSETS.list.length} assets · ` : ''}⇄ Switch / add asset</small></button>`;
+}
+async function assetCounts(id) {
+  const pk = await DB.get('meta', AK('pack', id)), pl = await DB.get('meta', AK('pidlib', id)); const sys = (await DB.all('systems')).filter(s => (s.asset || 'a0') === id);
+  return { pack: pk ? `${pk.name} v${pk.packVersion || ''}` : '', pids: pl?.items?.length || 0, sys: sys.length, sysIds: sys.map(s => s.id) };
+}
+async function assetPick() {
+  const rows = []; for (const a of ASSETS.list) { const c = await assetCounts(a.id); rows.push([a, c]); }
+  const r = await modal('📍 Choose asset', `<p class="small">Each asset has its own data pack, P&amp;ID library and IMSn't systems. Reference documents (📚 Standard Issue) are shared by every asset.</p>
+    ${rows.map(([a, c]) => `<button class="asset-row ${a.id === ASSET ? 'on' : ''}" data-v="go:${a.id}"><b>${a.id === ASSET ? '✓ ' : ''}${esc(assetName(a.id))}</b><small>${c.pack ? '📦 ' + esc(c.pack) : '📦 no data pack'} · ${c.pids} P&amp;ID page${c.pids === 1 ? '' : 's'} · ${c.sys} system${c.sys === 1 ? '' : 's'}</small></button>`).join('')}`,
+    [['Close', ''], ['✎ Rename', 'rename'], ...(ASSETS.list.length > 1 ? [['🗑 Delete', 'del', 'danger-t']] : []), ['＋ New asset', 'new', 'primary']]);
+  if (!r) return;
+  if (r.v.startsWith('go:')) { const id = r.v.slice(3); if (id !== ASSET) { await setAsset(id); toast('📍 ' + assetName()); } return route(); }
+  if (r.v === 'new') { const n = await modal('＋ New asset', `<label class="field"><span>Asset name</span><input type="text" name="name" placeholder="e.g. Clipper"></label><p class="small muted">Then import its data pack / asset pack. Request a data pack for the asset from the toolbox owner.</p>`, [['Cancel', ''], ['Create & switch', 'ok', 'primary']]);
+    if (!n) return assetPick(); const a = await newAsset(n.vals.name); await setAsset(a.id); toast('📍 ' + a.name); return go('/settings'); }
+  if (r.v === 'rename') { const n = await modal('✎ Rename asset', `<label class="field"><span>Asset name</span><input type="text" name="name" value="${esc(assetName())}"></label>`, [['Cancel', ''], ['Save', 'ok', 'primary']]);
+    if (n?.vals.name?.trim()) { ASSETS.list.find(a => a.id === ASSET).name = n.vals.name.trim(); await DB.put('meta', ASSETS); } return route(); }
+  if (r.v === 'del') {
+    const c = await assetCounts(ASSET);
+    if (!await confirmBox('Delete asset', `Delete "${assetName()}" from this device – its data pack, ${c.pids} P&ID pages and ${c.sys} IMSn't systems with all their line reports? This can't be undone (export a backup first).`, 'Delete')) return;
+    const id = ASSET, pk = await DB.get('meta', AK('pack', id)); if (pk) { for (const k of pk.images || []) await DB.del('blobs', AK('pack', id) + '_' + k); await DB.del('meta', AK('pack', id)); }
+    for (const it of S.pidlib.items) { await DB.del('blobs', it.blobId); await DB.del('meta', 'pidtxt_' + it.id); } await DB.del('meta', AK('pidlib', id)); await DB.del('meta', AK('pidindex', id));
+    for (const r2 of S.reports) await deleteReport(r2); for (const sid of c.sysIds) await DB.del('systems', sid);
+    ASSETS.list = ASSETS.list.filter(a => a.id !== id); await setAsset(ASSETS.list[0].id); toast('Asset deleted'); return go('/');
+  }
+}
 /* ================= data pack ================= */
 async function loadPack() {
   Object.values(PACK_URLS).forEach(u => URL.revokeObjectURL(u)); for (const k in PACK_URLS) delete PACK_URLS[k];
-  const p = await DB.get('meta', 'pack'); PACK = p || null;
+  const p = await DB.get('meta', AK('pack')); PACK = p || null;
   PIPE_CLASSES = p?.pipeClasses || []; PIPE_SOURCES = p?.pipeSources || {}; PLOT_LIBRARY = p?.plot || { asset: '', drawings: [] };
-  if (p) for (const k of p.images || []) { const b = await getBlob('pack_' + k); if (b) PACK_URLS[k] = URL.createObjectURL(b); }
+  if (p) for (const k of p.images || []) { const b = await getBlob(AK('pack') + '_' + k); if (b) PACK_URLS[k] = URL.createObjectURL(b); }
 }
 async function importPack(file) {
   if (/\.zip$/i.test(file.name)) return pidImport([file]);   // asset pack (data pack + P&IDs + index)
@@ -1455,21 +1497,22 @@ async function importPackJson(j, quiet) {
   if (!quiet) { const ok = await modal('Import data pack', `<p><b>${esc(j.name)}</b> v${esc(j.packVersion || '')}<br>${(j.pipeClasses || []).length} piping classes, ${(j.plot?.drawings || []).length} plot plans.</p>${PACK ? `<p>This replaces <b>${esc(PACK.name)}</b>.</p>` : ''}`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
     if (!ok) return; }
   toast('Importing data pack…', 15000);
-  const old = await DB.get('meta', 'pack');
-  if (old) for (const k of old.images || []) await DB.del('blobs', 'pack_' + k);
+  const old = await DB.get('meta', AK('pack'));
+  if (old) for (const k of old.images || []) await DB.del('blobs', AK('pack') + '_' + k);
   const images = [];
-  for (const [k, data] of Object.entries(j.images || {})) { await DB.put('blobs', { id: 'pack_' + k, blob: await b64.dec(data) }); images.push(k); }
+  for (const [k, data] of Object.entries(j.images || {})) { await DB.put('blobs', { id: AK('pack') + '_' + k, blob: await b64.dec(data) }); images.push(k); }
   const { images: _drop, ...meta } = j;
-  await DB.put('meta', { ...meta, id: 'pack', images, importedAt: new Date().toISOString() });
+  await DB.put('meta', { ...meta, id: AK('pack'), images, importedAt: new Date().toISOString() });
   await loadPack();
+  { const a = ASSETS.list.find(x => x.id === ASSET); if (a && (!a.name || a.name === 'New asset')) { a.name = String(j.name || '').replace(/\s*data\s*pack\s*/i, ' ').trim() || j.defaults?.site || a.name; await DB.put('meta', ASSETS); } }
   if (!S.settings.defaultSite && j.defaults?.site) { S.settings.defaultSite = j.defaults.site; persist('settings'); }
   if (!quiet) { toast('Data pack imported'); route(); }
 }
 /* Rebuild the data pack file (with its images) from what's stored on this device – for the asset pack export. */
 async function exportPackJson() {
-  const m = await DB.get('meta', 'pack'); if (!m) return null;
+  const m = await DB.get('meta', AK('pack')); if (!m) return null;
   const { id: _i, images: keys, importedAt: _a, ...meta } = m; const images = {};
-  for (const k of keys || []) { const b = await getBlob('pack_' + k); if (b) images[k] = await b64.enc(b); }
+  for (const k of keys || []) { const b = await getBlob(AK('pack') + '_' + k); if (b) images[k] = await b64.enc(b); }
   return { ...meta, images };
 }
 
@@ -1658,7 +1701,7 @@ const actions = {
     } catch { toast('Could not check – try again later'); }
     finally { el.disabled = false; el.textContent = '⟳ Check for updates'; }
   },
-  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length && !TB.face.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup(S.systems, S.reports, true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
+  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length && !TB.face.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup((await DB.all('systems')).map(s => ({ ...s, assetName: assetName(s.asset || 'a0') })), await DB.all('reports'), true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
   echImport: () => $('#fileEch').click(),
@@ -1700,9 +1743,10 @@ const actions = {
     S.settings.theme = dark ? 'light' : 'dark'; persist('settings'); applyTheme();
   },
   importPack: () => $('#filePack').click(),
+  assetPick: () => assetPick(),
   removePack: async () => {
     if (!await confirmBox('Remove data pack', 'Remove the data pack from this phone? Existing reports are not affected.', 'Remove')) return;
-    const old = await DB.get('meta', 'pack'); if (old) { for (const k of old.images || []) await DB.del('blobs', 'pack_' + k); await DB.del('meta', 'pack'); }
+    const old = await DB.get('meta', AK('pack')); if (old) { for (const k of old.images || []) await DB.del('blobs', AK('pack') + '_' + k); await DB.del('meta', AK('pack')); }
     await loadPack(); toast('Data pack removed'); route();
   },
   storage: async () => {
@@ -1755,9 +1799,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   try {
     await DB.open();
     S.settings = { ...DEFAULT_SETTINGS, ...(await DB.get('meta', 'settings') || {}) };
-    S.systems = await DB.all('systems'); S.reports = await DB.all('reports');
+    await loadAssets();
     applyTheme();
-    await loadPack(); await loadPidLib();
+    await loadAssetData();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
     await loadTools(); await loadFace(); await loadRefs();
