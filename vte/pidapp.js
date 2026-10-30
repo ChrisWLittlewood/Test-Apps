@@ -29,6 +29,31 @@ async function pidReadPage(lib, page) {
   }
   return { blob, w, h, items };
 }
+/* Shell document-system downloads end in "_XX_X_Publication" – that's the revision / status, not part of the name. */
+function pidTidyName(fileName) {
+  const b = String(fileName || '').replace(/\.[a-z0-9]{2,5}$/i, '').trim(); const end = '[\\s_]*Publication(?:[\\s_\\-]*\\(\\d+\\))?$';
+  let m = new RegExp('^(.*?)[\\s_]+([A-Z0-9]{1,4})[\\s_]+([A-Z0-9]{1,4})' + end, 'i').exec(b);
+  if (m && m[1]) return { name: m[1].replace(/[\s_\-.]+$/, ''), rev: (m[2] + '-' + m[3]).toUpperCase(), tidied: true };
+  m = new RegExp('^(.*?)[\\s_]+([A-Z0-9]{1,4})' + end, 'i').exec(b);
+  if (m && m[1]) return { name: m[1].replace(/[\s_\-.]+$/, ''), rev: m[2].toUpperCase(), tidied: true };
+  m = new RegExp('^(.*?)' + end, 'i').exec(b);
+  if (m && m[1]) return { name: m[1].replace(/[\s_\-.]+$/, ''), rev: '', tidied: true };
+  return { name: b, rev: '', tidied: false };
+}
+/* One-off tidy of P&IDs imported before names were tidied. */
+async function pidTidyExisting() {
+  let n = 0;
+  for (const it of S.pidlib.items) {
+    if (it._tidy) continue; it._tidy = 1; const t = pidTidyName(it.src || it.title); if (!t.tidied) continue;
+    const pageSfx = (it.title.match(/ – page \d+$/) || [''])[0]; const oldBase = (it.src || '').replace(/\.[^.]+$/, '');
+    if (it.title === oldBase + pageSfx || /Publication/i.test(it.title)) it.title = t.name + pageSfx;
+    if (t.rev) it.rev = t.rev;
+    { const d = pidTitleBlock([], t.name).dwgNo; if (d && (!it.dwgNo || (pnorm(oldBase).includes(pnorm(it.dwgNo)) && !pnorm(t.name).includes(pnorm(it.dwgNo))))) it.dwgNo = d; }
+    n++;
+  }
+  if (S.pidlib.items.some(it => it._tidy)) await savePidLib();
+  return n;
+}
 function pidTitleBlock(items, fileBase) {
   const tb = items.filter(a => a[1] > 0.5 && a[2] > 0.7);
   const tbText = tb.map(a => a[0]).join(' ');
@@ -62,7 +87,7 @@ async function pidImport(files) {
   const prog = progressModal(`Reading ${files.length} P&ID file${files.length > 1 ? 's' : ''}…`, true); let added = 0, updated = 0, noText = 0;
   for (const [k, f] of files.entries()) {
     if (prog.stopped) break;
-    const base = f.name.replace(/\.[^.]+$/, '');
+    const tidy = pidTidyName(f.name); const base = tidy.name;
     try {
       const pages = [];
       if (/\.pdf$/i.test(f.name)) {
@@ -71,13 +96,13 @@ async function pidImport(files) {
         try { await doc.destroy(); } catch { }
       } else { prog.set(k, files.length, f.name); const img = await importImage(f, 3200); pages.push({ blob: img.blob, w: img.w, h: img.h, items: [], page: 1, of: 1 }); }
       for (const pg of pages) {
-        const tb = pidTitleBlock(pg.items, base); const title = base + (pg.of > 1 ? ` – page ${pg.page}` : '');
+        const tb = pidTitleBlock(pg.items, base); if (tidy.rev) tb.rev = tidy.rev; const title = base + (pg.of > 1 ? ` – page ${pg.page}` : '');
         const old = S.pidlib.items.find(x => (tb.dwgNo && x.dwgNo === tb.dwgNo && (x.page || 1) === pg.page) || (x.src === f.name && (x.page || 1) === pg.page));
         if (old) { await pidDelete(old, true); updated++; } else added++;
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
         const hasText = pg.items.length > 5; if (!hasText) noText++;
         if (hasText) { await DB.put('meta', { id: 'pidtxt_' + id, items: pg.items }); PIDIDX.set(id, buildPidRows(pg.items)); }
-        S.pidlib.items.push({ id, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText });
+        S.pidlib.items.push({ id, _tidy: 1, title, src: f.name, page: pg.page, blobId, w: pg.w, h: pg.h, thumb: await thumbOf(pg.blob), added: new Date().toISOString(), dwgNo: tb.dwgNo, rev: tb.rev, hasText });
       }
     } catch (e) { console.error(e); toast('⚠ Could not read ' + f.name, 4000); }
   }
@@ -178,6 +203,7 @@ function pidRowHTML(x, opts = {}) {
 }
 let PIDRES = {};
 function renderPidApp() {
+  if (S.pidlib.items.some(it => !it._tidy)) pidTidyExisting().then(n => { if (n) { toast(`✨ ${n} P&ID name${n > 1 ? 's' : ''} tidied (“_Publication” suffix moved to the revision)`, 4000); if (location.hash.startsWith('#/pids')) renderPidApp(); } });
   setTop('P&I Spy', `${S.pidlib.items.length} P&ID page${S.pidlib.items.length === 1 ? '' : 's'}`, '/');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}

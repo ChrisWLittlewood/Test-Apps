@@ -39,7 +39,7 @@ async function pdfFirstText(file, pages = 1) {
 
 /* Decide what a drawing is and where it goes. */
 function classifyDrawing(d, lines) {
-  const fn = hayKey(d.file.name.replace(/\.[^.]+$/, '')), tx = hayKey(d.text || '');
+  const fn = hayKey(pidTidyName(d.file.name).name), tx = hayKey(d.text || '');
   const isoWord = /ISOMETRIC|\|ISO\||\|ISOS?[-|]/.test(fn + tx), pidWord = /P&ID|P\|?&\|?ID|PIPING\|(AND|&)\|INSTRUMENT|PROCESS\|(AND|&)\|INSTRUMENT|ENGINEERING\|FLOW/.test(fn + tx);
   // P&ID numbers known from the ECHs / stage 1
   const pids = {}; for (const r of lines) { const p = r.c?.general?.pidNumber; if (p) (pids[pidKey(p)] = pids[pidKey(p)] || { no: p, ids: [] }).ids.push(r.id); }
@@ -83,7 +83,7 @@ async function drawingApply(sys, lines, chosen) {
     try {
       if (c.to === 'lib') { await importPidFiles([c.d.file]); lib++; continue; }
       const [kind, ref] = c.to.split(':'); const targets = kind === 'pidgrp' ? (pids[ref] || []) : [lines.find(r => r.id === ref)].filter(Boolean);
-      const pages = []; const base = c.d.file.name.replace(/\.[^.]+$/, '');
+      const pages = []; const tdy = pidTidyName(c.d.file.name); const base = tdy.name + (tdy.rev ? ` (rev ${tdy.rev})` : '');
       if (PREP_PDF.test(c.d.file.name)) await importPdf(c.d.file, async (img, i, tot) => pages.push({ img, cap: base + (tot > 1 ? ` – page ${i}` : '') }));
       else pages.push({ img: await importImage(c.d.file, 2600), cap: base });
       const k2 = kind === 'iso' ? 'iso' : 'pid';
