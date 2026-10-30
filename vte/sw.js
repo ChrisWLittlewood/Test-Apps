@@ -1,8 +1,8 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v2.14.0';
+const VERSION = 'vte-v2.14.1';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './checklist.js', './dm.js', './launch.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js', './tools.js', './face.js', './refs.js', './xray.js', './help.js', './echbulk.js', './prepdrop.js', './pidapp.js', './promo.js',
-  './manifest.webmanifest', './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
+  './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
   './img/icon-192.png', './img/icon-512.png', './img/icon-180.png', './img/imsnt-192.png'
 ];
 // cache: 'reload' bypasses the browser's HTTP cache so a new version never stores stale copies of the old files
@@ -18,7 +18,7 @@ const put = (req, res) => { if (res.ok) { const copy = res.clone(); caches.open(
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url); if (url.origin !== location.origin) return;
-  if (/\/media\//.test(url.pathname)) return;   // the advert video streams (range requests); 'Save for offline' keeps a copy in the app
+  if (/\/media\//.test(url.pathname) || /manifest\.webmanifest$/.test(url.pathname)) return;   // video streams; the manifest always comes fresh from the network so install colours update   // the advert video streams (range requests); 'Save for offline' keeps a copy in the app
   const fromCache = () => caches.match(req, { ignoreSearch: true }).then(h => h || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error()));
   // big libraries and images: cache first
   if (/\/vendor\/|\/img\//.test(url.pathname)) { e.respondWith(caches.match(req, { ignoreSearch: true }).then(h => h || fetch(req).then(r => put(req, r)))); return; }
