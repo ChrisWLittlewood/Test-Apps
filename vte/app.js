@@ -405,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.22.0';
+const APP_VERSION = '2.23.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -507,8 +507,7 @@ function renderHome() {
   const sys = [...S.systems].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $('#main').innerHTML = `
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Start by adding your name in <a href="#/settings">Settings</a> – it is used on every report.</div>` : ''}
-    ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install app on this phone</button>` : ''}
-    ${!PACK ? `<div class="card notice">📦 No data pack loaded – import your asset's data pack in <a href="#/settings">Settings</a> to enable pipe classes, plot plans and FM areas.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
+    ${!PACK ? `<div class="card notice">📦 No data pack for this asset – install or build one in <a href="#/builder">📦 Pack Rat</a> for the plot plans, FM areas and P&amp;IDs.</div>` : `<p class="small muted" style="margin:0 2px 6px">📦 ${esc(PACK.name)} v${esc(PACK.packVersion || '')}</p>`}
     <div class="section-title"><h2>Piping systems ${iBtn('systems')}</h2><button class="btn primary" data-action="newSystem">+ New system</button></div>
     ${typeof echAiAllHTML === "function" ? echAiAllHTML() : ""}
     ${typeof prepDropHTML === "function" ? prepDropHTML(null) : ""}
@@ -520,72 +519,62 @@ function renderHome() {
         <div class="muted">${esc(s2.site || '')}${s2.floc ? ' · ' + esc(s2.floc) : ''}</div>
         <div class="chips"><span class="pill-s">${lines.length} line${lines.length === 1 ? '' : 's'}</span>${lines.length ? `<span class="pill-s ok">${issued} issued</span>` : ''}</div></a>`;
     }).join('') : `<div class="empty">No piping systems yet.<br>Create one, then add a report for each line number under it.</div>`}
-    <div class="section-title"><h2>Tools</h2></div>
-    <div class="grid2">
-      <a class="btn ghost" href="#/settings">⚙ Settings</a>
-      <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
-      <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
-      <button class="btn ghost" data-action="storage">💾 Storage info</button>
-    </div>
     ${refsChipHTML('imsnt')}
-    <p class="foot muted">All data is stored only on this device and works without signal. Back up regularly – clearing Chrome's site data deletes it.</p>
-    <div class="ver-row"><span>IMSn't v${APP_VERSION}</span><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button></div>`;
+    <p class="foot muted">All data is stored only on this device and works without signal. Back up regularly (⚙ Settings &amp; tools → ⬇ Backup everything) – clearing Chrome's site data deletes it.</p>
+`;
 }
 
 function renderSettings() {
   setTop('Settings & tools', '', '/');
-  const st = S.settings;
-  $('#main').innerHTML = `<div class="card">
+  const st = S.settings, ndb = (typeof CLASSDB !== 'undefined' && CLASSDB?.classes?.length) || 0, wait = typeof pidAiWaiting === 'function' ? pidAiWaiting(true).length : 0;
+  $('#main').innerHTML = `<div class="card"><h3>👤 You</h3>
     ${inputHTML('settings', 'inspectorName', st.inspectorName, 'Your name (Authorised Inspector)')}
     ${inputHTML('settings', 'position', st.position, 'Position / title')}
     ${inputHTML('settings', 'defaultSite', st.defaultSite, 'Default Installation / Site', 'Used for new piping systems – set automatically from the data pack')}
     <label class="field"><span>Photo size</span><select data-bind="settings" data-path="photoMax">
       ${[[1600, 'Standard (1600 px) – smaller reports'], [2000, 'High (2000 px) – recommended'], [2800, 'Very high (2800 px)']].map(([v, l]) => `<option value="${v}" ${+st.photoMax === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-  </div>
-  <div class="card"><h3>🧰 Tools</h3>
+    ${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}
+    <div class="field"><span>Report logo</span><small>Reports use the data pack's logo. To use another, pick an image – stored on this device only.</small>
+      <div class="grid2" style="margin-top:6px"><button class="btn ghost sm" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost sm" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div></div>
+
+  <div class="card"><h3>📍 Assets &amp; data ${iBtn('pack')}</h3>
+    ${assetBarHTML()}
+    <ul class="set-stat small">
+      <li>📦 <b>Data pack:</b> ${PACK ? `${esc(PACK.name)}${PACK.packVersion ? ' v' + esc(PACK.packVersion) : ''} · ${PACK.plot?.drawings?.length || 0} plot plans` : '<span class="muted">none yet</span>'}</li>
+      <li>📐 <b>P&amp;IDs:</b> ${S.pidlib.items.length} page${S.pidlib.items.length === 1 ? '' : 's'}${wait ? ` · ${wait} not AI-indexed` : ''}</li>
+      <li>🧾 <b>Piping classes:</b> ${ndb ? `${ndb} in ${esc(CLASSDB.name || 'the class database')}${CLASSDB.version ? ' v' + esc(CLASSDB.version) : ''} <small class="muted">(every asset)</small>` : '<span class="muted">none yet</span>'}</li></ul>
+    <a class="btn primary block" href="#/builder">📦 Pack Rat – install, build or issue data packs &amp; classes</a></div>
+
+  ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
+  ${typeof syncCardHTML === 'function' ? syncCardHTML() : ''}
+
+  <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
+    <p class="small muted">Only used when you tap an AI button, with signal. Without a key, every AI step gives you a file and a prompt for Copilot instead.</p>
+    <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules – if in doubt, ask.</small></label>
+    <label class="field"><span>Model</span><select data-bind="settings" data-path="aiModel">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommended)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (faster, cheaper)'], ['claude-opus-5-5', 'Claude Opus 5.5 (most thorough)']].map(([v, l]) => `<option value="${v}" ${(st.aiModel || 'claude-sonnet-5-5') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+
+  <div class="card"><h3>💾 Backup &amp; app</h3>
     <div class="grid2">
       <button class="btn ghost" data-action="exportAll">⬇ Backup everything</button>
       <button class="btn ghost" data-action="importBackup">⬆ Import backup</button>
       <button class="btn ghost" data-action="storage">💾 Storage info</button>
-      <button class="btn ghost" data-action="checkUpdate">⟳ Check for updates</button>
-      <a class="btn ghost" href="#/promo">🎬 Promo &amp; info</a>
-      <a class="btn ghost" href="#/refs">📚 Standard Issue</a>
       <a class="btn ghost" href="#/setup">🧭 Setup wizard</a>
-      <button class="btn ghost" data-action="assetPick">📍 Assets</button>
+      <a class="btn ghost" href="#/promo">🎬 Promo &amp; info</a>
+      <a class="btn ghost" href="#/help">📖 Help &amp; manual</a>
     </div>
-    <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
-  ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
-  ${typeof syncCardHTML === 'function' ? syncCardHTML() : ''}
-  ${typeof classDbCardHTML === 'function' ? classDbCardHTML() : ''}
-  <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
-  <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
-    <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
-    <label class="field"><span>Anthropic API key</span><input type="password" data-bind="settings" data-path="aiKey" value="${esc(st.aiKey || '')}" autocomplete="off" placeholder="sk-ant-…"><small>Stored only on this device. Sending company documents to an external AI service must be allowed by your company's information rules.</small></label>
-    <label class="field"><span>Model</span><select data-bind="settings" data-path="aiModel">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommended)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (faster, cheaper)'], ['claude-opus-5-5', 'Claude Opus 5.5 (most thorough)']].map(([v, l]) => `<option value="${v}" ${(st.aiModel || 'claude-sonnet-5-5') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-  <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
-  ${assetBarHTML()}
-  <div class="card"><h3>📦 Data pack – ${esc(assetName())} ${iBtn('pack')}</h3>
-    ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.plot?.drawings?.length || 0} plot plans · ${S.pidlib.items.length} P&amp;ID pages · ${PACK.issued ? `issued ${fmtDate(PACK.issued.slice(0, 10))}${PACK.issuedBy ? ' by ' + esc(PACK.issuedBy) : ''}` : 'created ' + esc(PACK.created || '')}</span></p>
-      ${PACK.changes ? `<details class="ref"><summary>What's new in v${esc(PACK.packVersion || '')}</summary><p class="small">${esc(PACK.changes).replace(/\n/g, '<br>')}</p></details>` : ''}
-      <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
-      : '<p class="muted">No data pack yet. An asset data pack holds the plot plans, FM areas, report logos and every P&amp;ID with its index scans – request one for your asset, or build one with 📦 Pack Rat.</p>'}
-    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Install a newer' : 'Install a'} data pack</button><a class="btn ghost" href="#/builder">📦 Pack Rat</a>
-      ${PACK || S.pidlib.items.length ? '<button class="btn ghost" data-action="assetExport">📦 Issue asset data pack</button>' : ''}${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
-    <small class="muted">Installing a newer pack only replaces what changed: new P&amp;ID revisions replace old ones, the same revision is skipped, and plot plans are updated. Piping classes are in the 📚 piping class database below. Reports already written keep their own copies.</small></div>
-  <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
-    <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
+    <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p>
+    <div class="ver-row" style="margin-top:10px"><span>Version <b>v${APP_VERSION}</b> – updates itself when opened with signal.</span></div>
+    <div class="grid2"><button class="btn ghost sm" data-action="checkUpdate">⟳ Check for updates</button><button class="btn ghost sm" data-action="forceUpdate">⟳ Force update</button></div></div>
+
   <div class="card danger-card"><h3>🧹 Reset app on this device</h3><p class="small">Wipes everything the app has stored on <b>this device</b> – reports, photos, sketches, data packs, P&amp;IDs, reference documents, settings and the link to the shared folder – and starts again at the setup wizard. <b>Your OneDrive folder and its files are not touched.</b></p>
     <button class="btn ghost block danger-t" data-action="resetApp">🧹 Reset app…</button><p class="small muted">To remove the app itself: PC – open the app's ⋮ menu → Uninstall; Android – long-press the icon → Uninstall / Remove.</p></div>
-  <div class="card"><h3>📷 Report logo</h3><p class="small muted">The report header uses the logo from the data pack. To use a different one, pick an image – it is stored on this phone only.</p>
-    <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
   <div class="card"><h3>About</h3>
     <p><b>Inspection Toolbox</b> v${APP_VERSION} – designed and developed by <b>Chris Littlewood</b>, 2026.</p>
     <div class="credit"><p>Concept, design and development © Chris Littlewood. If you share, adapt or build on any part of this toolbox, please credit the original author.</p>
     <p>Company data, standards and document formats remain the property of their respective owners.</p></div>
-    <p class="small">A growing suite of offline inspection apps for plant inspectors, with more to come: <b>IMSn't</b> (Pipework Visual Inspection Tool – VTE line reports while IMS isn't working), <b>Isometricks</b> (iso sketches), <b>Gasket Case</b> (flange &amp; bolting sheets), <b>Face Off</b> (flange face inspection) and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
-    <p class="small">Everything is stored on this device only. Company data comes from your data pack; standards come from your own reference library. Calculations follow the Performance Standard (PC005 / PC007), ASME B16.5 / B16.20 / B16.21 / B36.10M and API 571 / 574 – hints and defaults are flagged where they need confirming against your procedures.</p>
+    <p class="small">A growing suite of offline inspection apps for plant inspectors: <b>IMSn't</b>, <b>Isometricks</b>, <b>Gasket Case</b>, <b>P&amp;I Spy</b>, <b>Class Act</b>, <b>Face Off</b> and <b>Standard Issue</b>, with the <b>Pack Rat</b> and <b>Paper Trail</b> tools and <b>Totally RAD</b> (experimental – read the disclaimer).</p>
+    <p class="small">Everything is stored on this device only. Company data comes from your data packs and piping class database; standards come from your own reference library. Calculations follow the Performance Standard (PC005 / PC007), ASME B16.5 / B16.20 / B16.21 / B36.10M and API 571 / 574 – hints and defaults are flagged where they need confirming against your procedures.</p>
     <p class="small">💡 <b>Have an idea, an improvement or a requirement for a specific tool or app?</b> Let me know!</p>
-    <a class="btn ghost block" href="#/help">📖 Help &amp; manual</a>
     <p class="muted small" style="margin-top:10px">Original notes: temporary reporting tool while IMS is unavailable. Checklist mirrors the IMS "NAM Piping System Checklist"; acceptance hints from Performance Standards (PC005/PC007).</p></div>`;
 }
 function inputHTML(bind, path, val, label, hint, type = 'text', extra = '') {
@@ -760,7 +749,7 @@ function classRowHTML(c) {
   return `<button class="cls-item" data-action="pickClass" data-id="${esc(c.id)}"><b>${esc(c.c)}</b> <span class="pill-s">${c.r ? c.r + '#' : ''}</span> <span class="pill-s ${c.ca ? 'warn' : ''}">CA ${c.ca ?? '?'} mm</span><br><small>${esc(c.m)} · ${esc(c.s)}</small></button>`;
 }
 function classListHTML(q) {
-  if (!PIPE_CLASSES.length) return '<p class="small muted">No data pack loaded – import one in <a href="#/settings">Settings</a>, or tick "Class not in library" below.</p>';
+  if (!PIPE_CLASSES.length) return '<p class="small muted">No piping classes yet – install the class database in <a href="#/builder">📦 Pack Rat</a>, or tick "Class not in library" below.</p>';
   const res = searchClasses(q); const n = res.length;
   return res.slice(0, 25).map(classRowHTML).join('') + (n > 25 ? `<p class="small muted">${n - 25} more – keep typing to narrow down</p>` : '') + (!n ? '<p class="small muted">No class found – tick "Class not in library" below.</p>' : '');
 }
@@ -1048,7 +1037,7 @@ function stepHTML(r, step) {
           <div class="row-inp"><input type="text" id="fmCustom" placeholder="Type an FM area, e.g. AK 41A" autocapitalize="characters"><button class="btn ghost" data-action="fmAdd">Add</button></div>
         </section>
         <section class="card"><h3>Plot plan library${PLOT_LIBRARY.asset ? ' – ' + esc(PLOT_LIBRARY.asset) : ''}</h3>
-          ${!PLOT_LIBRARY.drawings.length ? `<p class="muted">No data pack loaded. Import one in <a href="#/settings">Settings</a>, or use "Use another drawing" above.</p>` : ''}
+          ${!PLOT_LIBRARY.drawings.length ? `<p class="muted">No plot plans for this asset yet – install or build its data pack in <a href="#/builder">📦 Pack Rat</a>, or use "Use another drawing" above.</p>` : ''}
           ${Object.entries(byPlat).map(([pl, ds]) => `<details ${ds.some(d => libIds.includes(d.id)) ? 'open' : ''}><summary><b>${esc(pl)}</b> <span class="muted">(${ds.length})</span></summary>
             <div class="lib">${ds.map(d => `<button class="lib-item ${libIds.includes(d.id) ? 'sel' : ''}" data-action="pickPlot" data-id="${d.id}"><img src="${packImg('plot:' + d.id) || ''}" loading="lazy" alt=""><span>${esc(d.title)}</span>${libIds.includes(d.id) ? '<b>✓ Added</b>' : ''}</button>`).join('')}</div></details>`).join('')}
         </section>`;
@@ -1344,7 +1333,7 @@ function savePidLib() { return DB.put('meta', S.pidlib); }
 function pidListHTML(q, pick) {
   q = String(q || '').toLowerCase().trim();
   const items = S.pidlib.items.filter(x => !q || [x.title, x.src, x.dwgNo, x.desc].join(' ').toLowerCase().includes(q));
-  if (!S.pidlib.items.length) return `<p class="small muted" style="padding:10px">Library is empty – import your P&IDs ${pick ? 'in Settings → P&ID library' : 'with the button above'}.</p>`;
+  if (!S.pidlib.items.length) return `<p class="small muted" style="padding:10px">Library is empty – import your P&IDs ${pick ? 'in P&I Spy (⚙ Settings) or 📦 Pack Rat' : 'with the button above'}.</p>`;
   return items.map(x => pick
     ? `<button class="pid-item" data-action="pickPid" data-id="${x.id}"><img src="${x.thumb}" alt=""><span><b>${esc(x.title)}</b>${x.desc ? `<br><small class="pid-desc">${esc(x.desc)}</small>` : ''}<br><small>${[x.dwgNo && !pnorm(x.title).startsWith(pnorm(x.dwgNo)) ? x.dwgNo : '', x.rev ? 'rev ' + x.rev : 'rev –'].filter(Boolean).map(esc).join(' · ')}</small></span></button>`
     : `<div class="pid-item lib"><img src="${x.thumb}" alt="" data-action="pidOpen" data-id="${x.id}" style="cursor:zoom-in"><span class="pid-ed"><input type="text" data-pidtitle="${x.id}" value="${esc(x.title)}" aria-label="P&ID name"><textarea class="pid-desc-in" data-piddesc="${x.id}" rows="${Math.max(1, Math.ceil((x.desc || '').length / 30))}" placeholder="Description (from the title block)" aria-label="Description">${esc(x.desc || '')}</textarea><small>${[x.dwgNo && !pnorm(x.title).startsWith(pnorm(x.dwgNo)) ? x.dwgNo : '', x.rev ? 'rev ' + x.rev : 'rev –'].filter(Boolean).map(esc).join(' · ')}${x.hasText === false ? ' · <i>scanned – no text</i>' : ''}</small></span><span class="pid-btns"><button class="btn ghost sm" data-action="pidOpen" data-id="${x.id}" aria-label="View">👁</button><button class="btn ghost sm ${x.ai ? '' : 'warn-b'}" data-action="pidAiPick" data-id="${x.id}" aria-label="AI index" title="${x.ai ? 'AI-indexed ' + esc((x.ai._at || '').slice(0, 10)) + ' via ' + esc(x.ai._via || 'AI') : 'Not AI-indexed yet'}">🤖</button><button class="btn ghost sm danger-t" data-action="delPid" data-id="${x.id}" aria-label="Delete">🗑</button></span></div>`).join('') || '<p class="small muted" style="padding:10px">No match.</p>';

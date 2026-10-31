@@ -85,13 +85,6 @@ async function classDbInstall(j, quiet) {
   if (!quiet) { toast(`📚 ${added} new, ${updated} updated${kept ? `, ${kept} of yours kept` : ''}`, 5000); route(); }
   return { added, updated, kept };
 }
-function classDbCardHTML() {
-  const n = CLASSDB?.classes?.length || 0, loc = (CLASSDB?.classes || []).filter(c => c._local).length;
-  return `<div class="card"><h3>📚 Piping class database ${iBtn('classdb')}</h3>
-    ${n ? `<p><b>${esc(CLASSDB.name || 'Piping classes')}</b>${CLASSDB.version ? ' v' + esc(CLASSDB.version) : ''}<br><span class="small muted">${n} classes · shared by every asset${CLASSDB.issued ? ` · issued ${fmtDate(CLASSDB.issued.slice(0, 10))}${CLASSDB.issuedBy ? ' by ' + esc(CLASSDB.issuedBy) : ''}` : ''}</span></p>${loc ? `<p class="small">✎ <b>${loc}</b> class${loc > 1 ? 'es' : ''} added on this device – included when you issue the database.</p>` : ''}`
-      : '<p class="small muted">No piping classes yet. Install the class database file, or build it from your class documents in 📦 Pack Rat.</p>'}
-    <div class="grid2"><button class="btn primary" data-action="classDbImport">⬆ Import piping class database</button><button class="btn ghost" data-action="clsAdd">🧾 Import a piping class</button>${n ? '<button class="btn ghost" data-action="classDbIssue">📚 Issue class database</button>' : ''}<a class="btn ghost" href="#/builder">📦 Pack Rat</a></div></div>`;
-}
 function classDbPickFile() {
   const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
   inp.onchange = async () => { const f = inp.files[0]; if (!f) return; try { await classDbInstall(JSON.parse(await f.text())); } catch (e) { toast('⚠ ' + e.message, 5000); } }; inp.click();

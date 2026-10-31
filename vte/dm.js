@@ -194,7 +194,7 @@ async function senseCheckPopup(ws) {
   await modal('Gasket sense check', ws.length ? ws.map(w => `<p class="${w.l === 'warn' ? 'warn-t' : ''}">${w.l === 'warn' ? '⚠' : 'ℹ'} ${esc(w.t)}</p>`).join('') : '<p>✓ No compatibility issues found for this gasket with the pipe material, class and size.</p>', [['OK', 'ok', 'primary']]);
 }
 function gasketHTML(gk) {
-  if (!gk) return `<div class="gasket muted small">Gasket: select a pipe class (with the data pack loaded) to see the gasket specified.</div>`;
+  if (!gk) return `<div class="gasket muted small">Gasket: select a pipe class to see the gasket specified.</div>`;
   return `<div class="gasket"><h3>🔘 ${gk.manual ? 'Gasket (selected)' : 'Gasket for this class'}</h3>
     <p><b>${esc(gk.type)}</b> ${gk.manual ? '' : `<span class="muted">(${esc(gk.range)}, class ${esc(gk.cls)})</span>`}<br>${esc(gk.mat)}</p>
     ${gk.swatches.length ? `<div class="swatches">${gk.swatches.map(s => `<span class="sw"><i style="background:${s.c}${s.stripe ? ';height:6px;margin:5px 0' : ''}"></i>${esc(s.l)}</span>`).join('')}</div>` : ''}

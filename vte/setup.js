@@ -131,5 +131,5 @@ async function odScanReport(rep, opts) {
 }
 function homeFolderHTML() {
   if (!(typeof odLinked === 'function' && odLinked())) return '';
-  return `<div class="home-folder"><span>📁 <b>Shared folder</b><small>Drop files in, then scan</small></span><a class="btn ghost sm" href="#/files">📂 Open</a><button class="btn primary sm" data-action="odScan">🔍 Scan folder</button></div>`;
+  return `<div class="home-folder"><span>📁 <b>Shared folder</b><small>Put files in (📂 Paper Trail), then scan</small></span><button class="btn primary sm" data-action="odScan">🔍 Scan folder</button></div>`;
 }

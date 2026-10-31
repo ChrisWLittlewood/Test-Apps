@@ -273,7 +273,7 @@ function renderPidApp() {
     <div class="card"><div class="pid-headrow"><h2>🔎 Which P&amp;IDs is it on? ${iBtn('pidspy')}</h2><a class="btn ghost sm" href="#/pids/settings">⚙ Settings</a></div>
       <input type="search" id="pidAppQ" placeholder="Type a line number, tag or drawing number" autocomplete="off" autocapitalize="characters" value="${esc(cur.pidQ || '')}">
       ${!n ? '<p class="small">No P&amp;IDs on this device yet – add them in <a href="#/pids/settings">⚙ Settings</a>.</p>' : ''}
-      <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189). Line numbers come with the pipe spec from the data pack.</p>
+      <p class="small muted">Searches every word on every drawing. Try the full line number, or just the service and number (e.g. PX-20189). Line numbers come with the pipe spec from the piping class database.</p>
       <div id="pidSpec"></div><div id="pidAppRes" class="pidlist"></div></div>
     <div class="section-title"><h2>All P&amp;IDs <small class="muted">(${n})</small></h2></div>
     <input type="search" id="pidLibQ" placeholder="Filter by title, description or drawing number" autocomplete="off">
@@ -284,11 +284,9 @@ function renderPidSettings() {
   setTop('P&I Spy settings', 'AI scan, sharing, import & export', '/pids');
   const n = S.pidlib.items.length;
   $('#main').innerHTML = `${PID_DISCLAIMER()}
-    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images or a whole folder – on a PC is best. A newer copy of the same drawing number replaces the old one. Library packs and shared indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
+    <div class="dropbox" data-action="pidPickFiles" tabindex="0" role="button"><b>📥 Drop P&amp;IDs here</b><span>PDFs, images, a zip or a whole folder – on a PC is best. The same drawing at the same revision is skipped; a newer revision replaces the old one. Shared search indexes (.zip) can be dropped here too.</span><small>Or click to choose files · read on this device, nothing is uploaded</small></div>
     ${pidAiHTML() || `<div class="card"><h3>🤖 AI scan</h3><p class="small muted">${!n ? 'Nothing to scan yet – import some P&amp;IDs first.' : S.settings.aiKey ? 'Every P&amp;ID has been AI-scanned.' : 'Add an authorised AI key in the main <a href="#/settings">Settings</a> to read scanned P&amp;IDs and add anything the drawing text missed.'}</p></div>`}
-    <div class="card"><h3>📤 Export / send to device</h3>
-      <p class="small muted">Saves one <b>asset pack</b> (.zip): the data pack (piping classes, plot plans, logos), every P&amp;ID with its text and AI scans, and the P&amp;ID search index. Send it by Teams / OneDrive and import it on the other device – drawings already there at the same revision are skipped, newer revisions replace the old copy.</p>
-      <div class="grid2">${n ? '<button class="btn primary" data-action="pidSendPack">📦 Issue asset data pack</button>' : ''}<button class="btn ghost" data-action="pidPickFiles">⬆ Import asset pack (.zip)</button></div></div>
+    <div class="card"><h3>📦 Asset data pack</h3><p class="small muted">To send every P&amp;ID (with its index, plot plans and logos) to another device or another inspector, issue the asset data pack – and install one – in 📦 Pack Rat.</p><a class="btn ghost block" href="#/builder">📦 Open Pack Rat</a></div>
     <div class="card"><h3>📇 Shared search index ${iBtn('pidindex')}</h3>
       <p class="small muted">A small file with every drawing's number, revision and the line numbers / tags on it (from the text and AI scans) – <b>no drawings</b>. Share it so others can search; drawings they don't have point them to document control.</p>
       <div id="pidIxList" class="small"></div>
@@ -388,7 +386,6 @@ document.addEventListener('dragover', e => { if (location.hash.startsWith('#/pid
 document.addEventListener('dragleave', e => { if (location.hash.startsWith('#/pids') && !e.relatedTarget) document.body.classList.remove('dragging'); });
 Object.assign(actions, {
   pidPickFiles: () => pidInput.click(),
-  pidSendPack: () => assetExport(),
   assetExport: () => assetExport(),
   pidOpen: el => { const r = PIDRES[el.dataset.id]; openPidViewer(el.dataset.id, el.dataset.q != null && r ? r.boxes : [], el.dataset.q || ''); },
   pidAuto: el => pidAutoForSystem(el.dataset.sys || cur.system?.id)
@@ -408,11 +405,8 @@ function pidAiHTML() {
   const list = pidAiWaiting(true).sort((a, b) => (a.hasText - b.hasText) || a.title.localeCompare(b.title, undefined, { numeric: true }));
   return `<div class="card ai-queue"><h3>🤖 AI index – ${rest} new or replaced P&amp;ID page${rest > 1 ? 's' : ''}</h3><span class="small muted">Reads line numbers and tags off the drawing image, so scanned P&amp;IDs become searchable and anything the drawing text missed is added. Drawings already indexed are never sent again. Only if company rules allow sending P&amp;IDs to the AI service – if in doubt, ask.</span>
     ${S.settings.aiKey ? `<div class="grid2"><button class="btn primary" data-action="pidAiScan" data-all="1">🤖 Scan all new / replaced (${rest})</button>${scanned && scanned < rest ? `<button class="btn ghost" data-action="pidAiScan" data-all="0">Scanned drawings only (${scanned})</button>` : ''}</div>` : '<p class="small">No AI key on this device – use 📋 Copilot below.</p>'}
-    <div class="pid-cpbox"><b class="small">📋 With Copilot, in batches</b><span class="small muted">Export the ${rest} waiting drawing${rest > 1 ? 's' : ''} as one zip (batches + prompt), run each batch in Copilot, then import all the replies at once.</span>
-      <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📦 Export for Copilot (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Import Copilot results</button></div></div>
-    <details class="pid-cpq"><summary class="small"><b>📋 One at a time with Copilot</b></summary>
-      ${list.slice(0, 60).map(it => `<div class="pid-cprow"><span><b>${esc(it.title)}</b>${it.rev ? ' · rev ' + esc(it.rev) : ''}${!it.hasText ? ' <small class="muted">scanned</small>' : ''}${it.desc ? `<br><small class="muted">${esc(it.desc)}</small>` : ''}</span><button class="btn ghost sm" data-action="pidCopilot" data-id="${it.id}">📋 Copilot</button></div>`).join('')}
-      ${list.length > 60 ? `<p class="small muted">…and ${list.length - 60} more – each drawing also has a 🤖 button in the list.</p>` : ''}</details></div>`;
+    <div class="pid-cpbox"><b class="small">📋 With Copilot</b><span class="small muted">One file (or a few) with the ${rest} waiting drawing${rest > 1 ? 's' : ''} and one prompt; paste all the replies back at once. A single drawing: its 🤖 button in the list.</span>
+      <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📋 Copilot – file + prompt (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Paste Copilot's replies</button></div></div></div>`;
 }
 async function pidTiles(blob) {
   const bmp = await createImageBitmap(blob); const out = []; const ov = 0.08;
@@ -579,7 +573,7 @@ function pidIndexItems(idx) {
 async function assetExport() {
   const dp = await exportPackJson(); const n = S.pidlib.items.length;
   const np = typeof promoLoad === 'function' ? Object.keys((await promoLoad()).items).length : 0;
-  if (!dp && !n && !np) return toast('Nothing to issue – install a data pack or add P&IDs / piping classes first');
+  if (!dp && !n && !np) return toast('Nothing to issue yet – add P&IDs or plot plans in 📦 Pack Rat first');
   const def = (assetName() || dp?.name || 'Platform').replace(/\s*data\s*pack\s*/i, ' ').trim();
   const iss = (await DB.get('meta', AK('issue'))) || { id: AK('issue') }; const chg = packChanges(iss, dp);
   const lastV = iss.version || dp?.packVersion || '1.0', sugV = iss.version || dp?.packVersion ? bumpV(lastV) : '1.0';
@@ -695,9 +689,9 @@ const pidCpFileName = it => `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' 
 const pidCpBatchPrompt = () => `Each attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. For EACH attached image, read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out.
 Reply with ONLY one JSON object in exactly this shape – one entry per attached image, with "file" set to the image's exact file name (it ends in a code like __p_abc123 – keep that code):
 {"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"]}]}`;
-async function pidCpExport() {
+async function pidCpExport(perIn) {
   const list = pidAiWaiting(true); if (!list.length) return toast('Every P&ID is already indexed');
-  const r = await modal('📦 Export for Copilot', `<p><b>${list.length}</b> P&amp;ID page${list.length > 1 ? 's' : ''} not yet indexed (new or replaced). This saves one zip with each drawing as a sharp image, split into batches, plus the prompt.</p>
+  const r = perIn ? { vals: { per: perIn } } : await modal('📦 Export for Copilot', `<p><b>${list.length}</b> P&amp;ID page${list.length > 1 ? 's' : ''} not yet indexed (new or replaced). This saves one zip with each drawing as a sharp image, split into batches, plus the prompt.</p>
     <label class="field"><span>Drawings per batch (Copilot attachment limit)</span><select name="per"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select></label>
     <p class="small muted">Only if company rules allow sending P&amp;IDs to Copilot – if in doubt, ask. Company data – keep the zip in company storage.</p>`, [['Cancel', ''], ['📦 Export', 'ok', 'primary']]);
   if (!r) return;
@@ -738,4 +732,4 @@ async function pidCpImport() {
   if (r) return pidCpImportText(r.vals.reply);
 }
 document.addEventListener('change', async e => { if (e.target.id !== 'cpFiles') return; const ta = $('#cpReply'); for (const f of e.target.files) ta.value += '\n' + await f.text(); toast(`${e.target.files.length} file${e.target.files.length > 1 ? 's' : ''} added`); });
-Object.assign(actions, { pidCpExport: () => pidCpExport(), pidCpImport: () => pidCpImport() });
+Object.assign(actions, { pidCpExport: () => (typeof bdPidCopilot === 'function' ? bdPidCopilot() : pidCpExport()), pidCpImport: () => pidCpImport() });

@@ -30,7 +30,7 @@ async function renderPromo() {
   };
   $('#main').innerHTML = `<div class="card"><p class="small">The <b>Inspection Toolbox</b> advert and owner's guide – for showing the team and sharing with new users. Share internally – Teams, OneDrive or email. The guide is kept on this device (add it once); it travels in the 📤 asset pack.</div>
     ${await card('video')}${await card('guide')}
-    <p class="small muted">The guide is included when you 📤 export an asset pack, so colleagues get it too.</p>${Object.keys(P.items).length ? '<button class="btn ghost block" data-action="assetExport">📦 Issue asset data pack</button>' : ''}`;
+    <p class="small muted">The guide goes into every asset data pack you issue in 📦 Pack Rat, so colleagues get it too.</p>`;
 }
 const promoInput = Object.assign(document.createElement('input'), { type: 'file', hidden: true, id: 'filePromo' }); document.body.append(promoInput);
 promoInput.addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; toast('Saving…', 8000); try { await promoSet(promoInput._slot, f); toast('Saved on this device'); } catch (err) { toast('⚠ ' + err.message, 5000); } renderPromo(); });

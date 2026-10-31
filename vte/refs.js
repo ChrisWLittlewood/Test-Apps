@@ -83,7 +83,7 @@ function renderRefs(app) {
     <div class="section-title"><h2>Company documents</h2></div>
     ${list.filter(d => d.company).map(card).join('') || '<p class="muted small">None needed for this app.</p>'}
     ${app ? '' : '<button class="btn ghost block" data-ref="custom" data-k="">＋ Add another document</button>'}
-    <div class="card"><h3>Also in the toolbox</h3><p class="small">P&amp;IDs live in <a href="#/pids">P&amp;I Spy</a>; piping classes and plot plans come from the data pack in <a href="#/settings">Settings</a>.</p></div>`;
+    <div class="card"><h3>Also in the toolbox</h3><p class="small">P&amp;IDs live in <a href="#/pids">P&amp;I Spy</a>; piping classes and plot plans come from <a href="#/builder">📦 Pack Rat</a>.</p></div>`;
 }
 document.addEventListener('input', e => { if (e.target.id !== 'refQ') return; const q = e.target.value.toLowerCase().trim();
   $$('[data-refcard]').forEach(c => { const hit = !q || c.textContent.toLowerCase().includes(q); c.hidden = !hit; const det = $('details', c); if (det) det.open = !!q && hit && $('details', c).textContent.toLowerCase().includes(q); }); });
