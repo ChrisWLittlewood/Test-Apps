@@ -112,7 +112,13 @@ function buildPidRows(items) {
   const rows = []; let row = null;
   for (const i of order) { const a = items[i]; if (row && Math.abs(a[2] - row.y) < Math.max(a[4], row.h) * 0.6 && a[3] >= a[4]) row.ids.push(i); else { row = { y: a[2], h: a[4], ids: [i] }; rows.push(row); } }
   for (const r of rows) { r.ids.sort((i, j) => items[i][1] - items[j][1]); r.n = r.ids.map(i => norm[i]).join(''); }
-  return { items, norm, rows };
+  const loose = norm.map(n => n.replace(/[^A-Z0-9]/g, '')); for (const r of rows) r.L = r.ids.map(i => loose[i]).join('');
+  // instrument bubbles: letters (PT, HV, LIC…) with the loop number written underneath – join them into one tag
+  const bub = [];
+  items.forEach((a, i) => { if (!/^[A-Z]{1,5}$/.test(norm[i])) return; const ax = a[1] + a[3] / 2;
+    items.forEach((b2, j) => { if (j === i || !/^\d{2,6}[A-Z]?$/.test(norm[j])) return; const dy = b2[2] - a[2]; if (dy <= 0 || dy > Math.max(a[4], b2[4]) * 3.2) return;   // allow for bubbles drawn with generous line spacing
+      if (Math.abs(b2[1] + b2[3] / 2 - ax) > Math.max(a[3], b2[3]) * 0.9) return; bub.push({ k: loose[i] + loose[j], ids: [i, j] }); }); });
+  return { items, norm, rows, loose, bub };
 }
 async function pidIndex() {
   if (PIDIDX) return PIDIDX; PIDIDX = new Map();
@@ -183,6 +189,13 @@ async function pidSearch(q) {
       P.norm.forEach((n, i) => { if (n.includes(v)) boxes.add(i); });
       for (const r of P.rows) { const s = r.n.indexOf(v); if (s < 0) continue; let pos = 0; const e = s + v.length; for (const i of r.ids) { const l = P.norm[i].length; if (pos < e && pos + l > s) boxes.add(i); pos += l; } }
       if (boxes.size) { best = { w, why, boxes: [...boxes] }; break; }
+    }
+    if (P && !best) for (const [v, w, why] of vars) {   // second try: ignore dashes / dots / slashes, and read instrument bubbles
+      const lv = v.replace(/[^A-Z0-9]/g, ''); if (lv.length < 3) continue; const boxes = new Set();
+      P.loose.forEach((n, i) => { if (n && n.includes(lv)) boxes.add(i); });
+      for (const r of P.rows) { const st = r.L.indexOf(lv); if (st < 0) continue; let pos = 0; const e = st + lv.length; for (const i of r.ids) { const l = P.loose[i].length; if (pos < e && pos + l > st) boxes.add(i); pos += l; } }
+      let bubHit = false; for (const bb of P.bub) if (bb.k === lv || (lv.length >= 5 && bb.k.endsWith(lv)) || lv.endsWith(bb.k) && bb.k.length >= 5) { bb.ids.forEach(i => boxes.add(i)); bubHit = true; }
+      if (boxes.size) { best = { w: w - 0.2, why: bubHit ? 'instrument bubble' : why + ', ignoring dashes', boxes: [...boxes] }; break; }
     }
     const tHit = vars.find(([v]) => meta.includes(v));
     const aiTok = it.ai ? pnorm([...(it.ai.lines || []), ...(it.ai.tags || [])].join('|')) : '';
