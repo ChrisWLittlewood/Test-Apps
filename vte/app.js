@@ -405,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.18.2';
+const APP_VERSION = '2.19.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -562,11 +562,14 @@ function renderSettings() {
   <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
   ${assetBarHTML()}
   <div class="card"><h3>📦 Data pack – ${esc(assetName())} ${iBtn('pack')}</h3>
-    ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · created ${esc(PACK.created || '')}</span></p>
+    ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · ${S.pidlib.items.length} P&amp;ID pages · ${PACK.issued ? `issued ${fmtDate(PACK.issued.slice(0, 10))}${PACK.issuedBy ? ' by ' + esc(PACK.issuedBy) : ''}` : 'created ' + esc(PACK.created || '')}</span></p>
+      ${(() => { const n = PACK.pipeClasses.filter(c => c._local).length; return n ? `<p class="small">✎ <b>${n}</b> piping class${n > 1 ? 'es' : ''} added on this device (${PACK.pipeClasses.filter(c => c._local).map(c => esc(c.id)).slice(0, 8).join(', ')}) – included when you 📦 issue the data pack.</p>` : ''; })()}
+      ${PACK.changes ? `<details class="ref"><summary>What's new in v${esc(PACK.packVersion || '')}</summary><p class="small">${esc(PACK.changes).replace(/\n/g, '<br>')}</p></details>` : ''}
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
-      : '<p class="muted">No data pack loaded. The pack holds the piping classes, plot plans, FM areas and reference charts for your asset.</p>'}
-    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Replace' : 'Import'} data pack / asset pack</button>${PACK ? '<button class="btn ghost" data-action="assetExport">📤 Export asset pack</button>' : ''}${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
-    <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
+      : '<p class="muted">No data pack yet. An asset data pack holds the piping classes, plot plans, FM areas, reference charts, and every P&amp;ID with its index scans – request one for your asset, or start your own by adding piping classes.</p>'}
+    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Install a newer' : 'Install a'} data pack</button><button class="btn ghost" data-action="clsAdd">＋ Add piping classes</button>
+      ${PACK || S.pidlib.items.length ? '<button class="btn ghost" data-action="assetExport">📦 Issue asset data pack</button>' : ''}${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
+    <small class="muted">Installing a newer pack only replaces what changed: new P&amp;ID revisions replace old ones, the same revision is skipped, and classes you've added here are kept. Reports already written keep their own copies.</small></div>
   <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
   <div class="card danger-card"><h3>🧹 Reset app on this device</h3><p class="small">Wipes everything the app has stored on <b>this device</b> – reports, photos, sketches, data packs, P&amp;IDs, reference documents, settings and the link to the shared folder – and starts again at the setup wizard. <b>Your OneDrive folder and its files are not touched.</b></p>
@@ -1521,6 +1524,7 @@ async function importPackJson(j, quiet) {
   if (old) for (const k of old.images || []) await DB.del('blobs', AK('pack') + '_' + k);
   const images = [];
   for (const [k, data] of Object.entries(j.images || {})) { await DB.put('blobs', { id: AK('pack') + '_' + k, blob: await b64.dec(data) }); images.push(k); }
+  if (PACK && Array.isArray(j.pipeClasses)) { const ids = new Set(j.pipeClasses.map(c => c.id)); const keep = (PACK.pipeClasses || []).filter(c => c._local && !ids.has(c.id)); if (keep.length) j = { ...j, pipeClasses: [...j.pipeClasses, ...keep] }; }   // classes added on this device and not yet issued are kept
   const { images: _drop, ...meta } = j;
   await DB.put('meta', { ...meta, id: AK('pack'), images, importedAt: new Date().toISOString() });
   await loadPack();

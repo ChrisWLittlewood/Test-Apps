@@ -1,7 +1,7 @@
 // Offline cache for the app shell. Bump VERSION whenever files change.
-const VERSION = 'vte-v2.18.2';
+const VERSION = 'vte-v2.19.0';
 const FILES = [
-  './', './index.html', './styles.css', './app.js', './checklist.js', './dm.js', './launch.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js', './tools.js', './face.js', './refs.js', './xray.js', './help.js', './echbulk.js', './prepdrop.js', './pidapp.js', './promo.js', './odrive.js', './sync.js', './files.js', './setup.js',
+  './', './index.html', './styles.css', './app.js', './checklist.js', './dm.js', './launch.js', './report.js', './pipedims.js', './pipeclasses.js', './ech.js', './viewer.js', './isotool.js', './pdfview.js', './tools.js', './face.js', './refs.js', './xray.js', './help.js', './echbulk.js', './prepdrop.js', './pidapp.js', './promo.js', './odrive.js', './sync.js', './files.js', './setup.js', './packs.js',
   './vendor/docx.js', './vendor/jszip.min.js', './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs',
   './img/icon-192.png', './img/icon-512.png', './img/icon-180.png', './img/imsnt-192.png'
 ];
