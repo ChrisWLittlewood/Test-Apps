@@ -87,15 +87,18 @@ function renderRefs(app) {
 }
 document.addEventListener('input', e => { if (e.target.id !== 'refQ') return; const q = e.target.value.toLowerCase().trim();
   $$('[data-refcard]').forEach(c => { const hit = !q || c.textContent.toLowerCase().includes(q); c.hidden = !hit; const det = $('details', c); if (det) det.open = !!q && hit && $('details', c).textContent.toLowerCase().includes(q); }); });
+async function refStoreFile(key, f) {   // store a document file; a replacement of a scanned / set document is marked as needing re-checking
+  const old = TB.refs.items[key]; if (old) await DB.del('blobs', old.blobId);
+  const blobId = 'std_' + key + '_' + uid(); await DB.put('blobs', { id: blobId, blob: f });
+  const d = allDocs().find(x => x.key === key); const hadData = !!(TB.refs.ai?.[key] || refValKeys(key).length);
+  TB.refs.items[key] = { blobId, name: f.name, size: f.size, addedAt: new Date().toISOString(), stale: !!(old && hadData) };
+  await DB.put('meta', TB.refs); return { old, hadData, d };
+}
 async function addRef(key) {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,.pdf';
   inp.onchange = async () => {
     const f = inp.files[0]; if (!f) return;
-    const old = TB.refs.items[key]; if (old) await DB.del('blobs', old.blobId);
-    const blobId = 'std_' + key + '_' + uid(); await DB.put('blobs', { id: blobId, blob: f });
-    const d = allDocs().find(x => x.key === key); const hadData = !!(TB.refs.ai?.[key] || refValKeys(key).length);
-    TB.refs.items[key] = { blobId, name: f.name, size: f.size, addedAt: new Date().toISOString(), stale: !!(old && hadData) };
-    await DB.put('meta', TB.refs); toast(`${d?.name || 'Document'} ${old ? 'updated' : 'added'}`);
+    const { old, hadData, d } = await refStoreFile(key, f); toast(`${d?.name || 'Document'} ${old ? 'updated' : 'added'}`);
     if (old && hadData) {
       const r = await modal('New copy uploaded', `<p>You've replaced <b>${esc(d?.name || 'this document')}</b>. The values and key facts taken from the old copy may be out of date.</p><p class="small">Until you check them, the document is marked <b>⚠ New copy – values need re-checking</b>. The apps keep using the current values meanwhile.</p>`,
         [['Later', ''], ...(refDefsFor(d).length ? [['✎ Update manually', 'manual']] : []), ['🤖 Rescan', 'ai', 'primary']]);
@@ -401,7 +404,7 @@ async function refCpExport() {
   zip.file('0 - READ ME.txt', `Reference documents for Copilot – ${docs.length} document${docs.length > 1 ? 's' : ''} in ${nb} chat${nb > 1 ? 's' : ''}\r\n\r\nFor each "Chat" folder:\r\n 1. Open a NEW Copilot chat and attach the PDF(s) in the folder.\r\n 2. Paste the text from that folder's "PROMPT - paste into Copilot.txt" (each folder has its own prompt) and send.\r\n 3. Copy Copilot's whole reply (the block with { } brackets) into one text file, or paste it straight into the app.\r\n\r\nThen in the Inspection Toolbox: Standard Issue > Import Copilot results. Paste all the replies at once, or choose the saved text file(s). Check and tick each value before it's used.\r\nDon't rename the PDFs - the code at the end of each name links the reply to the document.\r\n\r\nOnly send documents you are authorised to send to Copilot - if in doubt, ask. Keep this zip in company storage.`);
   TB.refs.cpAuth = { ...(TB.refs.cpAuth || {}), ...Object.fromEntries(docs.map(d => [d.key, a.auth])) }; await DB.put('meta', TB.refs);
   const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); prog.close();
-  shareBlob(blob, `Reference_docs_for_Copilot_${todayISO()}.zip`, 'Reference documents for Copilot');
+  saveOut('refcopilot', {}, blob, `Reference_docs_for_Copilot_${todayISO()}.zip`, 'Reference documents for Copilot');
 }
 async function refCpImport() {
   const r = await modal('📥 Import Copilot results', `<p class="small">Paste Copilot's replies – one or several chats at once – or choose the text file(s) you saved them in.</p>

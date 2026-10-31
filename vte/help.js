@@ -112,6 +112,16 @@ const HELP = [
     <li><i>📤 Export / send to device</i> saves the whole system as one file. Send it to the inspection device by Teams or OneDrive. On that device: Settings → <i>⬆ Import backup</i>.</li></ol>
     <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
   { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Settings → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
+  { id: 'onedrive', t: 'OneDrive folder – store, send and pick up files', b: `
+    <p>On a <b>PC (Chrome or Edge)</b>: Settings &amp; tools → <b>📁 Set up OneDrive folder</b> and pick your OneDrive <i>Documents</i> folder. The app creates <b>Inspection Toolbox</b> with:</p>
+    <ul><li><b>1 Data packs</b> – data packs and asset packs. Import: OneDrive → 📦 Data pack.</li>
+      <li><b>2 Piping system prep</b> – a folder per piping system with the IMS line list, ECHs, isos and P&amp;IDs. Import: OneDrive → 🗂 Piping system prep. <i>📤 Export / send to device</i> saves the system's file here too.</li>
+      <li><b>3 P&amp;IDs</b> – a folder per asset with every P&amp;ID. Import: OneDrive → 📐 New P&amp;IDs.</li>
+      <li><b>4 Reference documents</b> – standards and procedures. Import: OneDrive → 📚 New reference documents (matched to the library by name – check the list).</li>
+      <li><b>5 Completed reports for IMS</b> – signed reports, filed by the app under <i>piping system › IMS schedule No.</i>, ready to upload into IMS. A final Word report is saved here automatically; the system page has <i>📁 Save signed reports to OneDrive</i> for all of them.</li>
+      <li><b>6 Backups</b> – Backup everything files.</li></ul>
+    <p>Imports only read <b>new or changed</b> files. The browser asks to allow access to the folder – choose <i>Allow on every visit</i> if offered.</p>
+    <p><b>On the phone:</b> when you import, choose <b>OneDrive</b> in the file picker and open the Inspection Toolbox folder; to save, use 📤 Share → OneDrive. Company data – company OneDrive only.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
@@ -120,6 +130,7 @@ const HELP = [
   { id: 'rad', t: 'Totally RAD', b: `<p>An experimental feature. Everything you need to know is in its disclaimer, which you must read in full before use. Do not point it at people. Especially not Kelton.</p>` }
 ];
 const INFO = {
+  onedrive: ['OneDrive folder', 'On a PC the app files everything in an Inspection Toolbox folder in your OneDrive: exports are saved straight into the right folder, and imports read only new or changed files.', 'onedrive'],
   systems: ['Piping systems', 'A piping system groups the line reports for one IMS inspection schedule. Set the shared details (site, F/Loc, IMS schedule, SAP WO) once on the system and they fill every line.', 'imsnt'],
   lineprep: ['Line prep', 'Done in the office before going out: EP number, P&ID with the line highlighted, the isometric and the previous ECH. Lines with all four are "ready to inspect".', 'imsnt'],
   ep: ['EP report number', 'The unique EP number issued for this report. It prints top right on every page and in the Unique No. box.', 'imsnt'],

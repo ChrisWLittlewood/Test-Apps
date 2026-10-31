@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.14.1';
+const APP_VERSION = '2.15.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -547,6 +547,7 @@ function renderSettings() {
       <a class="btn ghost" href="#/refs">📚 Standard Issue</a>
     </div>
     <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
+  ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
   <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
@@ -625,7 +626,8 @@ function renderSystem(id) {
     ${lines.length ? `<div class="eb-btnrow"><button class="btn ${lines.some(r => r.ech) ? 'ghost' : 'primary'} block" data-action="echBulk" data-sys="${s2.id}">📑 Import previous ECHs – all PDFs at once</button>${iBtn('echbulk')}</div>` : ''}
     ${lines.length ? `<div class="grid2"><button class="btn ghost" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button><button class="btn ghost" data-action="pidAuto" data-sys="${s2.id}">🔎 Find P&amp;IDs in the library</button></div>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
-    ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Export / send to device</button><p class="small muted">Saves the whole system (lines, ECHs, photos, drawings) as one file – send it to another device by Teams or OneDrive, then on that device: Toolbox → ⬆ Import backup.</p>` : ''}
+    ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Export / send to device</button><p class="small muted">Saves the whole system (lines, ECHs, photos, drawings) as one file – send it to another device by Teams or OneDrive, then on that device: Settings & tools → ⬆ Import backup.</p>` : ''}
+    ${(() => { const n = lines.filter(r => r.sigId).length; return n && typeof odSupported === 'function' && odSupported() && OD?.root ? `<button class="btn ghost block" data-action="odSaveSigned">📁 Save signed reports to OneDrive (${n})</button><p class="small muted">Into ${esc(OD_DIRS.reports)} › ${esc(s2.name || '')} › <i>IMS schedule No.</i> – ready to upload into IMS.</p>` : ''; })()}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {
@@ -1677,7 +1679,8 @@ const actions = {
       const name = `VTE_${safeName(r.h?.tagNo)}_${(r.h?.examDate || todayISO()).replace(/-/g, '')}${draft ? '_DRAFT' : ''}.docx`;
       cur.docx = { blob, name };
       if (!draft) { r.issuedAt = Date.now(); r.updatedAt = r.issuedAt; await DB.put('reports', r); }
-      out.innerHTML = `<div class="calc ok">✓ ${esc(name)} (${(blob.size / 1048576).toFixed(1)} MB)</div><div class="grid2"><button class="btn primary" data-action="shareDocx">📤 Share</button><button class="btn ghost" data-action="saveDocx">⬇ Save to phone</button></div>`;
+      let odWhere = null; if (!draft && typeof odRoot === 'function' && await odRoot(false)) { try { odWhere = await odWrite(odPathFor('report', { system: cur.system?.name, schedule: r.h?.imsSchedule || cur.system?.imsSchedule }), name, blob); } catch { } }
+      out.innerHTML = `<div class="calc ok">✓ ${esc(name)} (${(blob.size / 1048576).toFixed(1)} MB)${odWhere ? `<br><small>📁 Saved to ${esc(odWhere)}</small>` : ''}</div><div class="grid2"><button class="btn primary" data-action="shareDocx">📤 Share</button><button class="btn ghost" data-action="saveDocx">⬇ Save to phone</button></div>`;
     } catch (e) { console.error(e); out.innerHTML = `<div class="calc bad">Failed: ${esc(e.message)}</div>`; }
     el.disabled = false;
   },
@@ -1695,9 +1698,9 @@ const actions = {
   },
   shareDocx: () => shareBlob(cur.docx.blob, cur.docx.name, cur.docx.name),
   saveDocx: () => downloadBlob(cur.docx.blob, cur.docx.name),
-  exportReport: async () => { const r = cur.report; toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
-  sendToPhone: async () => { toast('Packing this system…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection Toolbox export'); },
-  exportSystem: async () => { toast('Preparing backup…'); shareBlob(await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
+  exportReport: async () => { const r = cur.report; toast('Preparing backup…'); saveOut('backup', {}, await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
+  sendToPhone: async () => { toast('Packing this system…'); saveOut('prep', { system: cur.system.name }, await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection Toolbox export'); },
+  exportSystem: async () => { toast('Preparing backup…'); saveOut('backup', {}, await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
   forceUpdate: () => forceUpdate(),
   checkUpdate: async el => {
     if (!navigator.onLine) return toast('No signal – try again when online');
@@ -1711,7 +1714,7 @@ const actions = {
     } catch { toast('Could not check – try again later'); }
     finally { el.disabled = false; el.textContent = '⟳ Check for updates'; }
   },
-  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length && !TB.face.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); shareBlob(await makeBackup((await DB.all('systems')).map(s => ({ ...s, assetName: assetName(s.asset || 'a0') })), await DB.all('reports'), true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
+  exportAll: async () => { if (!S.systems.length && !TB.iso.items.length && !TB.fl.items.length && !TB.face.items.length) return toast('Nothing to back up yet'); toast('Preparing backup…'); await flushTB(); saveOut('backup', {}, await makeBackup((await DB.all('systems')).map(s => ({ ...s, assetName: assetName(s.asset || 'a0') })), await DB.all('reports'), true), `Toolbox_backup_all_${todayISO()}.json`, 'Inspection Toolbox backup'); },
   importBackup: () => $('#fileBackup').click(),
   sysFilter: el => { cur.sysFilter = el.dataset.f; renderSystem(cur.system.id); },
   echImport: () => $('#fileEch').click(),
@@ -1814,7 +1817,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await loadAssetData();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
-    await loadTools(); await loadFace(); await loadRefs();
+    await loadTools(); await loadFace(); await loadRefs(); if (typeof odLoad === 'function') await odLoad();
     route();
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

@@ -302,7 +302,7 @@ async function pidPackExport() {
   }
   zip.file('pidpack.json', JSON.stringify({ format: 'pid-pack', version: 1, exported: new Date().toISOString(), updated: S.pidlib.updated || '', items: S.pidlib.items }));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); prog.close();
-  shareBlob(blob, `PID_Library_${todayISO()}.zip`, 'P&ID library pack');
+  saveOut('pidindex', {}, blob, `PID_Library_${todayISO()}.zip`, 'P&ID library pack');
 }
 async function pidPackImport(file) {
   const zip = await JSZip.loadAsync(file); const jf = zip.file('pidpack.json'); if (!jf) throw new Error('Not a P&ID library pack');
@@ -485,7 +485,7 @@ async function pidIxExport() {
   const zip = new JSZip(); const name = (r.vals.name || def).trim();
   zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name, created: new Date().toISOString(), by: S.settings.inspectorName || '', libraryUpdated: S.pidlib.updated || '', items }));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }); prog.close();
-  shareBlob(blob, `PID_Index_${safeName(name)}_${todayISO()}.zip`, 'P&ID search index');
+  saveOut('pidindex', {}, blob, `PID_Index_${safeName(name)}_${todayISO()}.zip`, 'P&ID search index');
 }
 async function pidIxImport(zip) {
   const j = JSON.parse(await zip.file('pidindex.json').async('string')); if (j.format !== 'pid-index') throw new Error('Not a P&ID search index');
@@ -582,7 +582,7 @@ async function assetExport() {
   zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name: name + ' P&IDs', created, by, libraryUpdated: S.pidlib.updated || '', items: pidIndexItems(idx) }), J);
   zip.file('asset.json', JSON.stringify({ format: 'vte-asset-pack', version: 1, name, created, by, datapack: dp ? { name: dp.name, packVersion: dp.packVersion || '' } : null, pids: n, aiIndexed: n - pidNotIndexed().length, libraryUpdated: S.pidlib.updated || '' }));
   const blob = await zip.generateAsync({ type: 'blob' }); prog.close();
-  shareBlob(blob, `${safeName(name)}_AssetPack_${todayISO()}.zip`, `${name} asset pack`);
+  saveOut('assetpack', {}, blob, `${safeName(name)}_AssetPack_${todayISO()}.zip`, `${name} asset pack`);
 }
 document.addEventListener('click', e => { const b = e.target.closest('.modal [data-v]'); if (!b) return; const m = b.closest('.modal'); const dp = m.querySelector('input[name=dp]'), pid = m.querySelector('input[name=pid]'); if (dp || pid) assetImportRun._want = { dp: dp ? dp.checked : false, pid: pid ? pid.checked : true }; }, true);
 async function assetImport(zip) {
@@ -655,7 +655,7 @@ async function pidCpExport() {
   zip.file('1 - PROMPT - paste into Copilot.txt', pidCpBatchPrompt());
   zip.file('0 - READ ME.txt', `P&ID index with Copilot – ${list.length} drawings in ${nb} batch${nb > 1 ? 'es' : ''}\r\n\r\nFor each batch folder:\r\n 1. Open a new Copilot chat and attach ALL the images in the folder.\r\n 2. Paste the text from "1 - PROMPT - paste into Copilot.txt" and send.\r\n 3. Copy Copilot's whole reply (the block with { } brackets) and add it to one text file, or paste it straight into the app.\r\n\r\nThen in the Inspection Toolbox: P&I Spy > Settings > AI index > Import Copilot results. Paste all the replies at once, or choose the saved text file(s).\r\nDon't rename the images - the code at the end of each file name links the reply to the drawing.\r\n\r\nOnly if company rules allow sending P&IDs to Copilot - if in doubt, ask. Uncontrolled copies - company data, keep in company storage.`);
   const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); prog.close();
-  shareBlob(blob, `PID_Copilot_${list.length}_drawings_${todayISO()}.zip`, 'P&IDs for Copilot');
+  saveOut('pidcopilot', {}, blob, `PID_Copilot_${list.length}_drawings_${todayISO()}.zip`, 'P&IDs for Copilot');
 }
 function jsonObjects(txt) {   // every top-level {...} in a piece of text (several pasted replies)
   const out = []; let d = 0, st = -1, q = false, esc2 = false;
