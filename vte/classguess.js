@@ -6,8 +6,8 @@
 const CG_MATS = [['', 'Not sure'], ['cs', 'Carbon steel'], ['lt', 'Low-temperature carbon steel'], ['galv', 'Galvanised steel'], ['ss', 'Stainless steel (316)'], ['dup', 'Duplex'], ['sdup', 'Super duplex'], ['6mo', '6Mo'], ['cuni', 'Copper-nickel (90/10)'], ['ti', 'Titanium'], ['gre', 'GRE / GRP (plastic)']];
 const CG_MAT_RE = { cs: /carbon|\bcs\b|a106|api ?5l|a333/i, lt: /\blt\b|low.?temp|a333/i, galv: /galv/i, ss: /stainl|316|304|\bss\b|a312/i, dup: /duplex|2205|s31803|s32205/i, sdup: /super ?duplex|s32750|s32760|zeron/i, '6mo': /6 ?mo|254 ?smo|s31254/i, cuni: /cu.?ni|90.?10|copper/i, ti: /titan/i, gre: /gre|grp|glass|epoxy|vinyl/i };
 const CG_SERV = [['', 'Not sure'], ['gas', 'Hydrocarbon gas'], ['oil', 'Oil / condensate'], ['pw', 'Produced water'], ['sw', 'Seawater / cooling water'], ['fw', 'Firewater / deluge'], ['diesel', 'Diesel / fuel oil'], ['meoh', 'Methanol'], ['glycol', 'Glycol (MEG / TEG)'], ['air', 'Instrument / utility air'], ['n2', 'Nitrogen'], ['drain', 'Open / closed drains'], ['chem', 'Chemical injection'], ['flare', 'Flare / vent'], ['hyd', 'Hydraulic oil'], ['fresh', 'Fresh / potable water']];
-const CG_SERV_AFF = { gas: [/carbon|lt|duplex|stainl/i, /cu.?ni|gre|galv/i], oil: [/carbon|lt|duplex/i, /cu.?ni|gre|galv/i], pw: [/duplex|gre|super|stainl/i, /galv/i], sw: [/cu.?ni|gre|super|titan|6 ?mo/i, /^carbon|galv/i], fw: [/cu.?ni|gre|super|titan|galv|6 ?mo/i, /lt\b/i],
-  diesel: [/carbon|stainl/i, /cu.?ni|gre/i], meoh: [/carbon|stainl/i, /cu.?ni|galv/i], glycol: [/carbon|stainl/i, /galv/i], air: [/stainl|galv|carbon/i, /cu.?ni/i], n2: [/stainl|carbon/i, /cu.?ni|gre/i], drain: [/carbon|gre|stainl/i, /titan/i], chem: [/stainl|duplex|6 ?mo/i, /galv/i], flare: [/carbon|lt|stainl/i, /gre|cu.?ni/i], hyd: [/stainl/i, /gre|cu.?ni/i], fresh: [/stainl|cu.?ni|gre|galv/i, /^carbon/i] };
+const CG_SERV_AFF = { gas: [/carbon|lt|duplex|stainl/i, /cu.?ni|copper|gre|galv/i], oil: [/carbon|lt|duplex/i, /cu.?ni|copper|gre|galv/i], pw: [/duplex|gre|super|stainl/i, /galv/i], sw: [/cu.?ni|copper|gre|super|titan|6 ?mo/i, /^carbon|galv/i], fw: [/cu.?ni|copper|gre|super|titan|galv|6 ?mo/i, /lt\b/i],
+  diesel: [/carbon|stainl/i, /cu.?ni|copper|gre/i], meoh: [/carbon|stainl/i, /cu.?ni|galv/i], glycol: [/carbon|stainl/i, /galv/i], air: [/stainl|galv|carbon/i, /cu.?ni/i], n2: [/stainl|carbon/i, /cu.?ni|gre/i], drain: [/carbon|gre|stainl/i, /titan/i], chem: [/stainl|duplex|6 ?mo/i, /galv/i], flare: [/carbon|lt|stainl/i, /gre|cu.?ni/i], hyd: [/stainl/i, /gre|cu.?ni/i], fresh: [/stainl|cu.?ni|copper|gre|galv/i, /^carbon/i] };
 const cgNwt = (sch, dn) => sch == null ? null : /mm$/i.test(String(sch)) ? parseFloat(sch) : PIPE_DIMS[dn]?.wt?.[String(sch).toUpperCase()] ?? null;
 function cgStudMm(v) { v = String(v || '').trim().replace(/["”]/g, '').replace(/mm$/i, '').trim(); if (!v) return null; if (/\//.test(v) || (+v > 0 && +v < 4)) { const n = inchToNum(v); return n ? n * 25.4 : null; } const n = num(v); return n && n > 4 ? n : null; }
 const cgReadings = s => String(s || '').split(/[\s,;/]+/).map(x => num(x)).filter(x => x != null && x > 0.3 && x < 80);
@@ -19,7 +19,10 @@ async function cgPidEvidence(svc, dn) {
   return { at, any, n };
 }
 async function cgGuess(I) {
-  const dn = +I.dn; if (!dn) return null;
+  const odm = cgOD(I); let dn = +I.dn, inferred = null;
+  if (!dn && odm) { inferred = cgSizeFromOD(odm); if (inferred) dn = inferred.dn; }
+  if (!dn) return odm ? { noSize: true, odm } : null;
+  const odSteel = odm ? Math.abs(PIPE_DIMS[dn].od - odm) / PIPE_DIMS[dn].od <= 0.03 : null;
   const R = I.r ? +I.r : null, studN = num(I.n), studMm = cgStudMm(I.d), fod = num(I.od), ftf = num(I.tf), ut = cgReadings(I.ut), est = ut.length ? Math.max(...ut) : null;
   const ev = await cgPidEvidence(I.svc, dn);
   const out = [];
@@ -36,32 +39,42 @@ async function cgGuess(I) {
       if (est > hi) add(-6, -1, `UT ${est} mm is thicker than Sch ${sch} can be (${nwt} mm nominal)`);
       else if (est >= lo) add(Math.abs(est - nwt) / nwt < 0.05 ? 5 : 4, 1, `UT ${est} mm fits Sch ${sch} (${nwt} mm nominal)`);
       else { const loss = r2(nwt - est); add(ut.length >= 3 ? -2 : -1, 0, `UT ${est} mm is ${loss} mm under Sch ${sch} (${nwt} mm) – corrosion, or a thinner schedule`); } }
+    if (odm && !inferred) { const hay = `${c.m} ${(c.pipe || []).join(' ')}`; if (odSteel) { if (CG_NONSTEEL.test(hay)) add(-1, -1, `OD ${odm} mm is a steel size – ${c.m} usually has a different OD`); }
+      else { if (CG_NONSTEEL.test(hay)) add(1, 1, `OD ${odm} mm isn't a steel ${npsOf(dn)}" size – fits ${c.m}`); else if (CG_STEEL.test(hay)) add(-2, -1, `OD ${odm} mm doesn't match steel ${npsOf(dn)}" (${PIPE_DIMS[dn].od} mm)`); } }
     if (I.mat) { const re = CG_MAT_RE[I.mat]; const hay = `${c.m} ${(c.pipe || []).join(' ')}`; if (re?.test(hay)) add(2, 1, `material ${c.m}`); else add(-3, -1, `material is ${c.m}`); }
     if (I.serv && CG_SERV_AFF[I.serv]) { const [good, poor] = CG_SERV_AFF[I.serv]; const hay = `${c.m} ${(c.pipe || []).join(' ')}`; if (good.test(hay)) add(1, 1, `${c.m} suits ${CG_SERV.find(x => x[0] === I.serv)[1].toLowerCase()}`); else if (poor.test(hay)) add(-1, -1, `${c.m} is unusual for ${CG_SERV.find(x => x[0] === I.serv)[1].toLowerCase()}`); }
     if (ev && ev.n) { const k = c.id.toUpperCase(), n = ev.at[k] || 0; if (n) add(Math.min(5, 1 + Math.log2(n + 1) * 1.2), 1, `on the P&IDs: ${n} ${I.svc.toUpperCase()} line${n > 1 ? 's' : ''} at this size in this class`); else if (ev.any[k]) add(0.5, 0, `on the P&IDs with ${I.svc.toUpperCase()} at other sizes`); else add(ev.n >= 3 ? -1.5 : -0.3, -1, `not used for ${I.svc.toUpperCase()} at this size on the P&IDs`); }
     else if (ev && Object.keys(ev.any).length) { const n = ev.any[c.id.toUpperCase()] || 0; if (n) add(1.5, 1, `on the P&IDs with ${I.svc.toUpperCase()} (${n} line${n > 1 ? 's' : ''}, other sizes)`); }
     out.push({ c, sch, nwt, sc, why });
   }
-  if (!out.length) return { dn, list: [], sched: cgSchedOnly(dn, est), ut, est, ev };
+  if (!out.length) return { dn, list: [], sched: cgSchedOnly(dn, est), ut, est, ev, odm, inferred, odSteel };
   const mx = Math.max(...out.map(x => x.sc)); out.forEach(x => x.w = Math.exp(x.sc - mx)); const tot = out.reduce((t, x) => t + x.w, 0); out.forEach(x => x.p = x.w / tot);
   out.sort((a, b) => b.p - a.p || a.c.id.localeCompare(b.c.id, undefined, { numeric: true }));
   const bySch = {}; for (const x of out) { const k = x.nwt != null ? `${x.nwt}` : x.sch; bySch[k] = bySch[k] || { nwt: x.nwt, labels: new Set(), p: 0 }; bySch[k].labels.add(x.sch); bySch[k].p += x.p; }
   const sched = Object.values(bySch).sort((a, b) => b.p - a.p);
   const clues = [R, studN, studMm, fod, ftf, est, I.mat, I.serv, ev?.n].filter(v => v != null && v !== '' && v !== 0).length;
-  return { dn, list: out, sched, ut, est, ev, clues };
+  return { dn, list: out, sched, ut, est, ev, clues: clues + (odm ? 1 : 0), odm, inferred, odSteel };
 }
 function cgSchedOnly(dn, est) { const W = PIPE_DIMS[dn]?.wt || {}; const g = {}; for (const [s, w] of Object.entries(W)) { g[w] = g[w] || { nwt: w, labels: new Set(), p: 0 }; g[w].labels.add(s); }
   return Object.values(g).map(x => ({ ...x, p: est == null ? 0 : est > x.nwt * 1.08 ? 0 : est >= x.nwt * 0.875 ? 1 : 0.2 })).sort((a, b) => b.p - a.p || a.nwt - b.nwt); }
+function cgOD(I) { const od = num(I.pod), c = num(I.circ); return od && od > 5 ? od : c && c > 15 ? r2(c / Math.PI) : null; }
+function cgSizeFromOD(od) {   // nearest steel pipe size (ASME B36.10) to a measured OD
+  let best = null; for (const d of cgSizes()) { const e = Math.abs(PIPE_DIMS[d].od - od) / PIPE_DIMS[d].od; if (!best || e < best.e) best = { dn: d, e }; }
+  return best && best.e <= 0.03 ? best : null;
+}
+const CG_STEEL = /carbon|stainl|duplex|super|6 ?mo|galv|\blt\b|a333|a106|a312/i, CG_NONSTEEL = /cu.?ni|copper|gre|grp|glass|epoxy|titan/i;
 const cgSizes = () => Object.keys(PIPE_DIMS).map(Number).filter(d => d >= 15 && d <= 1200);
 function renderClassGuess() {
   cur.report = null; setTop('Class Act', 'Guess my class', '/classes');
   const I = cur.cg = cur.cg || { dn: '' };
   const sel = (name, opts, v) => `<select data-cg="${name}">${opts.map(([k, l]) => `<option value="${k}" ${String(v ?? '') === String(k) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   const inp = (name, ph, mode = 'decimal') => `<input type="text" inputmode="${mode}" data-cg="${name}" value="${esc(I[name] || '')}" placeholder="${ph}">`;
-  $('#main').innerHTML = `${caTabs('guess')}<div class="card"><h2>🕵 Guess my class</h2><p class="small">Put in every piece of the puzzle you have – the more clues, the better the guess. Only the size is needed.</p>
+  $('#main').innerHTML = `${caTabs('guess')}<div class="card"><h2>🕵 Guess my class</h2><p class="small">Put in every piece of the puzzle you have – the more clues, the better the guess. You need the size (NB), or a measured OD / circumference to work it out.</p>
       <div class="cg-grid">
-        <label class="field"><span>Line size</span>${sel('dn', [['', 'Pick a size…'], ...cgSizes().map(d => [d, sizeLabel(d)])], I.dn)}</label>
+        <label class="field"><span>Line size (NB)</span>${sel('dn', [['', 'Not sure – use the OD'], ...cgSizes().map(d => [d, sizeLabel(d)])], I.dn)}</label>
         <label class="field"><span>Rating, if known</span>${sel('r', [['', 'Not sure'], ...[150, 300, 600, 900, 1500, 2500].map(r => [r, 'Class ' + r])], I.r)}</label>
+        <label class="field"><span>Measured pipe OD (mm)</span>${inp('pod', 'e.g. 168')}</label>
+        <label class="field"><span>…or circumference (mm)</span>${inp('circ', 'tape round the pipe')}</label>
         <label class="field"><span>Studs on the flange</span>${inp('n', 'e.g. 8', 'numeric')}</label>
         <label class="field"><span>Stud size</span>${inp('d', 'e.g. 3/4 or 19 mm', 'text')}</label>
         <label class="field"><span>Flange OD (mm)</span>${inp('od', 'measured')}</label>
@@ -77,21 +90,23 @@ function renderClassGuess() {
 let cgT = null;
 async function cgRun() {
   const box = $('#cgOut'); if (!box) return; const I = cur.cg;
-  if (!I.dn) { box.innerHTML = '<p class="small muted" style="padding:0 4px">Pick the line size to start.</p>'; return; }
+  if (!I.dn && !cgOD(I)) { box.innerHTML = '<p class="small muted" style="padding:0 4px">Pick the line size (NB), or enter a measured OD or circumference.</p>'; return; }
   const g = await cgGuess(I); if (!g || cur.cg !== I || !$('#cgOut')) return;
+  if (g.noSize) { box.innerHTML = `<div class="card"><p>📏 OD <b>${g.odm} mm</b> doesn't match a steel pipe size (ASME B36.10). It could be copper-nickel, GRE or tubing, or the reading is off – check it, or pick the size (NB) by hand.</p></div>`; return; }
+  const odNote = g.odm ? `<div class="card cg-od">📏 ${num(I.circ) && !num(I.pod) ? `Circumference ${esc(I.circ)} mm → ` : ''}OD <b>${g.odm} mm</b> ${g.inferred ? `→ <b>${esc(sizeLabel(g.dn))}</b> steel pipe (${PIPE_DIMS[g.dn].od} mm OD)` : g.odSteel ? `✓ matches steel ${esc(sizeLabel(g.dn))} (${PIPE_DIMS[g.dn].od} mm)` : `⚠ doesn't match steel ${esc(sizeLabel(g.dn))} (${PIPE_DIMS[g.dn].od} mm) – copper-nickel, GRE or a different size?`}</div>` : '';
   const pct = p => p >= 0.995 ? '99%' : p < 0.01 ? '<1%' : Math.round(p * 100) + '%';
-  const schTxt = s => `Sch ${[...s.labels].join(' / ')}${s.nwt != null ? ` – ${s.nwt} mm` : ''}`;
+  const schTxt = s => { const L = [...s.labels].filter(l => !/mm$/i.test(l)); return L.length ? `Sch ${L.join(' / ')}${s.nwt != null ? ` – ${s.nwt} mm` : ''}` : `${s.nwt ?? [...s.labels][0]} mm wall`; };
   const top = g.sched?.[0];
   const schedCard = top ? `<div class="card cg-sched"><h3>📏 Most likely schedule</h3>${g.list.length || g.est != null ? `<p class="cg-big"><b>${esc(schTxt(top))}</b>${g.list.length ? ` <span class="pill-s ${top.p > 0.7 ? 'ok' : 'warn'}">${pct(top.p)}</span>` : ''}</p>` : ''}
     ${g.sched.slice(1, 4).filter(s => !g.list.length || s.p >= 0.03).map(s => `<div class="small">${esc(schTxt(s))}${g.list.length ? ` · ${pct(s.p)}` : ''}</div>`).join('')}
     ${g.est != null ? `<p class="small muted">From ${g.ut.length} UT reading${g.ut.length > 1 ? 's' : ''} – highest ${g.est} mm. Corrosion only thins the wall, so the highest reading on sound steel is the best guide; mill tolerance means new pipe can be up to 12.5% under nominal.</p>` : '<p class="small muted">Add UT readings to narrow the schedule down.</p>'}</div>` : '';
-  if (!g.list.length) { box.innerHTML = schedCard + `<div class="card"><p class="small">${PIPE_CLASSES?.length ? `No class in ${esc(PACK?.name || 'the data pack')} covers ${esc(sizeLabel(g.dn))}${cur.cg.r ? ' at Class ' + esc(cur.cg.r) : ''}.` : 'No data pack loaded – only the schedule can be guessed. Install the asset data pack to guess the class.'}</p></div>`; return; }
+  if (!g.list.length) { box.innerHTML = odNote + schedCard + `<div class="card"><p class="small">${PIPE_CLASSES?.length ? `No class in ${esc(PACK?.name || 'the data pack')} covers ${esc(sizeLabel(g.dn))}${cur.cg.r ? ' at Class ' + esc(cur.cg.r) : ''}.` : 'No data pack loaded – only the schedule can be guessed. Install the asset data pack to guess the class.'}</p></div>`; return; }
   const shown = g.list.slice(0, 6);
-  box.innerHTML = schedCard + `<div class="card"><h3>🔧 Most likely classes <small class="muted">· ${g.list.length} cover this size</small></h3>
+  box.innerHTML = odNote + schedCard + `<div class="card"><h3>🔧 Most likely classes <small class="muted">· ${g.list.length} cover this size</small></h3>
     ${g.clues < 2 ? '<p class="small pid-miss">Only one clue so far – this is a wide guess. Add studs, UT readings or the service code.</p>' : ''}
     ${g.ev && !g.ev.n && cur.cg.svc ? `<p class="small muted">No ${esc(cur.cg.svc.toUpperCase())} line numbers at this size found on the P&amp;IDs${S.pidlib.items.length ? '' : ' (no P&amp;IDs loaded)'}.</p>` : ''}
     ${shown.map((x, i) => `<a class="cg-row" href="#/classes/${encodeURIComponent(x.c.id)}/${g.dn}"><div class="cg-h"><b>${i + 1}. ${esc(x.c.id)}</b><span class="pill-s ${x.p > 0.5 ? 'ok' : x.p > 0.15 ? '' : 'warn'}">${pct(x.p)}</span></div>
-      <small>${esc(x.c.m)} · Class ${esc(x.c.r)} · CA ${esc(x.c.ca)} mm · Sch ${esc(x.sch)}${x.nwt != null ? ` (${x.nwt} mm)` : ''}</small>
+      <small>${esc(x.c.m)} · Class ${esc(x.c.r)} · CA ${esc(x.c.ca)} mm · ${/mm$/i.test(x.sch) ? esc(x.sch) + ' wall' : `Sch ${esc(x.sch)}${x.nwt != null ? ` (${x.nwt} mm)` : ''}`}</small>
       <div class="cg-why">${x.why.map(([ok, t]) => `<span class="${ok > 0 ? 'y' : ok < 0 ? 'n' : 'm'}">${ok > 0 ? '✓' : ok < 0 ? '✗' : '~'} ${esc(t)}</span>`).join('')}</div></a>`).join('')}
     ${g.list.length > 6 ? `<p class="small muted">…and ${g.list.length - 6} less likely.</p>` : ''}
     <p class="small pid-miss">⚠ An educated guess from the clues you gave – confirm the class against the line list, P&amp;ID or IMS before relying on it.</p></div>`;

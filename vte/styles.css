@@ -644,3 +644,4 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 .cg-row{display:block;padding:10px 4px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.cg-h{display:flex;justify-content:space-between;align-items:center}.cg-row small{color:var(--muted)}
 .cg-why{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:.82em}.cg-why .y{color:#1d7a3a}.cg-why .n{color:#b3261e}.cg-why .m{color:var(--muted)}
 .cg-st tr.used td{background:rgba(233,178,58,.18);font-weight:600}
+.cg-od{font-size:.95em}
