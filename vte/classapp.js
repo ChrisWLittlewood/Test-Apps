@@ -2,7 +2,7 @@
    schedule, nominal wall, PS minimum (from the Standard Issue factors), flange, bolting with reject sizes, gasket with
    colour code and dimensions, materials, and the pressure–temperature limits. A quick MRWT check is built in. */
 const CA_ICON = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#7a3b2e"/><circle cx="32" cy="32" r="19" fill="#e9b23a"/><circle cx="32" cy="32" r="8" fill="#7a3b2e"/>${[0, 45, 90, 135, 180, 225, 270, 315].map(a => `<circle cx="${32 + 13.5 * Math.cos(a * Math.PI / 180)}" cy="${32 + 13.5 * Math.sin(a * Math.PI / 180)}" r="2.6" fill="#7a3b2e"/>`).join('')}<rect x="38" y="40" width="20" height="12" rx="3" fill="#f4e7c9"/><text x="48" y="49.5" font-size="9" font-family="Arial" font-weight="700" text-anchor="middle" fill="#7a3b2e">CL</text></svg>`;
-const caTile = tile => tile('#/classes', CA_ICON, 'Class Act', 'Piping class lookup – type a class, pick a size, get the PS min wall, flange, bolting &amp; gasket', PIPE_CLASSES?.length ? `${PIPE_CLASSES.length} classes · ${esc(assetName())}` : '');
+const caTile = tile => tile('#/classes', CA_ICON, 'Class Act', 'Piping class lookup – find a class, guess one from the clues you have, or look up pipe schedules', PIPE_CLASSES?.length ? `${PIPE_CLASSES.length} classes · ${esc(assetName())}` : '');
 function caSearch(q) {
   q = String(q || '').trim().toUpperCase(); if (!q) return [];
   const k = q.replace(/\s+/g, '');
@@ -11,9 +11,9 @@ function caSearch(q) {
 }
 function renderClassApp(id, dn) {
   cur.report = null; setTop('Class Act', 'Piping class lookup' + (PACK ? ' · ' + assetName() : ''), '/');
-  if (!PIPE_CLASSES?.length) { $('#main').innerHTML = `<div class="card"><h2>🔧 Class Act</h2><p>No piping classes for <b>${esc(assetName())}</b> yet. Install the asset data pack (Settings &amp; tools → Data pack), or add classes with <i>＋ Add piping classes</i>.</p><a class="btn primary block" href="#/settings">Settings &amp; tools</a></div>`; return; }
+  if (!PIPE_CLASSES?.length) { $('#main').innerHTML = `${typeof caTabs === 'function' ? caTabs('find') : ''}<div class="card"><h2>🔧 Class Act</h2><p>No piping classes for <b>${esc(assetName())}</b> yet. Install the asset data pack (Settings &amp; tools → Data pack), or add classes with <i>＋ Add piping classes</i>.</p><a class="btn primary block" href="#/settings">Settings &amp; tools</a></div>`; return; }
   const c = id ? findClass(decodeURIComponent(id)) : null;
-  $('#main').innerHTML = `<div class="card"><h2>🔧 Which class?</h2>
+  $('#main').innerHTML = `${typeof caTabs === 'function' ? caTabs('find') : ''}<div class="card"><h2>🔧 Which class?</h2>
       <input type="search" id="caQ" placeholder="Class code, e.g. 11472X – or a material, e.g. duplex" autocomplete="off" autocapitalize="characters" value="${esc(c ? c.id : cur.caQ || '')}">
       <div id="caRes" class="ca-res"></div></div>
     <div id="caOut">${c ? caClassHTML(c, dn ? +dn : null) : `<p class="small muted" style="padding:0 4px">${PIPE_CLASSES.length} classes in ${esc(PACK?.name || 'the data pack')}. Start typing – matches by class code, specification or material.</p>`}</div>`;
