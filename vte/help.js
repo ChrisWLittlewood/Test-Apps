@@ -122,6 +122,12 @@ const HELP = [
       <li><b>6 Backups</b> – Backup everything files.</li></ul>
     <p>Imports only read <b>new or changed</b> files. The browser asks to allow access to the folder – choose <i>Allow on every visit</i> if offered.</p>
     <p><b>On the phone:</b> when you import, choose <b>OneDrive</b> in the file picker and open the Inspection Toolbox folder; to save, use 📤 Share → OneDrive. Company data – company OneDrive only.</p>` },
+  { id: 'sync', t: 'Sync between devices', b: `
+    <p>Do the setup on your laptop and carry on on the phone. Each device keeps its own copy of everything; <b>🔄 Sync</b> keeps them in step through the OneDrive folder – no company sign-in needed.</p>
+    <ul><li><b>PC</b> (OneDrive folder linked): <i>🔄 Sync now</i> – also runs by itself when the app opens and every 15 minutes. It merges anything the phone sent and writes the PC's own sync file into <b>Inspection Toolbox › 7 Sync</b>.</li>
+      <li><b>Phone</b>: Settings &amp; tools → <i>🔄 Get updates</i> → choose <b>OneDrive</b> in the file picker → Inspection Toolbox › 7 Sync → the <i>Toolbox_Sync_PC_…</i> file. After inspecting: <i>📤 Send my changes</i> → share to OneDrive → 7 Sync (replace the old one).</li></ul>
+    <p><b>What syncs:</b> piping systems and line reports with their photos, drawings and signatures; iso sketches, flange sheets and face inspections; acceptance values and reference document results; data packs and P&amp;IDs, for every asset. <b>Not synced:</b> reference document PDFs (each device adds its own licensed copies), settings and AI keys, and deletions.</p>
+    <p><b>Small files:</b> the first sync carries everything; after that only photos and drawings the other device hasn't got. If something looks missing, use <i>Full sync</i> / <i>Send a full copy</i>. If the same report was edited on both devices, the newest edit wins.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>
     <li><b>Import backup</b> restores it, on this or another phone.</li>
@@ -130,6 +136,7 @@ const HELP = [
   { id: 'rad', t: 'Totally RAD', b: `<p>An experimental feature. Everything you need to know is in its disclaimer, which you must read in full before use. Do not point it at people. Especially not Kelton.</p>` }
 ];
 const INFO = {
+  sync: ['Sync between devices', 'Keeps your laptop and phone in step through the OneDrive folder. The PC syncs by itself; on the phone tap Get updates (pick the PC\'s file from OneDrive) and Send my changes.', 'sync'],
   onedrive: ['OneDrive folder', 'On a PC the app files everything in an Inspection Toolbox folder in your OneDrive: exports are saved straight into the right folder, and imports read only new or changed files.', 'onedrive'],
   systems: ['Piping systems', 'A piping system groups the line reports for one IMS inspection schedule. Set the shared details (site, F/Loc, IMS schedule, SAP WO) once on the system and they fill every line.', 'imsnt'],
   lineprep: ['Line prep', 'Done in the office before going out: EP number, P&ID with the line highlighted, the isometric and the previous ECH. Lines with all four are "ready to inspect".', 'imsnt'],

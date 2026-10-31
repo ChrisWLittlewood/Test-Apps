@@ -404,7 +404,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '2.16.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -548,6 +548,7 @@ function renderSettings() {
     </div>
     <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
   ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
+  ${typeof syncCardHTML === 'function' ? syncCardHTML() : ''}
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
   <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
@@ -1508,7 +1509,7 @@ async function importPackJson(j, quiet) {
   if (j.format !== 'vte-datapack') throw new Error('Not a VTE data pack file');
   if (!quiet) { const ok = await modal('Import data pack', `<p><b>${esc(j.name)}</b> v${esc(j.packVersion || '')}<br>${(j.pipeClasses || []).length} piping classes, ${(j.plot?.drawings || []).length} plot plans.</p>${PACK ? `<p>This replaces <b>${esc(PACK.name)}</b>.</p>` : ''}`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
     if (!ok) return; }
-  toast('Importing data pack…', 15000);
+  if (!quiet) toast('Importing data pack…', 15000);
   const old = await DB.get('meta', AK('pack'));
   if (old) for (const k of old.images || []) await DB.del('blobs', AK('pack') + '_' + k);
   const images = [];
@@ -1817,7 +1818,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     await loadAssetData();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
-    await loadTools(); await loadFace(); await loadRefs(); if (typeof odLoad === 'function') await odLoad();
-    route();
+    await loadTools(); await loadFace(); await loadRefs(); if (typeof odLoad === 'function') await odLoad(); if (typeof syncLoad === 'function') await syncLoad();
+    route(); if (typeof syncAuto === 'function') setTimeout(syncAuto, 2500);
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();
