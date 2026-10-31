@@ -223,17 +223,46 @@ async function pidSearch(q) {
   return res.sort((a, b) => b.w - a.w || b.hits - a.hits || a.it.title.localeCompare(b.it.title, undefined, { numeric: true }));
 }
 
+/* ---------- off-page links: other drawings named on this one (continuation arrows at the edges) ---------- */
+const pidLoose = v => pnorm(v).replace(/[^A-Z0-9]/g, '');
+function pidKAt(str, k) { for (let i = str.indexOf(k); i >= 0; i = str.indexOf(k, i + 1)) { const nx = str[i + k.length] || ''; if (!(/\d$/.test(k) && /\d/.test(nx))) return i; } return -1; }   // whole number only (…-02 isn't …-021)
+function pidLinks(it, P) {
+  const own = pidLoose(it.dwgNo), seen = new Map();
+  for (const o of S.pidlib.items) { if (!o.dwgNo) continue; const k = pidLoose(o.dwgNo); if (k.length < 6 || k === own) continue; const cur = seen.get(k); if (!cur || (o.page || 1) < (cur.page || 1)) seen.set(k, o); }
+  const out = [];
+  for (const [k, o] of seen) {
+    const boxes = [];
+    if (P) {
+      P.loose.forEach((l, i) => { if (l.length >= 4 && pidKAt(l, k) >= 0) boxes.push([i]); });   // the number in one piece of text (also rotated text)
+      if (!boxes.length) for (const r of P.rows) { const at = pidKAt(r.L, k); if (at < 0) continue; let pos = 0; const span = [];
+        for (const i of r.ids) { const a = pos, b = pos + P.loose[i].length; if (b > at && a < at + k.length) span.push(i); pos = b; } if (span.length) boxes.push(span); }
+    }
+    const ai = it.ai && [...(it.ai.refs || []), ...(it.ai.tags || []), ...(it.ai.lines || [])].some(x => pidKAt(pidLoose(x), k) >= 0);
+    if (boxes.length || ai) out.push({ o, k, boxes });
+  }
+  if (own.length >= 6) for (const o of S.pidlib.items) {   // drawings that point to this one, even if this one doesn't name them (e.g. a scanned drawing)
+    if (o.id === it.id || !o.dwgNo || out.some(x => x.k === pidLoose(o.dwgNo)) || pidLoose(o.dwgNo) === own) continue;
+    const OP = PIDIDX?.get(o.id), byText = OP && OP.loose.some(l => pidKAt(l, own) >= 0), byAi = o.ai && (o.ai.refs || []).some(x => pidKAt(pidLoose(x), own) >= 0);
+    if (byText || byAi) out.push({ o, k: pidLoose(o.dwgNo), boxes: [] });
+  }
+  return out.sort((a, b) => a.o.dwgNo.localeCompare(b.o.dwgNo, undefined, { numeric: true }));
+}
+function pidBoxRect(P, ids) { let x0 = 1, y0 = 1, x1 = 0, y1 = 0; for (const i of ids) { const a = P.items[i]; x0 = Math.min(x0, a[1]); y0 = Math.min(y0, a[2]); x1 = Math.max(x1, a[1] + a[3]); y1 = Math.max(y1, a[2] + a[4]); } const pad = 0.004; return [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad]; }
+const PIDV_HIST = [];
+
 /* ---------- viewer ---------- */
-async function openPidViewer(id, boxes = [], q = '') {
+async function openPidViewer(id, boxes = [], q = '', from = null) {
   const it = S.pidlib.items.find(x => x.id === id); if (!it) return;
   const blob = await getBlob(it.blobId); if (!blob) return toast('Drawing missing – re-import it');
   const url = URL.createObjectURL(blob); const P = (await pidIndex()).get(id);
+  const links = pidLinks(it, P); if (!from) PIDV_HIST.length = 0;
   const ov = document.createElement('div'); ov.className = 'pidv';
   ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
       <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
+    ${links.length || PIDV_HIST.length ? `<div class="pidv-links">${PIDV_HIST.length ? `<button class="btn ghost sm" data-pv="back">‹ ${esc(PIDV_HIST[PIDV_HIST.length - 1].label)}</button>` : ''}${links.length ? `<small>🔗 Continues on:</small>${links.map((l, i) => `<button class="btn ghost sm" data-pvgo="${i}" title="${esc(l.o.desc || l.o.title)}">${esc(l.o.dwgNo)}</button>`).join('')}` : ''}</div>` : ''}
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
-    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" style="left:${a[1] * 100}%;top:${a[2] * 100}%;width:${a[3] * 100}%;height:${a[4] * 100}%"></i>`; }).join('')}</div></div>`;
+    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" style="left:${a[1] * 100}%;top:${a[2] * 100}%;width:${a[3] * 100}%;height:${a[4] * 100}%"></i>`; }).join('')}${P ? links.flatMap((l, i) => l.boxes.map(ids => { const [x, y, w, h] = pidBoxRect(P, ids); return `<a class="pidv-link" data-pvgo="${i}" role="button" tabindex="0" title="Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></a>`; })).join('') : ''}</div></div>`;
   document.body.append(ov); document.body.classList.add('noscroll');
   const sc = $('.pidv-scroll', ov), pg = $('.pidv-page', ov); let z = 1, k = 0;
   const fitW = () => Math.min(sc.clientWidth, sc.clientHeight * it.w / it.h) || sc.clientWidth;
@@ -245,9 +274,18 @@ async function openPidViewer(id, boxes = [], q = '') {
   sc.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z }; } });
   sc.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; setZ(pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d); } });
   const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; }; sc.addEventListener('pointerup', up); sc.addEventListener('pointercancel', up);
-  ov.addEventListener('click', e => {
+  const shut = () => { URL.revokeObjectURL(url); ov.remove(); document.body.classList.remove('noscroll'); };
+  const goTo = async (tid, tb, tq) => { shut(); await openPidViewer(tid, tb, tq, true); };
+  ov.addEventListener('click', async e => {
+    const g = e.target.closest('[data-pvgo]');
+    if (g) { e.preventDefault(); const l = links[+g.dataset.pvgo]; if (!l) return;
+      PIDV_HIST.push({ id, boxes, q, label: it.dwgNo || it.title });
+      const TP = (await pidIndex()).get(l.o.id); let tb = [];   // on the next drawing, highlight where it points back to this one
+      if (TP && it.dwgNo) { const back = pidLinks(l.o, TP).find(x => x.o.id === it.id || x.k === pidLoose(it.dwgNo)); if (back) tb = back.boxes.flat(); }
+      return goTo(l.o.id, tb, tb.length ? it.dwgNo : ''); }
     const a = e.target.closest('[data-pv]')?.dataset.pv; if (!a) return;
-    if (a === 'close') { URL.revokeObjectURL(url); ov.remove(); document.body.classList.remove('noscroll'); }
+    if (a === 'back') { const h = PIDV_HIST.pop(); if (h) return goTo(h.id, h.boxes, h.q); }
+    if (a === 'close') { PIDV_HIST.length = 0; shut(); }
     if (a === 'in') setZ(z * 1.5); if (a === 'out') setZ(z / 1.5); if (a === 'fit') setZ(1);
     const n = $$('.pidv-box', ov).length; if (a === 'next' && n) { k = (k + 1) % n; goHit(); } if (a === 'prev' && n) { k = (k - 1 + n) % n; goHit(); }
   });
@@ -396,7 +434,7 @@ Object.assign(actions, {
    text layer, but also adds anything the PDF text missed. Results are searchable and travel in the library pack. */
 const PID_AI_SCHEMA = `{"dwgNo":"drawing number from the title block","rev":"revision","title":"the drawing title / description from the title block in the bottom-right corner, e.g. GAS COMPRESSION – 1ST STAGE SUCTION SCRUBBER (not just 'Piping and instrument diagram')",
 "lines":["every pipeline number exactly as written, e.g. 6\"-PX-20189-61472"],
-"tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"]}`;
+"tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"],"refs":["other drawing numbers named at the off-page connectors / continuation arrows where lines leave or arrive, e.g. A-30-175-021"]}`;
 function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all || !it.hasText)); }
 function pidAiHTML() {
   if (!S.pidlib.items.length) return '';
@@ -404,7 +442,7 @@ function pidAiHTML() {
   if (!rest) return `<div class="card"><h3>🤖 AI index</h3><p class="small muted">Every P&amp;ID has been AI-indexed. New or replaced drawings (a new revision) will show here.</p></div>`;
   const list = pidAiWaiting(true).sort((a, b) => (a.hasText - b.hasText) || a.title.localeCompare(b.title, undefined, { numeric: true }));
   return `<div class="card ai-queue"><h3>🤖 AI index – ${rest} new or replaced P&amp;ID page${rest > 1 ? 's' : ''}</h3><span class="small muted">Reads line numbers and tags off the drawing image, so scanned P&amp;IDs become searchable and anything the drawing text missed is added. Drawings already indexed are never sent again. Only if company rules allow sending P&amp;IDs to the AI service – if in doubt, ask.</span>
-    ${S.settings.aiKey ? `<div class="grid2"><button class="btn primary" data-action="pidAiScan" data-all="1">🤖 Scan all new / replaced (${rest})</button>${scanned && scanned < rest ? `<button class="btn ghost" data-action="pidAiScan" data-all="0">Scanned drawings only (${scanned})</button>` : ''}</div>` : '<p class="small">No AI key on this device – use 📋 Copilot below.</p>'}
+    ${S.settings.aiKey ? `${AIJOB.run ? `<p class="small">⏳ Scanning now – progress in the bar at the bottom.</p>` : ''}<p class="small muted">Runs in the background, 4 drawings at a time – carry on using the app, but keep it open (the screen stays on). If it's closed part-way, scan again and it carries on with the rest.</p><div class="grid2"><button class="btn primary" data-action="pidAiScan" data-all="1">🤖 Scan all new / replaced (${rest})</button>${scanned && scanned < rest ? `<button class="btn ghost" data-action="pidAiScan" data-all="0">Scanned drawings only (${scanned})</button>` : ''}</div>` : '<p class="small">No AI key on this device – use 📋 Copilot below.</p>'}
     <div class="pid-cpbox"><b class="small">📋 With Copilot</b><span class="small muted">One file (or a few) with the ${rest} waiting drawing${rest > 1 ? 's' : ''} and one prompt; paste all the replies back at once. A single drawing: its 🤖 button in the list.</span>
       <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📋 Copilot – file + prompt (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Paste Copilot's replies</button></div></div></div>`;
 }
@@ -431,7 +469,7 @@ async function pidAiOne(it) {
   pidAiApply(it, parseAiJson(((await res.json()).content || []).map(c => c.text || '').join('')), S.settings.aiModel || 'AI');
 }
 function pidAiApply(it, j, via) {
-  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), title: j.title || '', _at: new Date().toISOString(), _via: via, _file: it.src || '', _rev: it.rev || '' };
+  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), refs: (j.refs || []).map(String).slice(0, 60), title: j.title || '', _at: new Date().toISOString(), _via: via, _file: it.src || '', _rev: it.rev || '' };
   if (!it.desc && it.ai.title) it.desc = pidAiDesc(it.ai.title);
   if (!it.dwgNo && j.dwgNo) it.dwgNo = String(j.dwgNo); if (!it.rev && j.rev) it.rev = String(j.rev);
 }
@@ -466,19 +504,59 @@ async function pidAiPick(id) {
   if (r?.v === 'cp') return pidCopilot(id);
   if (r?.v === 'api') { if (!navigator.onLine) return toast('No signal – try again when online'); toast('Scanning…', 30000); try { await pidAiOne(it); await savePidLib(); PIDIDX = null; toast(`✓ ${it.dwgNo || it.title} indexed`); } catch (err) { toast('⚠ ' + err.message, 6000); } route(); }
 }
-async function pidAiScan(all) {
-  const list = pidAiWaiting(all); if (!list.length) return toast('Nothing waiting for an AI scan');
-  if (!navigator.onLine) return toast('No signal – try again when online');
-  const prog = progressModal(`AI scanning ${list.length} P&ID page${list.length > 1 ? 's' : ''}…`, true); let n = 0, err = '';
-  for (const [k, it] of list.entries()) {
-    if (prog.stopped) break;
-    prog.set(k, list.length, it.title); await tick();
-    try { await pidAiOne(it); n++; if (n % 5 === 0) await savePidLib(); }
-    catch (e) { err = e.message; if (/\b(401|403|No API key)\b/.test(err)) break; }
-  }
-  prog.close(); await savePidLib(); route();
-  toast(`🤖 ${n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} scanned${err ? ' – ⚠ ' + err.slice(0, 80) : ''}`, 6000);
+/* 🤖 Bulk AI index in the background: 4 drawings at a time, the app stays usable, progress in a bar at the bottom.
+   The screen is kept awake while it runs. If the app is closed part-way, the drawings already done are kept and the
+   next scan carries on with the rest. Several assets queue up. */
+const AIJOB = { run: null, queue: [] }; let AIWL = null;
+const aiWaitIn = (lib, all) => (lib?.items || []).filter(it => !it.ai && (all || !it.hasText));
+async function aiWake(on) { try { if (on && (!AIWL || AIWL.released)) AIWL = await navigator.wakeLock?.request('screen'); if (!on && AIWL) { await AIWL.release(); AIWL = null; } } catch { } }
+document.addEventListener('visibilitychange', () => { if (AIJOB.run && document.visibilityState === 'visible') aiWake(true); });
+window.addEventListener('beforeunload', e => { if (AIJOB.run) { e.preventDefault(); e.returnValue = ''; } });
+function aiBar() {
+  let el = document.getElementById('aiJobBar'); const j = AIJOB.run;
+  if (!j) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'aiJobBar'; el.className = 'aijob'; document.body.append(el); }
+  const left = j.list.length - j.done, per = j.done ? (Date.now() - j.t0) / j.done : 0, eta = per ? Math.ceil(per * left / 60000) : null;
+  el.innerHTML = `<span>🤖 <b>AI indexing ${esc(j.name)}</b> – ${j.done} of ${j.list.length}${eta != null ? ` · about ${eta < 60 ? eta + ' min' : Math.floor(eta / 60) + ' h ' + (eta % 60) + ' min'} left` : ''}${j.fail ? ` · ⚠ ${j.fail} failed` : ''}${AIJOB.queue.length ? ` · ${AIJOB.queue.length} more asset${AIJOB.queue.length > 1 ? 's' : ''} queued` : ''}<i style="width:${Math.round(100 * j.done / Math.max(1, j.list.length))}%"></i></span><button class="btn ghost sm" data-aijob="stop">${j.stop ? 'Stopping…' : 'Stop'}</button>`;
 }
+document.addEventListener('click', e => { if (!e.target.closest('[data-aijob=stop]') || !AIJOB.run) return; AIJOB.run.stop = true; AIJOB.queue = []; aiBar(); toast('Stopping after the drawings being read now – the rest stay waiting for next time', 5000); });
+async function aiJobSave(job) {   // copy results into the asset's library as it is now (it may have changed while scanning)
+  const lib = job.asset === ASSET ? S.pidlib : await DB.get('meta', AK('pidlib', job.asset)); if (!lib) return;
+  for (const it of job.list) if (it.ai) { const t = lib.items.find(x => x.id === it.id); if (t && t !== it) { t.ai = it.ai; for (const k of ['desc', 'dwgNo', 'rev']) if (!t[k] && it[k]) t[k] = it[k]; } }
+  await DB.put('meta', lib); if (job.asset === ASSET) PIDIDX = null;
+}
+async function pidAiScan(all) {
+  if (!navigator.onLine) return toast('No signal – try again when online');
+  if (!S.settings.aiKey) return toast('No API key on this device – use 📋 Copilot instead', 5000);
+  if (AIJOB.run) { if (AIJOB.run.asset === ASSET || AIJOB.queue.some(q => q.asset === ASSET)) return toast('Already scanning – see the bar at the bottom'); AIJOB.queue.push({ asset: ASSET, all }); aiBar(); return toast(`🤖 ${assetName()} queued – it starts when the current scan finishes`, 4000); }
+  if (!pidAiWaiting(all).length) return toast('Nothing waiting for an AI scan');
+  aiJobRun({ asset: ASSET, all });
+  toast('🤖 Scanning in the background, 4 at a time – carry on using the app, just keep it open', 6000);
+}
+async function aiJobRun(q) {
+  const lib = q.asset === ASSET ? S.pidlib : await DB.get('meta', AK('pidlib', q.asset)); const list = aiWaitIn(lib, q.all);
+  if (!list.length) return aiJobNext();
+  const job = AIJOB.run = { asset: q.asset, name: assetName(q.asset), list, i: 0, done: 0, n: 0, fail: 0, err: '', stop: false, t0: Date.now() };
+  aiWake(true); aiBar();
+  const worker = async () => {
+    while (!job.stop && job.i < list.length) {
+      const it = list[job.i++];
+      for (let tries = 0; ; tries++) {
+        try { await pidAiOne(it); job.n++; break; }
+        catch (e) { const m = e.message || String(e);
+          if (/\b(429|529|500|502|503|overloaded|rate.?limit)\b/i.test(m) && tries < 5 && !job.stop) { await new Promise(r => setTimeout(r, 10000 * (tries + 1))); continue; }   // busy – wait and try again
+          job.err = m; job.fail++; if (/\b(401|403)\b|No API key|Failed to fetch/i.test(m)) job.stop = true; break; }
+      }
+      job.done++; aiBar(); if (job.done % 8 === 0) await aiJobSave(job);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
+  await aiJobSave(job); AIJOB.run = null; aiBar();
+  toast(`🤖 ${job.name}: ${job.n} of ${list.length} P&ID page${list.length > 1 ? 's' : ''} indexed${job.fail ? ` – ⚠ ${job.fail} failed (${job.err.slice(0, 70)})` : ''}${job.stop && job.n + job.fail < list.length ? ' – stopped; the rest are still waiting' : ''}`, 9000);
+  if (/^#\/(pids|builder)/.test(location.hash) && !document.querySelector('.modal-back, .pidv')) route();
+  if (!job.stop) aiJobNext(); else { AIJOB.queue = []; aiWake(false); }
+}
+function aiJobNext() { const q = AIJOB.queue.shift(); if (q) aiJobRun(q); else aiWake(false); }
 Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1'), pidCopilot: el => pidCopilot(el.dataset.id), pidAiPick: el => pidAiPick(el.dataset.id) });
 
 /* ---------- shared search index (no drawings) ---------- */
@@ -688,7 +766,7 @@ const PID_CP_TAG = /__(p_[a-z0-9]+)/i;
 const pidCpFileName = it => `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' + safeName(it.rev) : ''}${(it.page || 1) > 1 ? '_p' + it.page : ''}__${it.id}.jpg`;
 const pidCpBatchPrompt = () => `Each attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. For EACH attached image, read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out.
 Reply with ONLY one JSON object in exactly this shape – one entry per attached image, with "file" set to the image's exact file name (it ends in a code like __p_abc123 – keep that code):
-{"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"]}]}`;
+{"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"],"refs":["other drawing numbers named at the off-page connectors / continuation arrows where lines leave or arrive, e.g. A-30-175-021"]}]}`;
 async function pidCpExport(perIn) {
   const list = pidAiWaiting(true); if (!list.length) return toast('Every P&ID is already indexed');
   const r = perIn ? { vals: { per: perIn } } : await modal('📦 Export for Copilot', `<p><b>${list.length}</b> P&amp;ID page${list.length > 1 ? 's' : ''} not yet indexed (new or replaced). This saves one zip with each drawing as a sharp image, split into batches, plus the prompt.</p>

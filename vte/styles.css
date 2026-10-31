@@ -660,3 +660,13 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 .set-stat{list-style:none;padding:0;margin:4px 0 10px;display:flex;flex-direction:column;gap:4px}
 .bd-add{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}.bd-add>summary{cursor:pointer;padding:6px 0;color:var(--navy)}
 :root[data-theme="dark"] .bd-add>summary{color:inherit}
+/* background AI scan bar */
+.aijob{position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:60;display:flex;gap:10px;align-items:center;background:#12385c;color:#fff;border-radius:12px;padding:8px 10px 8px 14px;box-shadow:0 4px 16px rgba(0,0,0,.3);font-size:.85rem;max-width:720px;margin:0 auto}
+.aijob span{flex:1;position:relative;padding-bottom:6px}.aijob span i{position:absolute;left:0;bottom:0;height:3px;background:#e9b23a;border-radius:2px;transition:width .4s}
+.aijob .btn{color:#fff;border-color:rgba(255,255,255,.4);flex:none}
+body:has(#bottombar:not([hidden])) .aijob{bottom:76px}
+/* P&I Spy off-page links */
+.pidv-link{position:absolute;outline:2px solid #1f8fff;background:rgba(31,143,255,.18);border-radius:3px;min-width:10px;min-height:10px;cursor:pointer;z-index:2}
+.pidv-link:hover,.pidv-link:focus{background:rgba(31,143,255,.38)}
+.pidv-links{display:flex;gap:6px;align-items:center;padding:6px 10px;background:#0f1216;overflow-x:auto;white-space:nowrap;font-size:.8rem}
+.pidv-links .btn{color:#cfe6ff;border-color:#2b6cb0;flex:none}.pidv-links>small{opacity:.7;flex:none}
