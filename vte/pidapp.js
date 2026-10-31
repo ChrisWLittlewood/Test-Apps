@@ -505,12 +505,14 @@ function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all |
 function pidAiHTML() {
   if (!S.pidlib.items.length) return '';
   const scanned = pidAiWaiting(false).length, rest = pidAiWaiting(true).length;
-  if (!rest) return `<div class="card"><h3>🤖 AI index</h3><p class="small muted">Every P&amp;ID has been AI-indexed. New or replaced drawings (a new revision) will show here.</p></div>`;
+  const old = aiWaitIn(S.pidlib, 'refs').length;
+  const reBtn = old && S.settings.aiKey ? `<p class="small" style="margin-top:8px"><b>${old}</b> scanned drawing${old > 1 ? 's were' : ' was'} indexed before the AI also marked where the off-page connectors are. <button class="btn ghost sm" data-action="pidAiScan" data-all="refs">🔄 Re-scan ${old > 1 ? 'them' : 'it'} for connectors</button></p>` : '';
+  if (!rest) return `<div class="card"><h3>🤖 AI index</h3><p class="small muted">Every P&amp;ID has been AI-indexed. New or replaced drawings (a new revision) will show here.</p>${reBtn}</div>`;
   const list = pidAiWaiting(true).sort((a, b) => (a.hasText - b.hasText) || a.title.localeCompare(b.title, undefined, { numeric: true }));
   return `<div class="card ai-queue"><h3>🤖 AI index – ${rest} new or replaced P&amp;ID page${rest > 1 ? 's' : ''}</h3><span class="small muted">Reads line numbers and tags off the drawing image, so scanned P&amp;IDs become searchable and anything the drawing text missed is added. Drawings already indexed are never sent again. Only if company rules allow sending P&amp;IDs to the AI service – if in doubt, ask.</span>
     ${S.settings.aiKey ? `${AIJOB.run ? `<p class="small">⏳ Scanning now – progress in the bar at the bottom.</p>` : ''}<p class="small muted">Runs in the background, 4 drawings at a time – carry on using the app, but keep it open (the screen stays on). If it's closed part-way, scan again and it carries on with the rest.</p><div class="grid2"><button class="btn primary" data-action="pidAiScan" data-all="1">🤖 Scan all new / replaced (${rest})</button>${scanned && scanned < rest ? `<button class="btn ghost" data-action="pidAiScan" data-all="0">Scanned drawings only (${scanned})</button>` : ''}</div>` : '<p class="small">No AI key on this device – use 📋 Copilot below.</p>'}
     <div class="pid-cpbox"><b class="small">📋 With Copilot</b><span class="small muted">One file (or a few) with the ${rest} waiting drawing${rest > 1 ? 's' : ''} and one prompt; paste all the replies back at once. A single drawing: its 🤖 button in the list.</span>
-      <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📋 Copilot – file + prompt (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Paste Copilot's replies</button></div></div></div>`;
+      <div class="grid2"><button class="btn ${S.settings.aiKey ? 'ghost' : 'primary'}" data-action="pidCpExport">📋 Copilot – file + prompt (${rest})</button><button class="btn ghost" data-action="pidCpImport">📥 Paste Copilot's replies</button></div></div>${reBtn}</div>`;
 }
 async function pidTiles(blob) {
   const bmp = await createImageBitmap(blob); const out = []; const ov = 0.08;
@@ -581,7 +583,7 @@ async function pidAiPick(id) {
    The screen is kept awake while it runs. If the app is closed part-way, the drawings already done are kept and the
    next scan carries on with the rest. Several assets queue up. */
 const AIJOB = { run: null, queue: [] }; let AIWL = null;
-const aiWaitIn = (lib, all) => (lib?.items || []).filter(it => !it.ai && (all || !it.hasText));
+const aiWaitIn = (lib, all) => (lib?.items || []).filter(it => all === 'refs' ? !it.hasText && it.ai && !it.ai.refPos : !it.ai && (all || !it.hasText));   // 'refs': scanned drawings indexed before connector positions were read
 async function aiWake(on) { try { if (on && (!AIWL || AIWL.released)) AIWL = await navigator.wakeLock?.request('screen'); if (!on && AIWL) { await AIWL.release(); AIWL = null; } } catch { } }
 document.addEventListener('visibilitychange', () => { if (AIJOB.run && document.visibilityState === 'visible') aiWake(true); });
 window.addEventListener('beforeunload', e => { if (AIJOB.run) { e.preventDefault(); e.returnValue = ''; } });
@@ -602,7 +604,7 @@ async function pidAiScan(all) {
   if (!navigator.onLine) return toast('No signal – try again when online');
   if (!S.settings.aiKey) return toast('No API key on this device – use 📋 Copilot instead', 5000);
   if (AIJOB.run) { if (AIJOB.run.asset === ASSET || AIJOB.queue.some(q => q.asset === ASSET)) return toast('Already scanning – see the bar at the bottom'); AIJOB.queue.push({ asset: ASSET, all }); aiBar(); return toast(`🤖 ${assetName()} queued – it starts when the current scan finishes`, 4000); }
-  if (!pidAiWaiting(all).length) return toast('Nothing waiting for an AI scan');
+  if (!aiWaitIn(S.pidlib, all).length) return toast('Nothing waiting for an AI scan');
   aiJobRun({ asset: ASSET, all });
   toast('🤖 Scanning in the background, 4 at a time – carry on using the app, just keep it open', 6000);
 }
@@ -630,7 +632,7 @@ async function aiJobRun(q) {
   if (!job.stop) aiJobNext(); else { AIJOB.queue = []; aiWake(false); }
 }
 function aiJobNext() { const q = AIJOB.queue.shift(); if (q) aiJobRun(q); else aiWake(false); }
-Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === '1'), pidCopilot: el => pidCopilot(el.dataset.id), pidAiPick: el => pidAiPick(el.dataset.id) });
+Object.assign(actions, { pidAiScan: el => pidAiScan(el.dataset.all === 'refs' ? 'refs' : el.dataset.all === '1'), pidCopilot: el => pidCopilot(el.dataset.id), pidAiPick: el => pidAiPick(el.dataset.id) });
 
 /* ---------- shared search index (no drawings) ---------- */
 let PIDIX = null;
