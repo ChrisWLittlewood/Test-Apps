@@ -1,6 +1,6 @@
 /* 🕵 Guess my class & 📏 Pipe schedules (Class Act).
    Guess: every clue you have – size, rating, studs, stud size, flange OD / thickness, UT readings, material, contents, the
-   line's service code – is scored against every class in the data pack that covers the size. The highest UT reading is the
+   line's service code – is scored against every class in the piping class database that covers the size. The highest UT reading is the
    best guide to the original wall (corrosion only takes metal away); a reading thicker than nominal + tolerance rules a
    schedule out. If P&IDs are loaded, the classes really used with that service code and size count as strong evidence. */
 const CG_MATS = [['', 'Not sure'], ['cs', 'Carbon steel'], ['lt', 'Low-temperature carbon steel'], ['galv', 'Galvanised steel'], ['ss', 'Stainless steel (316)'], ['dup', 'Duplex'], ['sdup', 'Super duplex'], ['6mo', '6Mo'], ['cuni', 'Copper-nickel (90/10)'], ['ti', 'Titanium'], ['gre', 'GRE / GRP (plastic)']];
@@ -100,7 +100,7 @@ async function cgRun() {
   const schedCard = top ? `<div class="card cg-sched"><h3>📏 Most likely schedule</h3>${g.list.length || g.est != null ? `<p class="cg-big"><b>${esc(schTxt(top))}</b>${g.list.length ? ` <span class="pill-s ${top.p > 0.7 ? 'ok' : 'warn'}">${pct(top.p)}</span>` : ''}</p>` : ''}
     ${g.sched.slice(1, 4).filter(s => !g.list.length || s.p >= 0.03).map(s => `<div class="small">${esc(schTxt(s))}${g.list.length ? ` · ${pct(s.p)}` : ''}</div>`).join('')}
     ${g.est != null ? `<p class="small muted">From ${g.ut.length} UT reading${g.ut.length > 1 ? 's' : ''} – highest ${g.est} mm. Corrosion only thins the wall, so the highest reading on sound steel is the best guide; mill tolerance means new pipe can be up to 12.5% under nominal.</p>` : '<p class="small muted">Add UT readings to narrow the schedule down.</p>'}</div>` : '';
-  if (!g.list.length) { box.innerHTML = odNote + schedCard + `<div class="card"><p class="small">${PIPE_CLASSES?.length ? `No class in ${esc(PACK?.name || 'the data pack')} covers ${esc(sizeLabel(g.dn))}${cur.cg.r ? ' at Class ' + esc(cur.cg.r) : ''}.` : 'No data pack loaded – only the schedule can be guessed. Install the asset data pack to guess the class.'}</p></div>`; return; }
+  if (!g.list.length) { box.innerHTML = odNote + schedCard + `<div class="card"><p class="small">${PIPE_CLASSES?.length ? `No class in ${esc(CLASSDB?.name || PACK?.name || 'the class database')} covers ${esc(sizeLabel(g.dn))}${cur.cg.r ? ' at Class ' + esc(cur.cg.r) : ''}.` : 'No piping classes yet – only the schedule can be guessed. Install the piping class database (📦 Pack Rat) to guess the class.'}</p></div>`; return; }
   const shown = g.list.slice(0, 6);
   box.innerHTML = odNote + schedCard + `<div class="card"><h3>🔧 Most likely classes <small class="muted">· ${g.list.length} cover this size</small></h3>
     ${g.clues < 2 ? '<p class="small pid-miss">Only one clue so far – this is a wide guess. Add studs, UT readings or the service code.</p>' : ''}
@@ -124,7 +124,7 @@ function renderSchedules(dn) {
     const rows = Object.values(g).sort((a, b) => a.w - b.w);
     body = `<div class="card"><h3>${esc(sizeLabel(dn))} · OD ${P.od} mm</h3><table class="ca-t cg-st"><tr><th>Schedule</th><th>Wall</th><th>Bore</th><th>${PIPE_CLASSES?.length ? 'Classes' : ''}</th></tr>
       ${rows.map(r => `<tr class="${used[r.w] ? 'used' : ''}"><td><b>${r.labels.map(esc).join(' / ')}</b></td><td>${r.w} mm</td><td>${r2(P.od - 2 * r.w)} mm</td><td>${used[r.w] ? `${used[r.w]} class${used[r.w] > 1 ? 'es' : ''}` : ''}</td></tr>`).join('')}</table>
-      <p class="small muted">ASME B36.10M / B36.19M nominal walls; "S" schedules are stainless (B36.19M). New pipe can be up to 12.5% under nominal (mill tolerance).${PIPE_CLASSES?.length ? ` Highlighted: used by classes in ${esc(PACK?.name || 'the data pack')} at this size.` : ''}</p></div>`;
+      <p class="small muted">ASME B36.10M / B36.19M nominal walls; "S" schedules are stainless (B36.19M). New pipe can be up to 12.5% under nominal (mill tolerance).${PIPE_CLASSES?.length ? ` Highlighted: used by classes in ${esc(CLASSDB?.name || PACK?.name || 'the class database')} at this size.` : ''}</p></div>`;
   }
   $('#main').innerHTML = `${caTabs('sched')}<div class="card"><h2>📏 Pipe schedules</h2><div class="ca-sizes">${sizes.map(d => `<a class="ca-size ${d === dn ? 'on' : ''}" href="#/classes/sched/${d}"><b>DN${d}</b><small>${PIPE_DIMS[d].nps}"</small></a>`).join('')}</div></div>${body}`;
 }

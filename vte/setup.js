@@ -27,6 +27,7 @@ function renderSetup(step) {
       <pre class="setup-tree">Inspection Toolbox
 ├─ ${OD_SHARED}
 │   ├─ ${OD_SH.refs}
+│   ├─ ${OD_SH.classes}
 │   ├─ ${OD_SH.sync}
 │   └─ ${OD_SH.backups}
 └─ <i>one folder per asset</i></pre>
@@ -40,7 +41,8 @@ function renderSetup(step) {
     h = `<div class="card"><h2>📥 Put your files in</h2><p>Copy your files into the folders (Windows File Explorer → OneDrive → Documents → Inspection Toolbox, or 📂 Paper Trail). Each folder has a READ ME.</p>
       <ul class="setup-where">
         <li>📚 <b>Reference documents</b> → <i>${esc(OD_SHARED)} › ${esc(OD_SH.refs)}</i><br><small>Standards, PC005 / PC007, IBMS, site flange procedure – shared by every asset and copied to your other devices.</small></li>
-        ${(named.length ? named : [{ name: 'each asset' }]).map(a => `<li>📍 <b>${esc(a.name)}</b><ul><li>📦 <b>Data pack</b> → <i>${esc(odClean(a.name))} › ${esc(OD_AS.pack)}</i> <small>(request one for your asset)</small></li><li>📐 <b>P&amp;IDs</b> → <i>${esc(odClean(a.name))} › ${esc(OD_AS.pids)}</i></li></ul></li>`).join('')}
+        <li>🧾 <b>Piping class database</b> → <i>${esc(OD_SHARED)} › ${esc(OD_SH.classes)}</i><br><small>The piping classes for every asset (e.g. Shell SNS piping classes .json) – or build it from the class sheets later in 📦 Pack Rat.</small></li>
+        ${(named.length ? named : [{ name: 'each asset' }]).map(a => `<li>📍 <b>${esc(a.name)}</b><ul><li>📦 <b>Data pack</b> → <i>${esc(odClean(a.name))} › ${esc(OD_AS.pack)}</i> <small>(request one for your asset, or build it later in 📦 Pack Rat)</small></li><li>📐 <b>P&amp;IDs</b> → <i>${esc(odClean(a.name))} › ${esc(OD_AS.pids)}</i></li></ul></li>`).join('')}
         <li>🗂 <b>Piping systems</b> can wait – add a folder per system under <i>${esc(OD_AS.systems)}</i> when you need it.</li></ul>
       <div class="grid2"><a class="btn ghost" href="#/files">📂 Open in Paper Trail</a><button class="btn primary" data-action="setupScan">🔍 Scan the folder now</button></div>
       <p class="small muted">Nothing to add yet? Finish now and tap <b>🔍 Scan folder</b> on the front page later.</p></div>${nav(true, 'Finish without scanning ›', `href="#/setup/done"`, 'ghost')}`; }
@@ -82,6 +84,7 @@ async function odScan(opts = {}) {
   await odEnsure(root);
   rep.sync = typeof syncNow === 'function' ? await syncNow({ quiet: true, noWrite: true }) : [];
   rep.refs = await odImportRefs(true);
+  rep.classdb = typeof odImportClassDb === 'function' ? await odImportClassDb(true) : null;
   const orig = ASSET;
   for (const a of [...ASSETS.list]) {
     if (!a.name && a.id !== ASSET) continue; await setAsset(a.id); toast(`🔍 Scanning ${assetName()}…`, 60000);
@@ -106,6 +109,7 @@ async function odScanReport(rep, opts) {
     !nDoc && `No reference documents yet – <i>${esc(OD_SHARED)} › ${esc(OD_SH.refs)}</i>`, nDef && `${nDef} acceptance value${nDef > 1 ? 's' : ''} still on defaults – confirm them in 📚 Standard Issue`].filter(Boolean);
   const syncTxt = (rep.sync || []).map(syncSumHTML).join('');
   const html = `${syncTxt ? `<h4>🔄 From your other devices</h4>${syncTxt}` : ''}
+    <h4>🧾 Piping class database</h4><p class="small">${rep.classdb ? `✓ Installed <b>${esc(rep.classdb.name)}</b>${rep.classdb.version ? ' v' + esc(rep.classdb.version) : ''} – ${rep.classdb.added} new, ${rep.classdb.updated} updated. ` : ''}${CLASSDB?.classes?.length ? `${CLASSDB.classes.length} classes on this device${CLASSDB.version ? ` (${esc(CLASSDB.name)} v${esc(CLASSDB.version)})` : ''}.` : `None yet – save the class database file in <i>${esc(OD_SHARED)} › ${esc(OD_SH.classes)}</i>, or build it in 📦 Pack Rat.`}</p>
     <h4>📚 Reference documents</h4><p class="small">${R.added || R.repl ? `✓ ${R.added || 0} added${R.repl ? `, ${R.repl} replaced` : ''}${R.stale ? ` (${R.stale} need values re-checking)` : ''}. ` : 'Nothing new. '}${R.skipped ? `${R.skipped} skipped. ` : ''}${nDoc} on this device.</p>
     ${rep.assets.map(a => `<h4>📍 ${esc(a.name)}</h4><ul class="small scan-l"><li>📦 ${a.pack ? `Installed <b>${esc(a.pack.name)}</b>` : a.hasPack ? `Data pack ${esc(a.packName)} ✓` : '⚠ No data pack'}</li>
       <li>📐 P&amp;IDs: ${a.pids?.added || a.pids?.updated ? `<b>${a.pids.added || 0}</b> new, <b>${a.pids.updated || 0}</b> updated · ` : ''}${a.nPids} in the library${a.waiting ? ` · ${a.waiting} not AI-indexed` : ''}</li>

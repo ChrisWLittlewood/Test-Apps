@@ -38,9 +38,10 @@ async function syncBuild(full) {
     assets.push(ent);
   }
   const refDocs = []; for (const [key, it] of Object.entries(TB.refs.items || {})) if (tms(it.addedAt) > since && (full || !it._src)) { const b = await getBlob(it.blobId); if (b) { zip.file(`refdoc/${key}.pdf`, b); refDocs.push({ key, name: it.name, size: it.size, addedAt: it.addedAt }); } }
+  const classdb = typeof CLASSDB !== 'undefined' && CLASSDB && tms(CLASSDB.updated) > since ? classDbOut() : null;
   const me = { inspectorName: S.settings.inspectorName || '', position: S.settings.position || '', defaultSite: S.settings.defaultSite || '' };
   const mf = { format: 'vte-sync', version: 1, created, device: SYNC.device, by: S.settings.inspectorName || '', full: since < 0, ack: Object.fromEntries(Object.entries(SYNC.peers).map(([k, p]) => [k, p.iMerged || ''])),
-    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, odLink: S.settings.odLink || '', me, refDocs, crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
+    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, odLink: S.settings.odLink || '', me, classdb, refDocs, crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
   zip.file('sync.json', JSON.stringify(mf), J);
   return { blob: await zip.generateAsync({ type: 'blob' }), created, blobs: ids.size, pids: nPid, full: since < 0 };
 }
@@ -74,6 +75,7 @@ async function syncMerge(zip, j) {
     for (const id of [r.sigId, ...(r.att || []).map(a => a.blobId)].filter(Boolean)) if (!(await DB.get('blobs', id))) sum.missing++; }
   for (const k of ['iso', 'fl', 'face']) for (const it of j[k] || []) { const l = TB[k].items.find(x => x.id === it.id); if (l && (l.updatedAt || 0) >= (it.updatedAt || 0)) continue; TB[k].items = TB[k].items.filter(x => x.id !== it.id).concat({ ...it, _rx: now, _src: j.device.id, _srcT: it.updatedAt || 0 }); sum.tools++; }
   if (sum.tools) { await flushTB(); await DB.put('meta', TB.face); }
+  if (j.classdb && typeof classDbMerge === 'function') sum.classes = await classDbMerge(j.classdb, j.device.id);
   for (const [k, v] of Object.entries(j.crit || {})) { const l = TB.crit.items[k]; if (l && tms(l.at) >= tms(v.at)) continue; TB.crit.items[k] = v; const d = critDef(k); if (d?.face && TB.face?.limits) { TB.face.limits[d.face[0]][d.face[1]] = +v.v; TB.face.limits.confirmed = true; await DB.put('meta', TB.face); } sum.crit++; }
   await critSaved();
   for (const c of j.refs?.custom || []) if (!(TB.refs.custom || []).some(x => x.key === c.key)) { (TB.refs.custom = TB.refs.custom || []).push(c); sum.refs++; }
@@ -92,12 +94,12 @@ async function syncMerge(zip, j) {
 }
 function syncSumHTML(s) {
   const li = [s.newRep && `${s.newRep} new line report${s.newRep > 1 ? 's' : ''}`, s.rep && `${s.rep} line report${s.rep > 1 ? 's' : ''} updated`, s.sys && `${s.sys} piping system${s.sys > 1 ? 's' : ''}`, s.tools && `${s.tools} sketch${s.tools > 1 ? 'es' : ''} / sheet${s.tools > 1 ? 's' : ''} / face inspection${s.tools > 1 ? 's' : ''}`,
-    s.pids && `${s.pids} P&amp;ID page${s.pids > 1 ? 's' : ''}`, s.packs.length && `data pack: ${s.packs.map(esc).join(', ')}`, s.crit && `${s.crit} acceptance value${s.crit > 1 ? 's' : ''}`, s.refs && `${s.refs} reference document result${s.refs > 1 ? 's' : ''}`, s.refDocs && `${s.refDocs} reference document${s.refDocs > 1 ? 's' : ''} (PDF)`, s.me && 'your personal details'].filter(Boolean);
+    s.pids && `${s.pids} P&amp;ID page${s.pids > 1 ? 's' : ''}`, s.packs.length && `data pack: ${s.packs.map(esc).join(', ')}`, s.classes && 'piping class database', s.crit && `${s.crit} acceptance value${s.crit > 1 ? 's' : ''}`, s.refs && `${s.refs} reference document result${s.refs > 1 ? 's' : ''}`, s.refDocs && `${s.refDocs} reference document${s.refDocs > 1 ? 's' : ''} (PDF)`, s.me && 'your personal details'].filter(Boolean);
   return `<p><b>From ${esc(s.from)}</b> · ${new Date(s.at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</p>${li.length ? `<ul class="ticks">${li.map(x => `<li>${x}</li>`).join('')}</ul>` : '<p class="small muted">Nothing new – already up to date.</p>'}
     ${s.missing ? `<p class="small">⚠ ${s.missing} photo / signature file${s.missing > 1 ? 's were' : ' was'} missing – on the other device use <i>Full sync</i>.</p>` : ''}`;
 }
 async function syncRead(file) { const z = await JSZip.loadAsync(file); const mf = z.file('sync.json'); if (!mf) throw new Error('Not an Inspection Toolbox sync file'); const j = JSON.parse(await mf.async('string')); if (j.format !== 'vte-sync') throw new Error('Not an Inspection Toolbox sync file'); return [z, j]; }
-const syncPrint = () => { const f = []; f.push(Object.values(TB.refs.items || {}).map(i => i.addedAt).sort().pop() || '', S.settings.inspectorName || '', Math.max(0, ...S.reports.map(recT)), Math.max(0, ...S.systems.map(s => s.updatedAt || 0)), Math.max(0, ...[...TB.iso.items, ...TB.fl.items, ...TB.face.items].map(recT)), S.pidlib.updated || '', PACK?.importedAt || '', Math.max(0, ...Object.values(TB.crit.items).map(v => tms(v.at))), Object.keys(TB.refs.ai || {}).length); return f.join('|'); };
+const syncPrint = () => { const f = []; f.push(Object.values(TB.refs.items || {}).map(i => i.addedAt).sort().pop() || '', S.settings.inspectorName || '', Math.max(0, ...S.reports.map(recT)), Math.max(0, ...S.systems.map(s => s.updatedAt || 0)), Math.max(0, ...[...TB.iso.items, ...TB.fl.items, ...TB.face.items].map(recT)), S.pidlib.updated || '', PACK?.importedAt || '', (typeof CLASSDB !== 'undefined' && CLASSDB?.updated) || '', Math.max(0, ...Object.values(TB.crit.items).map(v => tms(v.at))), Object.keys(TB.refs.ai || {}).length); return f.join('|'); };
 /* PC with the OneDrive folder: merge everything new in 7 Sync, then write this device's file */
 async function syncNow(opts = {}) {
   await syncLoad();

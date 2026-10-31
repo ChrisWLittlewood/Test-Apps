@@ -1,6 +1,6 @@
-/* ＋ Piping classes – add or update classes in this asset's data pack from a class sheet (🤖 AI scan / 📋 Copilot, only if
-   authorised) or by hand. Every value is checked in an editor before it's saved. Classes added here are marked as local
-   until the next 📦 Issue asset data pack, and are kept when a newer issued pack is installed. */
+/* ＋ Piping classes – add or update classes in the shared piping class database from a class sheet (🤖 AI scan / 📋 Copilot,
+   only if authorised) or by hand. Every value is checked in an editor before it's saved. Classes added here are marked as
+   local until the next 📚 Issue class database, and are kept when an older issued database is installed. */
 const CLS_DNS = [15, 20, 25, 40, 50, 80, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600];
 const CLS_SCHEMA = `{"classes":[{"c":"class code, e.g. 11472X","s":"specification / source, e.g. LAC or ES/315","r":150,"m":"material, e.g. Carbon steel LT","ca":1,"rev":"class revision and date",
  "sch":{"15":"80","50":"40","150":"40"},
@@ -16,7 +16,7 @@ Reply with ONLY a JSON object in exactly this shape:
 ${CLS_SCHEMA}`;
 async function clsAdd() {
   const key = !!S.settings.aiKey;
-  const r = await modal('＋ Add piping classes', `<p>Add or update classes in <b>${esc(assetName())}</b>'s data pack. You check every value before it's saved; new classes go into your next 📦 issued data pack.</p>
+  const r = await modal('＋ Add piping classes', `<p>Add or update classes in the shared <b>piping class database</b> (used by every asset). You check every value before it's saved; new classes go into your next 📚 issued class database.</p>
     <div class="pid-disc sm">⚠ Class sheets are company documents. Only use 🤖 AI scan or 📋 Copilot if you're <b>authorised</b> to send them to an AI service – <b>if in doubt, ask!</b> Otherwise type the class in.</div>
     <label class="imp-row"><input type="checkbox" name="auth" value="" data-cv> <span>I'm authorised to send this class sheet to an AI service</span></label>`,
     [['Cancel', ''], ['✎ Type it in', 'manual'], ['📋 Copilot', 'cp'], ...(key ? [['🤖 Scan a class sheet', 'api', 'primary']] : [])]);
@@ -50,8 +50,8 @@ async function clsAiCall(file) {
   return parseAiJson(((await res.json()).content || []).map(c => c.text || '').join(''));
 }
 /* the check-and-edit screen */
-async function clsEdit(list, title) {
-  const have = id => (PACK?.pipeClasses || []).find(c => c.id === String(id || '').trim().toUpperCase());
+async function clsEdit(list, title, opts = {}) {
+  const have = id => (PIPE_CLASSES || []).find(c => c.id === String(id || '').trim().toUpperCase());
   const sec = (c, i) => {
     const dns = [...new Set([...CLS_DNS, ...Object.keys(c.sch || {}).map(Number), ...Object.keys(c.b || {}).map(Number)])].sort((a, b) => a - b);
     const ex = have(c.c);
@@ -65,8 +65,8 @@ async function clsEdit(list, title) {
       <label class="field"><span>Studs / nuts <small class="muted">(one per line)</small></span><textarea name="studs${i}" rows="2">${esc((c.studs || []).join('\n'))}</textarea></label>
       <label class="field"><span>Gaskets <small class="muted">(type | size range | material, one per line)</small></span><textarea name="gk${i}" rows="2">${esc((c.gk || []).map(g => g.join(' | ')).join('\n'))}</textarea></label></div>`;
   };
-  const r = await modal('✎ ' + title, `<p class="small">Check every value against the class sheet – AI can misread tables. Leave a size blank if the class doesn't cover it.</p>${list.map(sec).join('')}`, [['Cancel', ''], ['💾 Save to the data pack', 'ok', 'primary']]);
-  if (!r) return;
+  const r = await modal('✎ ' + title, `<p class="small">Check every value against the class sheet – AI can misread tables. Leave a size blank if the class doesn't cover it.</p>${list.map(sec).join('')}`, [['Cancel', ''], ['💾 Save to the class database', 'ok', 'primary']]);
+  if (!r) return null;
   const V = r.vals, out = [], bad = [];
   list.forEach((c0, i) => {
     if (V['u' + i] !== 'yes') return;
@@ -81,11 +81,12 @@ async function clsEdit(list, title) {
     const ex = have(code); if (ex) { if (ex.pg) c.pg = ex.pg; if (ex.dl) c.dl = ex.dl; }
     out.push(c);
   });
-  if (bad.length && !await confirmBox('Check these', bad.join(' · ') + '. Save anyway?', 'Save anyway')) return clsEdit(list, title);
-  if (!out.length) return toast('Nothing ticked to save');
-  await clsSave(out); toast(`💾 ${out.length} piping class${out.length > 1 ? 'es' : ''} saved to ${assetName()} – included in your next issued data pack`, 6000); route();
+  if (bad.length && !await confirmBox('Check these', bad.join(' · ') + '. Save anyway?', 'Save anyway')) return clsEdit(list, title, opts);
+  if (!out.length) { toast('Nothing ticked to save'); return []; }
+  await clsSave(out); if (opts.quiet) return out; toast(`💾 ${out.length} piping class${out.length > 1 ? 'es' : ''} saved to the piping class database – included in your next issue`, 6000); route(); return out;
 }
 async function clsSave(list) {
+  if (typeof classDbUpsert === 'function') return classDbUpsert(list);   // classes now live in the shared piping class database
   let m = await DB.get('meta', AK('pack'));
   if (!m) m = { id: AK('pack'), format: 'vte-datapack', version: 1, name: `${assetName()} data pack`, asset: assetName(), packVersion: '0.1', created: todayISO(), pipeClasses: [], pipeSources: {}, plot: { asset: assetName(), drawings: [] }, images: [], importedAt: new Date().toISOString() };
   m.pipeClasses = m.pipeClasses || [];

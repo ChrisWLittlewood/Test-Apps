@@ -33,7 +33,7 @@ async function renderFiles(sub) {
 }
 /* what a folder is for, from its place in the layout */
 function ptRole(path) {
-  if (path[0] === OD_SHARED) return { role: { [OD_SH.refs]: 'refs', [OD_SH.sync]: 'sync', [OD_SH.backups]: 'backups' }[path[1]] || 'shared' };
+  if (path[0] === OD_SHARED) return { role: { [OD_SH.refs]: 'refs', [OD_SH.classes]: 'classes', [OD_SH.sync]: 'sync', [OD_SH.backups]: 'backups' }[path[1]] || 'shared' };
   if (!path.length) return { role: 'root' };
   const a = ASSETS.list.find(x => odAF(x.id).toLowerCase() === String(path[0]).toLowerCase());
   const role = path.length === 1 ? 'asset' : { [OD_AS.pack]: 'pack', [OD_AS.pids]: 'pids', [OD_AS.systems]: path.length >= 3 ? 'system' : 'systems', [OD_AS.reports]: 'reports' }[path[1]] || 'other';
@@ -48,6 +48,7 @@ function ptShortcut(R, path) {
     case 'pack': return b('data-pt="packHere"', `📦 Install the newest data pack for ${A}`);
     case 'system': return b('data-pt="sysHere"', `🗂 Import “${esc(path[2])}” into IMSn't (${A})`);
     case 'systems': return `<p class="small">Make one folder per piping system (＋ New folder) and put in its IMS line list, previous ECHs, isometrics and P&amp;IDs – then open it and tap <b>Import</b>.</p>`;
+    case 'classes': return b('data-pt="classesHere"', '📚 Install the newest piping class database');
     case 'sync': return b('data-action="syncNow"', '🔄 Sync now');
     case 'reports': return '<p class="small">Signed reports, filed by piping system › IMS schedule – ready to upload into IMS. Each system page has <b>📁 Save signed reports to the shared folder</b>.</p>';
     case 'asset': return `<p class="small">Everything for <b>${A || esc(path[0])}</b>.</p>` + b('data-action="odScan"', '🔍 Scan folder for new files');
@@ -61,6 +62,7 @@ function ptFileBtns(x, i, R) {
   if (R.role === 'pids' && /\.(pdf|jpe?g|png|zip)$/i.test(n)) out.push(a('pid', '📐 Import'));
   if (R.role === 'refs' && /\.pdf$/i.test(n)) out.push(a('ref', '📚 Add'));
   if (R.role === 'pack' && /\.(json|zip)$/i.test(n)) out.push(a('pack', '📦 Import'));
+  if (R.role === 'classes' && /\.json$/i.test(n)) out.push(a('classdb', '📚 Install'));
   if (/^Prep_.*\.json$|backup.*\.json$/i.test(n)) out.push(a('backup', '⬆ Import'));
   out.push(a('dl', '⬇'));
   return out.join('');
@@ -87,6 +89,8 @@ document.addEventListener('click', async e => {
   if (k === 'dl') return downloadBlob(x.f, x.n);
   if (k === 'pid') return pidImport([x.f]);
   if (k === 'pack') { try { await importPack(x.f); } catch (err) { toast('⚠ ' + err.message, 5000); } return; }
+  if (k === 'classdb') { try { await classDbInstall(JSON.parse(await x.f.text())); } catch (err) { toast('⚠ ' + err.message, 5000); } return; }
+  if (k === 'classesHere') { const r = await odImportClassDb(false); if (!r) toast('No new piping class database here', 4000); return; }
   if (k === 'backup') { try { await importBackup(x.f); } catch (err) { toast('⚠ ' + err.message, 5000); } return; }
   if (k === 'ref') { const key = refKeyForFile(x.n);
     const r = await modal('📚 Add to Standard Issue', `<p class="small">📄 ${esc(x.n)}</p><label class="field"><span>Which document is it?</span><select name="k"><option value="new">＋ Add as a new document</option>${allDocs().map(d => `<option value="${d.key}" ${d.key === key ? 'selected' : ''}>${esc(d.name)}${TB.refs.items[d.key] ? ' (replace)' : ''}</option>`).join('')}</select></label>`, [['Cancel', ''], ['Add', 'ok', 'primary']]);

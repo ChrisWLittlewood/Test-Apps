@@ -28,6 +28,8 @@ function renderToolbox() {
     ${typeof caTile === 'function' ? caTile(tile) : ''}
     ${tile('#/face', faceIconSVG(), 'Face Off', 'Flange face inspection – scratches & pits vs the gasket seating band', TB.face.items.length ? `${TB.face.items.length} inspection${TB.face.items.length === 1 ? '' : 's'}` : '')}
     ${tile('#/refs', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#5a3d2b"/><rect x="10" y="14" width="9" height="38" rx="2" fill="#e9b23a"/><rect x="21" y="10" width="9" height="42" rx="2" fill="#c8402f"/><rect x="32" y="16" width="8" height="36" rx="2" fill="#4f8fc0"/><rect x="41" y="13" width="10" height="39" rx="2" transform="rotate(12 46 32)" fill="#f4e7c9"/><rect x="8" y="52" width="48" height="4" rx="2" fill="#f4e7c9"/></svg>`, 'Standard Issue', 'Reference library – every standard &amp; procedure in one place; the apps take their acceptance criteria from here', `${Object.keys(TB.refs.items).length} document${Object.keys(TB.refs.items).length === 1 ? '' : 's'}`)}
+    <div class="section-title"><h2>Tools</h2></div>
+    ${typeof bdTile === 'function' ? bdTile(tile) : ''}
     ${typeof ptTileHTML === 'function' ? ptTileHTML(tile) : ''}
     <div class="section-title"><h2>Experimental features</h2></div>
     ${tile('#/xray', `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b1e33"/><circle cx="32" cy="32" r="22" fill="#f2c230"/><circle cx="32" cy="32" r="5" fill="#0b1e33"/><path d="M32 32 L20 12 A23 23 0 0 1 44 12 Z M32 32 L55 32 A23 23 0 0 1 43 52 Z M32 32 L21 52 A23 23 0 0 1 9 32 Z" fill="#0b1e33"/></svg>`, 'Totally RAD <small class="xr-exp">EXPERIMENTAL</small>', 'Radiographic Assessment Device – see through cladding for CUI. Do not point at people.', '')}

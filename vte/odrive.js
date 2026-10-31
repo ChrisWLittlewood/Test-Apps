@@ -1,11 +1,11 @@
 /* 📁 The shared Inspection Toolbox folder – on a PC (Chrome / Edge) the app works directly in a folder the user picks
    (their synced "OneDrive – Company › Documents"). Layout:
-     Inspection Toolbox / 0 Shared - settings & reference / Reference documents · Device sync · Backups
+     Inspection Toolbox / 0 Shared - settings & reference / Reference documents · Piping classes · Device sync · Backups
      Inspection Toolbox / <Asset> / 1 Data pack · 2 P&IDs · 3 Piping systems / <system> · 4 Completed reports for IMS / <system> / <schedule>
    Exports are saved straight into the right place; "Scan folder" imports whatever is new. On a phone, files are picked
    from the OneDrive app and saved with Share → OneDrive. */
 const OD_SHARED = '0 Shared - settings & reference';
-const OD_SH = { refs: 'Reference documents', sync: 'Device sync', backups: 'Backups' };
+const OD_SH = { refs: 'Reference documents', classes: 'Piping classes', sync: 'Device sync', backups: 'Backups' };
 const OD_AS = { pack: '1 Data pack', pids: '2 P&IDs', systems: '3 Piping systems', reports: '4 Completed reports for IMS' };
 const OD_OLD = ['1 Data packs', '2 Piping system prep', '3 P&IDs', '4 Reference documents', '5 Completed reports for IMS', '6 Backups', '7 Sync'];
 const odMobile = () => navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -37,7 +37,7 @@ function odPathFor(kind, ctx = {}) {
   const A = odAF(ctx.asset);
   return { report: [A, OD_AS.reports, ctx.system || 'No piping system', ctx.schedule || 'No IMS schedule'], prep: [A, OD_AS.systems, ctx.system || 'Piping system'],
     assetpack: [A, OD_AS.pack], pidindex: [A, OD_AS.pids], pidcopilot: [A, OD_AS.pids, 'For Copilot'],
-    backup: [OD_SHARED, OD_SH.backups], refcopilot: [OD_SHARED, OD_SH.refs, 'For Copilot'], sync: [OD_SHARED, OD_SH.sync] }[kind];
+    backup: [OD_SHARED, OD_SH.backups], classdb: [OD_SHARED, OD_SH.classes], classcopilot: [OD_SHARED, OD_SH.classes, 'For Copilot'], refcopilot: [OD_SHARED, OD_SH.refs, 'For Copilot'], sync: [OD_SHARED, OD_SH.sync] }[kind];
 }
 /* save an export: into the shared folder when linked on a PC, otherwise share / download as before */
 async function saveOut(kind, ctx, blob, name, title) {
@@ -51,9 +51,10 @@ async function saveOut(kind, ctx, blob, name, title) {
 const OD_README = {
   root: `INSPECTION TOOLBOX – shared folder\r\n\r\n0 Shared - settings & reference : things used by every asset and every device.\r\n<Asset name> (e.g. Leman Alpha) : one folder per asset. Add an asset in the app (Settings & tools > Assets, or the asset bar) and its folder appears here.\r\n\r\nPut your files in, then in the app tap "Scan folder" on the front page – it imports everything that is new or changed.\r\nOn the phone: Settings & tools > Sync > Get updates, and pick the PC's file from 0 Shared - settings & reference > Device sync.\r\n\r\nCompany data – keep in company OneDrive only. P&IDs and documents here are uncontrolled copies – check the latest revision in document control.`,
   refs: `Reference documents – standards, performance standards and site procedures (PDF): ASME PCC-1, B16.5, PC005, PC007, IBMS, site flange procedure…\r\nName files so the document is recognisable (e.g. "PC005 Piping Systems.pdf"). Scan folder adds them to Standard Issue and copies them to your other devices by sync.`,
+  classes: `Piping classes – the piping class database shared by every asset (e.g. "Shell SNS piping classes_v1.2….json"). Scan folder installs the newest one. Build or update it in the app with 📦 Pack Rat from the class sheets.`,
   sync: `Device sync – one file per device (Toolbox_Sync_PC_… / Toolbox_Sync_Phone_…). Don't edit. The PC updates its own and merges the others; the phone picks the PC's file with Settings & tools > Sync > Get updates and sends its own back here.`,
   backups: `Backups – "Backup everything" files from the app.`,
-  pack: `Data pack – this asset's data pack (.json) or asset pack (.zip). Request a new data pack for your asset from the toolbox owner and save it here. Scan folder installs the newest one.`,
+  pack: `Data pack – this asset's data pack (.zip, or an older .json). Request a new data pack for your asset from the toolbox owner and save it here – or build one with 📦 Pack Rat. Scan folder installs the newest one.`,
   pids: `P&IDs – every P&ID for this asset (PDF, sub-folders are fine). Scan folder imports new and changed drawings into P&I Spy; a newer revision of the same drawing number replaces the old one.`,
   systems: `Piping systems – make one folder per piping system when you need it, and put in the IMS line list (Excel), the previous ECHs, the isometrics and the P&IDs. Import it from the app (Paper Trail > open the system folder > Import), then do the line prep.`,
   reports: `Completed reports for IMS – signed line reports, filed by the app under <piping system> / <IMS schedule No.>, ready to upload into IMS.`

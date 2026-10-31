@@ -405,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.21.1';
+const APP_VERSION = '2.22.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -462,6 +462,7 @@ async function route() {
   if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
   if (p[0] === 'face-limits') return renderFaceLimits();
   if (p[0] === 'files') return renderFiles();
+  if (p[0] === 'builder') return renderBuilder();
   if (p[0] === 'classes') return p[1] === 'guess' ? renderClassGuess() : p[1] === 'sched' ? renderSchedules(p[2]) : renderClassApp(p[1], p[2]);
   if (p[0] === 'setup') return renderSetup(p[1]);
   if (p[0] === 'refs') return p[1] === 'doc' ? renderRefDoc(p[2]) : renderRefs(p[1]);
@@ -555,6 +556,7 @@ function renderSettings() {
     <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
   ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
   ${typeof syncCardHTML === 'function' ? syncCardHTML() : ''}
+  ${typeof classDbCardHTML === 'function' ? classDbCardHTML() : ''}
   <div class="card"><h3>📚 P&ID library</h3><p class="small muted">${S.pidlib.items.length} drawing page(s) stored on this device – managed in P&amp;I Spy.</p><a class="btn primary block" href="#/pids">Open P&amp;I Spy</a></div>
   <div class="card"><h3>🤖 AI (optional) ${iBtn('aikey')}</h3>
     <p class="small muted">Used only when you tap an AI button with signal (previous ECH summary). Without a key, the app gives you text to paste into your approved AI tool instead.</p>
@@ -563,14 +565,13 @@ function renderSettings() {
   <div class="card"><h3>Appearance</h3>${pillsHTML('settings', 'theme', st.theme || 'auto', [['auto', 'Follow phone'], ['light', 'Light'], ['dark', 'Dark']], 'Theme')}</div>
   ${assetBarHTML()}
   <div class="card"><h3>📦 Data pack – ${esc(assetName())} ${iBtn('pack')}</h3>
-    ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.pipeClasses.length} piping classes · ${PACK.plot?.drawings?.length || 0} plot plans · ${S.pidlib.items.length} P&amp;ID pages · ${PACK.issued ? `issued ${fmtDate(PACK.issued.slice(0, 10))}${PACK.issuedBy ? ' by ' + esc(PACK.issuedBy) : ''}` : 'created ' + esc(PACK.created || '')}</span></p>
-      ${(() => { const n = PACK.pipeClasses.filter(c => c._local).length; return n ? `<p class="small">✎ <b>${n}</b> piping class${n > 1 ? 'es' : ''} added on this device (${PACK.pipeClasses.filter(c => c._local).map(c => esc(c.id)).slice(0, 8).join(', ')}) – included when you 📦 issue the data pack.</p>` : ''; })()}
+    ${PACK ? `<p><b>${esc(PACK.name)}</b> v${esc(PACK.packVersion || '')}<br><span class="muted small">${PACK.plot?.drawings?.length || 0} plot plans · ${S.pidlib.items.length} P&amp;ID pages · ${PACK.issued ? `issued ${fmtDate(PACK.issued.slice(0, 10))}${PACK.issuedBy ? ' by ' + esc(PACK.issuedBy) : ''}` : 'created ' + esc(PACK.created || '')}</span></p>
       ${PACK.changes ? `<details class="ref"><summary>What's new in v${esc(PACK.packVersion || '')}</summary><p class="small">${esc(PACK.changes).replace(/\n/g, '<br>')}</p></details>` : ''}
       <details class="ref"><summary>Sources</summary><ul class="small">${(PACK.sources || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
-      : '<p class="muted">No data pack yet. An asset data pack holds the piping classes, plot plans, FM areas, reference charts, and every P&amp;ID with its index scans – request one for your asset, or start your own by adding piping classes.</p>'}
-    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Install a newer' : 'Install a'} data pack</button><button class="btn ghost" data-action="clsAdd">＋ Add piping classes</button>
+      : '<p class="muted">No data pack yet. An asset data pack holds the plot plans, FM areas, report logos and every P&amp;ID with its index scans – request one for your asset, or build one with 📦 Pack Rat.</p>'}
+    <div class="grid2"><button class="btn primary" data-action="importPack">⬆ ${PACK ? 'Install a newer' : 'Install a'} data pack</button><a class="btn ghost" href="#/builder">📦 Pack Rat</a>
       ${PACK || S.pidlib.items.length ? '<button class="btn ghost" data-action="assetExport">📦 Issue asset data pack</button>' : ''}${PACK ? '<button class="btn ghost danger-t" data-action="removePack">Remove pack</button>' : ''}</div>
-    <small class="muted">Installing a newer pack only replaces what changed: new P&amp;ID revisions replace old ones, the same revision is skipped, and classes you've added here are kept. Reports already written keep their own copies.</small></div>
+    <small class="muted">Installing a newer pack only replaces what changed: new P&amp;ID revisions replace old ones, the same revision is skipped, and plot plans are updated. Piping classes are in the 📚 piping class database below. Reports already written keep their own copies.</small></div>
   <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
   <div class="card danger-card"><h3>🧹 Reset app on this device</h3><p class="small">Wipes everything the app has stored on <b>this device</b> – reports, photos, sketches, data packs, P&amp;IDs, reference documents, settings and the link to the shared folder – and starts again at the setup wizard. <b>Your OneDrive folder and its files are not touched.</b></p>
@@ -1508,7 +1509,8 @@ async function assetPick() {
 async function loadPack() {
   Object.values(PACK_URLS).forEach(u => URL.revokeObjectURL(u)); for (const k in PACK_URLS) delete PACK_URLS[k];
   const p = await DB.get('meta', AK('pack')); PACK = p || null;
-  PIPE_CLASSES = p?.pipeClasses || []; PIPE_SOURCES = p?.pipeSources || {}; PLOT_LIBRARY = p?.plot || { asset: '', drawings: [] };
+  if (typeof classDbLoad === 'function') { if (!CLASSDB) await classDbLoad(); await classDbSeed(p); }
+  PIPE_CLASSES = typeof classesMerged === 'function' ? classesMerged(p?.pipeClasses) : (p?.pipeClasses || []); PIPE_SOURCES = { ...(p?.pipeSources || {}), ...(CLASSDB?.sources || {}) }; PLOT_LIBRARY = p?.plot || { asset: '', drawings: [] };
   if (p) for (const k of p.images || []) { const b = await getBlob(AK('pack') + '_' + k); if (b) PACK_URLS[k] = URL.createObjectURL(b); }
 }
 async function importPack(file) {
@@ -1531,6 +1533,7 @@ async function importPackJson(j, quiet) {
   await loadPack();
   { const a = ASSETS.list.find(x => x.id === ASSET); if (a && (!a.name || a.name === 'New asset')) { a.name = String(j.name || '').replace(/\s*data\s*pack\s*/i, ' ').trim() || j.defaults?.site || a.name; await DB.put('meta', ASSETS); } }
   if (!S.settings.defaultSite && j.defaults?.site) { S.settings.defaultSite = j.defaults.site; persist('settings'); }
+  if (typeof classDbAddMissing === 'function' && j.pipeClasses?.length) { await classDbAddMissing(j.pipeClasses, j.name); await loadPack(); }
   if (!quiet) { toast('Data pack imported'); route(); }
 }
 /* Rebuild the data pack file (with its images) from what's stored on this device – for the asset pack export. */
@@ -1848,6 +1851,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) setupUpdates();
     await loadTools(); await loadFace(); await loadRefs(); if (typeof odLoad === 'function') await odLoad(); if (typeof syncLoad === 'function') await syncLoad();
+    if (typeof classDbLoad === 'function' && !CLASSDB) { await classDbLoad(); await loadPack(); }
     route(); if (typeof syncAuto === 'function') setTimeout(syncAuto, 2500);
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
 })();

@@ -130,10 +130,12 @@ async function pidImport(files, opts = {}) {
   { const tx = files.filter(f => /\.(txt|json)$/i.test(f.name)); if (tx.length) { let all = ''; for (const f of tx) all += '\n' + await f.text(); if (/"files"\s*:/.test(all)) await pidCpImportText(all); } }
   files = files.filter(f => /\.(pdf|jpe?g|png|webp|zip)$/i.test(f.name) && f.size > 0);
   const packs = files.filter(f => /\.zip$/i.test(f.name)); files = files.filter(f => !/\.zip$/i.test(f.name));
-  for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('asset.json')) await assetImport(z); else if (z.file('pidindex.json') && !z.file('pidpack.json')) await pidIxImport(z); else await pidPackImport(p); }
-  if (!files.length) return;
+  for (const p of packs) { const z = await JSZip.loadAsync(p); if (z.file('asset.json')) await assetImport(z); else if (z.file('pidindex.json') && !z.file('pidpack.json')) await pidIxImport(z); else if (z.file('pidpack.json')) await pidPackImport(p);
+    else for (const e of Object.values(z.files)) if (!e.dir && /\.(pdf|jpe?g|png|webp)$/i.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name)) files.push(new File([await e.async('blob')], e.name.split('/').pop(), { type: /\.pdf$/i.test(e.name) ? 'application/pdf' : 'image/' + e.name.split('.').pop().toLowerCase().replace('jpg', 'jpeg'), lastModified: e.date?.getTime?.() || Date.now() })); }   // a plain zip of drawings
+  { const seen = new Set(); files = files.filter(f => { const k = f.name.toLowerCase() + '|' + f.size; if (seen.has(k)) return false; seen.add(k); return true; }); }   // the same file dropped twice
+  if (!files.length) return opts.quiet ? { added: 0, updated: 0, same: 0, noText: 0 } : undefined;
   const lib = await getPdfjs(); await pidIndex();
-  const prog = progressModal(`Reading ${files.length} P&ID file${files.length > 1 ? 's' : ''}…`, true); let added = 0, updated = 0, noText = 0;
+  const prog = progressModal(`Reading ${files.length} P&ID file${files.length > 1 ? 's' : ''}…`, true); let added = 0, updated = 0, same = 0, noText = 0;
   for (const [k, f] of files.entries()) {
     if (prog.stopped) break;
     const tidy = pidTidyName(f.name); const base = tidy.name;
@@ -147,6 +149,7 @@ async function pidImport(files, opts = {}) {
       for (const pg of pages) {
         const tb = pidTitleBlock(pg.items, base); if (tidy.rev) tb.rev = tidy.rev; const title = (tb.dwgNo || base) + (pg.of > 1 ? ` – page ${pg.page}` : '');
         const old = S.pidlib.items.find(x => (tb.dwgNo && x.dwgNo === tb.dwgNo && (x.page || 1) === pg.page) || (x.src === f.name && (x.page || 1) === pg.page));
+        if (old && pnorm(old.rev) === pnorm(tb.rev) && (tb.rev || old.src === f.name)) { same++; continue; }   // same drawing, same revision – already in the library
         const keepAi = old && old.ai && pnorm(old.rev) === pnorm(tb.rev) ? old.ai : null;
         if (old) { await pidDelete(old, true); updated++; } else added++;
         const id = 'p_' + uid(); const blobId = 'pid_' + id; await DB.put('blobs', { id: blobId, blob: pg.blob });
@@ -159,8 +162,8 @@ async function pidImport(files, opts = {}) {
   prog.close();
   S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = new Date().toISOString();
   await savePidLib();
-  if (opts.quiet) return { added, updated, noText };
-  const r = await modal('P&IDs imported', `<p><b>${added}</b> page${added === 1 ? '' : 's'} added${updated ? `, <b>${updated}</b> updated (same drawing number – the old copy was replaced)` : ''}.</p>
+  if (opts.quiet) return { added, updated, same, noText };
+  const r = await modal('P&IDs imported', `<p><b>${added}</b> page${added === 1 ? '' : 's'} added${updated ? `, <b>${updated}</b> updated (same drawing number – the old copy was replaced)` : ''}${same ? `, <b>${same}</b> already in the library at the same revision (skipped)` : ''}.</p>
     ${noText ? `<p class="small">⚠ ${noText} page${noText === 1 ? ' has' : 's have'} no text layer (scanned drawings), so ${noText === 1 ? 'it' : 'they'} can only be found by title until AI-scanned.</p>` : ''}
     ${pidScanPromptHTML()}<p class="small muted">Reports that already use a P&amp;ID keep their own copy.</p>`, pidScanBtns());
   if (r?.v === 'scan') await pidAiScan(true);
@@ -580,7 +583,9 @@ async function assetExport() {
   const def = (assetName() || dp?.name || 'Platform').replace(/\s*data\s*pack\s*/i, ' ').trim();
   const iss = (await DB.get('meta', AK('issue'))) || { id: AK('issue') }; const chg = packChanges(iss, dp);
   const lastV = iss.version || dp?.packVersion || '1.0', sugV = iss.version || dp?.packVersion ? bumpV(lastV) : '1.0';
-  const r = await modal('📦 Issue asset data pack', `<p>One file that gets anyone going on <b>${esc(def)}</b> from today's baseline:</p><ul class="ticks">${dp ? `<li><b>${(dp.pipeClasses || []).length}</b> piping classes, ${(dp.plot?.drawings || []).length} plot plans, report logos</li>` : '<li class="muted">No piping classes / plot plans on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with their text and AI index scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li><li>Owner's guide (🎬 Promo &amp; info), if it's on this device</li></ul>
+  const ndb = (typeof CLASSDB !== 'undefined' && CLASSDB?.classes?.length) || 0;
+  const r = await modal('📦 Issue asset data pack', `<p>One file that gets anyone going on <b>${esc(def)}</b> from today's baseline:</p><ul class="ticks">${dp ? `<li>${(dp.plot?.drawings || []).length} plot plans with FM areas, report logos</li>` : '<li class="muted">No plot plans on this device</li>'}<li><b>${n}</b> P&amp;ID page${n === 1 ? '' : 's'} with their text and AI index scans (${n - pidNotIndexed().length} AI-indexed)</li><li>P&amp;ID search index</li><li>Owner's guide (🎬 Promo &amp; info), if it's on this device</li></ul>
+    ${ndb ? `<label class="imp-row"><input type="checkbox" name="withdb" value="yes" data-cv checked> <span>Include the 📚 piping class database – <b>${esc(CLASSDB.name || '')}</b>${CLASSDB.version ? ' v' + esc(CLASSDB.version) : ''}, ${ndb} classes <small class="muted">(so one file gets a new device going; a newer database on their device is never replaced)</small></span></label>` : ''}
     <div class="grid2"><label class="field"><span>Asset</span><input type="text" name="name" value="${esc(def)}"></label><label class="field"><span>Version</span><input type="text" name="ver" value="${esc(sugV)}"><small>Last issued: ${esc(iss.version ? 'v' + iss.version + ' · ' + fmtDate((iss.issued || '').slice(0, 10)) : 'never')}</small></label></div>
     <label class="field"><span>What's new <small class="muted">(shown to everyone who installs it)</small></span><textarea name="notes" rows="5">${esc(chg.text || (iss.version ? 'No changes since the last issue.' : 'First issue – baseline.'))}</textarea></label>
     <p class="small muted">On other devices: a newer P&amp;ID revision replaces the old copy, the same revision is skipped, and classes are updated. Company data – internal only, company devices / Workspace Connect only.</p>`, [['Cancel', ''], ['📦 Issue', 'ok', 'primary']]);
@@ -589,7 +594,8 @@ async function assetExport() {
   if (dp) { dp.name = `${(r.vals.name || def).trim()} data pack`; dp.packVersion = ver; dp.issued = issued; dp.issuedBy = issuer; dp.changes = String(r.vals.notes || '').trim(); dp.pipeClasses = (dp.pipeClasses || []).map(c => { const { _local, ...rest } = c; return rest; }); }
   const name = (r.vals.name || def).trim(); const idx = await pidIndex(); const zip = new JSZip(); const J = { compression: 'DEFLATE' };
   const prog = progressModal('Building the asset pack…', false);
-  if (dp) zip.file('datapack.json', JSON.stringify(dp), J);
+  if (dp) { dp.pipeClasses = (PIPE_CLASSES || []).map(c => Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith('_')))); zip.file('datapack.json', JSON.stringify(dp), J); }   // classes live in the class database now; a copy stays here for app versions before 2.22
+  if (ndb && r.vals.withdb === 'yes') zip.file('classdb.json', JSON.stringify(classDbOut()), J);
   for (const [k, it] of S.pidlib.items.entries()) {
     prog.set(k, Math.max(1, n), it.title); if (k % 10 === 0) await tick();
     const b = await getBlob(it.blobId); if (b) zip.file(`img/${it.id}.jpg`, b);
@@ -599,11 +605,11 @@ async function assetExport() {
   const created = new Date().toISOString(), by = S.settings.inspectorName || '';
   zip.file('pidpack.json', JSON.stringify({ format: 'pid-pack', version: 1, exported: created, updated: S.pidlib.updated || '', items: S.pidlib.items }), J);
   zip.file('pidindex.json', JSON.stringify({ format: 'pid-index', version: 1, name: name + ' P&IDs', created, by, libraryUpdated: S.pidlib.updated || '', items: pidIndexItems(idx) }), J);
-  zip.file('asset.json', JSON.stringify({ format: 'vte-asset-pack', version: 1, name, created, by, datapack: dp ? { name: dp.name, packVersion: dp.packVersion || '' } : null, pids: n, aiIndexed: n - pidNotIndexed().length, libraryUpdated: S.pidlib.updated || '' }));
+  zip.file('asset.json', JSON.stringify({ format: 'vte-asset-pack', version: 1, name, created, by, datapack: dp ? { name: dp.name, packVersion: dp.packVersion || '' } : null, classdb: ndb && r.vals.withdb === 'yes' ? { name: CLASSDB.name, version: CLASSDB.version || '', n: ndb } : null, pids: n, aiIndexed: n - pidNotIndexed().length, libraryUpdated: S.pidlib.updated || '' }));
   const blob = await zip.generateAsync({ type: 'blob' }); prog.close();
-  iss.version = ver; iss.issued = issued; iss.by = issuer; iss.pidSnap = Object.fromEntries(S.pidlib.items.map(it => [`${pnorm(it.dwgNo || it.title)}|${it.page || 1}`, it.rev || ''])); iss.clsSnap = Object.fromEntries((PACK?.pipeClasses || []).map(c => [c.id, clsHash(c)]));
+  iss.version = ver; iss.issued = issued; iss.by = issuer; iss.pidSnap = Object.fromEntries(S.pidlib.items.map(it => [`${pnorm(it.dwgNo || it.title)}|${it.page || 1}`, it.rev || ''])); iss.clsSnap = {};
   await DB.put('meta', iss);
-  const m = await DB.get('meta', AK('pack')); if (m) { m.packVersion = ver; m.issued = issued; m.issuedBy = issuer; m.changes = dp?.changes || ''; m.name = dp?.name || m.name; m.pipeClasses = (m.pipeClasses || []).map(c => { const { _local, ...rest } = c; return rest; }); await DB.put('meta', m); await loadPack(); }
+  const m = await DB.get('meta', AK('pack')); if (m) { m.packVersion = ver; m.issued = issued; m.issuedBy = issuer; m.changes = dp?.changes || ''; m.name = dp?.name || m.name; m.pipeClasses = []; await DB.put('meta', m); await loadPack(); }
   saveOut('assetpack', {}, blob, `${safeName(name)}_DataPack_v${ver}_${todayISO()}.zip`, `${name} data pack v${ver}`);
 }
 const clsHash = c => JSON.stringify(Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith('_')).sort()));
@@ -613,7 +619,7 @@ function packChanges(iss, dp) {
   if (!iss.version) return { text: '' };
   const snap = iss.pidSnap || {}, cs = iss.clsSnap || {}; const newP = [], revP = [], newC = [], chgC = [];
   for (const it of S.pidlib.items) { const k = `${pnorm(it.dwgNo || it.title)}|${it.page || 1}`; if (!(k in snap)) newP.push(it.dwgNo || it.title); else if ((snap[k] || '') !== (it.rev || '')) revP.push(`${it.dwgNo || it.title} rev ${snap[k] || '?'} → ${it.rev || '?'}`); }
-  for (const c of dp?.pipeClasses || PACK?.pipeClasses || []) { if (!(c.id in cs)) newC.push(c.id); else if (cs[c.id] !== clsHash(c)) chgC.push(c.id); }
+  for (const c of (Object.keys(cs).length ? dp?.pipeClasses || PACK?.pipeClasses || [] : [])) { if (!(c.id in cs)) newC.push(c.id); else if (cs[c.id] !== clsHash(c)) chgC.push(c.id); }
   const u = a => [...new Set(a)]; const L = [];
   if (newP.length) L.push(`New P&IDs (${u(newP).length}): ${u(newP).slice(0, 15).join(', ')}${u(newP).length > 15 ? '…' : ''}`);
   if (revP.length) L.push(`P&ID revisions (${revP.length}): ${revP.slice(0, 15).join(', ')}${revP.length > 15 ? '…' : ''}`);
@@ -641,9 +647,10 @@ async function assetImport(zip) {
   const notes = dpf ? (JSON.parse(await dpf.async('string')).changes || '') : '';
   const r = await modal('Install asset data pack', `<p>📦 <b>${esc(a.name)}</b>${a.datapack?.packVersion ? ` <b>v${esc(a.datapack.packVersion)}</b>` : ''} – issued ${fmtDate((a.created || '').slice(0, 10))}${a.by ? ' by ' + esc(a.by) : ''}.</p>
     ${notes ? `<div class="pack-notes"><b>What's new</b><br>${esc(notes).replace(/\n/g, '<br>')}</div>` : ''}
-    ${older ? `<p class="small">⚠ This is <b>older</b> than the data pack on this device (v${esc(PACK.packVersion)}) – piping classes are left unticked.</p>` : ''}
+    ${older ? `<p class="small">⚠ This is <b>older</b> than the data pack on this device (v${esc(PACK.packVersion)}) – its plot plans are left unticked; newer P&amp;ID revisions on this device are kept.</p>` : ''}
     ${dpf ? `<label class="imp-row" style="border:0"><input type="checkbox" name="dp" ${older ? '' : 'checked'}><span>Data pack <b>${esc(a.datapack?.name || '')}</b> v${esc(a.datapack?.packVersion || '')}${PACK ? ` – replaces ${esc(PACK.name)} v${esc(PACK.packVersion || '')}` : ''}</span></label>` : ''}
     <label class="imp-row" style="border:0"><input type="checkbox" name="pid" checked><span><b>${pj.items.length}</b> P&amp;ID page${pj.items.length === 1 ? '' : 's'} – same revision already here is skipped, a new revision replaces the old copy</span></label>
+    ${a.classdb ? `<p class="small">📚 Includes the piping class database <b>${esc(a.classdb.name)}</b>${a.classdb.version ? ' v' + esc(a.classdb.version) : ''} (${a.classdb.n} classes) – new and updated classes are added; a newer database on this device is kept.</p>` : ''}
     <p class="small muted">Report copies of P&amp;IDs are never changed.</p>`, [['Cancel', ''], ['Import', 'ok', 'primary']]);
   if (!r) return;
   return assetImportRun(zip, a, pj, r);
@@ -653,6 +660,7 @@ async function assetImportRun(zip, a, pj, r, quiet) {
   const want = assetImportRun._want || { dp: true, pid: true }; assetImportRun._want = null;
   const sum = { dp: false, added: 0, updated: [], same: 0 };
   if (typeof promoFromZip === 'function') sum.promo = await promoFromZip(zip);
+  if (zip.file('classdb.json') && typeof classDbInstall === 'function') { try { const cj = JSON.parse(await zip.file('classdb.json').async('string')); sum.cdb = await classDbInstall(cj, true); if (sum.cdb) sum.cdb.name = `${cj.name}${cj.version ? ' v' + cj.version : ''}`; } catch (e) { console.error(e); } }
   if (want.dp && zip.file('datapack.json')) { await importPackJson(JSON.parse(await zip.file('datapack.json').async('string')), true); sum.dp = true; }
   if (want.pid && pj.items.length) {
     await pidIndex(); const prog = progressModal('Importing P&IDs…', false);
@@ -671,7 +679,7 @@ async function assetImportRun(zip, a, pj, r, quiet) {
     S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = pj.updated || new Date().toISOString(); await savePidLib();
   }
   if (quiet) return sum;
-  const res = await modal('Asset data pack installed', `<ul class="ticks">${sum.promo ? `<li>${sum.promo} promo file${sum.promo > 1 ? 's' : ''} (video / guide) – see 🎬 Promo &amp; info</li>` : ''}${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}
+  const res = await modal('Asset data pack installed', `<ul class="ticks">${sum.promo ? `<li>${sum.promo} promo file${sum.promo > 1 ? 's' : ''} (video / guide) – see 🎬 Promo &amp; info</li>` : ''}${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}${sum.cdb ? `<li>📚 Piping class database <b>${esc(sum.cdb.name)}</b>: ${sum.cdb.added} new, ${sum.cdb.updated} updated${sum.cdb.kept ? `, ${sum.cdb.kept} newer ones on this device kept` : ''}</li>` : ''}
     ${want.pid ? `<li><b>${sum.added}</b> new P&amp;ID page${sum.added === 1 ? '' : 's'}</li><li><b>${sum.updated.length}</b> updated${sum.updated.length ? ': ' + sum.updated.slice(0, 8).map(esc).join(', ') + (sum.updated.length > 8 ? '…' : '') : ''}</li><li><b>${sum.same}</b> already up to date</li>` : ''}</ul>
     ${pidScanPromptHTML()}`, pidScanBtns());
   if (res?.v === 'scan') await pidAiScan(true);
