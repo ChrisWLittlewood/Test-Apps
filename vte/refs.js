@@ -1,5 +1,5 @@
 /* Reference library – standards and company documents the toolbox apps rely on.
-   Each user adds their own licensed copy; files stay on this phone only (not in backups, never uploaded). */
+   Licensed copies live in the shared folder (0 Shared › Reference documents) and are copied to the user's other company devices by sync. */
 const APP_NAMES = { imsnt: "IMSn't", iso: 'Isometricks', flange: 'Gasket Case', face: 'Face Off' };
 const REF_DOCS = [
   { key: 'pcc1', name: 'ASME PCC-1', title: 'Guidelines for Pressure Boundary Bolted Flange Joint Assembly',
@@ -72,7 +72,7 @@ function renderRefs(app) {
   const nHave = allDocs().filter(d => TB.refs.items[d.key]).length;
   const stt = allDocs().map(refStatus); const cnt = k => stt.filter(x => x.k === k).length;
   $('#main').innerHTML = `<div class="card"><h2>📚 Standard Issue ${iBtn('refs')}</h2>
-      <p class="small">One place for every reference document – standards, performance standards and site procedures. <b>The apps take their acceptance criteria from here.</b> Each user adds their own licensed copy (or one supplied by the company). Files stay on this device only – never uploaded, not in backups.</p>
+      <p class="small">One place for every reference document – standards, performance standards and site procedures. <b>The apps take their acceptance criteria from here.</b> Keep your licensed copies (or the company's) in the shared folder – <i>Inspection Toolbox › 0 Shared - settings &amp; reference › Reference documents</i> – and 🔍 Scan folder adds them; sync copies them to your other company devices. Company devices only.</p>
       <div class="pid-disc sm">⚠ Company policy and licence terms may restrict sending these documents to an AI service. Only use 🤖 AI scan if you're authorised – <b>if in doubt, ask!</b> Otherwise set the data manually.</div>
       <input type="search" id="refQ" placeholder="Search documents and key facts" autocomplete="off">
       ${app ? `<a class="small" href="#/refs">Show all documents</a>` : `<div class="chips">${Object.entries(APP_NAMES).map(([k, v]) => `<a class="pill-s" href="#/refs/${k}">${v}</a>`).join('')}</div>`}

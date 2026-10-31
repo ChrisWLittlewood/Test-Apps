@@ -10,14 +10,17 @@ const HELP = [
     <p>They share one <a href="#/help/packs">data pack</a>, one <a href="#/help/refs">reference library</a> and one backup.</p>
     <div class="help-idea">💡 <b>Have an idea, an improvement, or a requirement for a specific tool or app?</b> Let me know – the best ones go into the next revision.</div>` },
   { id: 'setup', t: 'Getting started', b: `
-    <ol><li><b>Open the link</b> on the phone you'll use on site, with signal: <code>chriswlittlewood.github.io/Test-Apps/vte/</code></li>
-    <li><b>Install it.</b> Android: Chrome ⋮ → <i>Install app</i> / <i>Add to Home screen</i>. iPhone: Safari Share → <i>Add to Home Screen</i>. Locked-down work tablet: just bookmark it.</li>
-    <li><b>Open it once with signal</b> – it quietly downloads everything it needs to work offline.</li>
-    <li><b>Settings</b> → your name and position (they go on every report).</li>
-    <li><b>Settings → Data pack → Import</b> your asset's data pack file (piping classes, gaskets, plot plans, logos).</li>
-    <li>Optional: add your copies of the standards in the <a href="#/help/refs">reference library</a>, and an <a href="#/help/ai">AI key</a> if authorised.</li>
-    <li><b>Back up</b> regularly (Settings → ⬇ Backup everything). Everything lives on the phone.</li></ol>
-    <p><b>Updates</b> install themselves when you open the app with signal. To check by hand use <i>⟳ Check for updates</i> in Settings. If the installed name or icon looks out of date, remove the app from the home screen and install it again – your data is kept.</p>` },
+    <p>The first time you open the app, the <b>🧭 setup wizard</b> walks you through it (run it again any time: Settings &amp; tools → 🧭 Setup wizard). Start on your <b>PC</b>, then do the phone.</p>
+    <ol><li><b>Open the link</b> with signal in Chrome or Edge: <code>chriswlittlewood.github.io/Test-Apps/vte/</code> → <i>Set up now</i>.</li>
+    <li><b>Install the app</b> – it gets its own desktop / home-screen shortcut and works offline.</li>
+    <li><b>From another device?</b> Import a backup or sync file – or, on a second PC, just link the same shared folder and the scan brings everything across.</li>
+    <li><b>Your name and position</b> – they go on every report.</li>
+    <li><b>Shared folder</b> (PC): pick your OneDrive <i>Documents</i>; the app makes <b>Inspection Toolbox</b> with <i>0 Shared - settings &amp; reference</i> and a folder per asset.</li>
+    <li><b>Assets</b>: add each one – e.g. Leman Alpha, then Clipper.</li>
+    <li><b>Put your files in</b>: reference documents in <i>0 Shared › Reference documents</i>; each asset's data pack in <i>&lt;asset&gt; › 1 Data pack</i> and its P&amp;IDs in <i>&lt;asset&gt; › 2 P&amp;IDs</i>. Piping systems can wait.</li>
+    <li><b>🔍 Scan the folder</b>: data packs are installed, P&amp;IDs and reference documents imported, and you're offered the AI scans (only if authorised – if in doubt, ask!). It also lists what's still missing.</li></ol>
+    <p><b>Phone:</b> open the link, <i>Set up now</i>, and at <i>From another device?</i> pick the PC's sync file from OneDrive › Inspection Toolbox › 0 Shared - settings &amp; reference › Device sync.</p>
+    <p><b>Later:</b> drop new files in the folder and tap <b>🔍 Scan folder</b> on the front page. <b>Updates</b> install themselves when you open the app with signal (⟳ Check for updates in Settings &amp; tools).</p>` },
   { id: 'imsnt', t: 'IMSn\'t – line reports', b: `
     <ol><li><b>Create a piping system</b> – fastest is <i>📥 Import line list from Excel</i> (one report per line, system name from the file name). Fill in site, F/Loc, SCE, <b>IMS schedule No.</b> and <b>SAP WO</b> once – they fill every line.</li>
     <li><b>★ Line prep</b> (in the office): the <b>EP report number</b>, the P&amp;ID (pick from the P&amp;ID library and highlight the line – check it's the latest revision), the isometric (or <i>No ISO available</i>) and the previous ECH. The system page shows which lines are ready.</li>
@@ -68,7 +71,7 @@ const HELP = [
     <p>Import it in <b>Settings → Data pack</b>. A new version replaces the old one; your reports aren't touched. To get a pack for your asset, or an update, <b>request a new data pack for your asset</b> from the toolbox owner.</p>
     <p><b>📍 More than one asset?</b> Tap the asset bar on the front page (or in Settings) to switch or add one. Each asset keeps its own data pack, P&amp;ID library and search indexes, and IMSn't systems; importing an asset pack for a different asset offers to create it. Reference documents in 📚 Standard Issue and the acceptance criteria are shared by every asset.</p>` },
   { id: 'refs', t: 'Standard Issue – the reference library', b: `
-    <p><b>📚 Standard Issue</b> (on the front page) is the one place for every reference document – standards such as ASME PCC-1, B16.5 and API 571, and company documents such as PC005, PC007 and site procedures. Copyright standards can't be built into the app, so <b>each user adds their own licensed copy</b> (or one supplied by the company); company documents come from document control. Add your own with <i>＋ Add another document</i>. Files stay on this device only and aren't in backups.</p>
+    <p><b>📚 Standard Issue</b> (on the front page) is the one place for every reference document – standards such as ASME PCC-1, B16.5 and API 571, and company documents such as PC005, PC007 and site procedures. Copyright standards can't be built into the app, so you add your <b>licensed copies</b> (or the company's); company documents come from document control. Put them in the shared folder – <i>0 Shared - settings &amp; reference › Reference documents</i> – and tap 🔍 Scan folder: they're matched to the library by name and copied to your other company devices by sync. You can also add one directly on its card, or your own with <i>＋ Add another document</i>.</p>
     <p><b>🎯 Acceptance criteria.</b> IMSn't, Gasket Case and Face Off take their limits from here: PS minimum wall factor, bend intrados factor, small-bore minimum, stud / nut reject level, flange thickness loss limits and the flange face defect limits. Each shows where it came from – built-in default, a document (AI scan) or set manually.</p>
     <p><b>🤖 AI scan.</b> Reads a document and pulls out those values plus up to 25 key facts. <b>Company policy, information-security rules and licence terms may restrict sending these documents to an AI service – including Copilot. Only run a scan if you are authorised to do so. If in doubt, ask!</b> If not, use <i>✎ Set data manually</i>. Every AI value is shown with its clause and a quote, and nothing is used until you tick it.</p>
     <p><b>🤖 Scan all / 📦 Copilot in batches.</b> When documents on this device haven't been scanned (or have a new copy), a card at the top lists them. <i>🤖 Scan all</i> (API key) or <i>📦 Export for Copilot</i> both start with a list where you <b>tick only the documents you're authorised to send</b> – if in doubt, ask. The Copilot export is one zip with a folder per chat (1–5 documents each, each with its own prompt); attach the PDFs, paste the prompt, copy the reply, then <i>📥 Import Copilot results</i> takes all the replies at once. Either way you get one review of every value; where two documents give the same value, the company / site document is ticked first and a standard never quietly replaces a value set from one. Already-scanned documents are never sent again.</p>
@@ -112,24 +115,30 @@ const HELP = [
     <li><i>📤 Export / send to device</i> saves the whole system as one file. Send it to the inspection device by Teams or OneDrive. On that device: Settings → <i>⬆ Import backup</i>.</li></ol>
     <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
   { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Settings → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
-  { id: 'onedrive', t: 'OneDrive folder – store, send and pick up files', b: `
-    <p>On a <b>PC (Chrome or Edge)</b>: Settings &amp; tools → <b>📁 Set up OneDrive folder</b> and pick your OneDrive <i>Documents</i> folder. The app creates <b>Inspection Toolbox</b> with:</p>
-    <ul><li><b>1 Data packs</b> – data packs and asset packs. Import: OneDrive → 📦 Data pack.</li>
-      <li><b>2 Piping system prep</b> – a folder per piping system with the IMS line list, ECHs, isos and P&amp;IDs. Import: OneDrive → 🗂 Piping system prep. <i>📤 Export / send to device</i> saves the system's file here too.</li>
-      <li><b>3 P&amp;IDs</b> – a folder per asset with every P&amp;ID. Import: OneDrive → 📐 New P&amp;IDs.</li>
-      <li><b>4 Reference documents</b> – standards and procedures. Import: OneDrive → 📚 New reference documents (matched to the library by name – check the list).</li>
-      <li><b>5 Completed reports for IMS</b> – signed reports, filed by the app under <i>piping system › IMS schedule No.</i>, ready to upload into IMS. A final Word report is saved here automatically; the system page has <i>📁 Save signed reports to OneDrive</i> for all of them.</li>
-      <li><b>6 Backups</b> – Backup everything files.</li></ul>
-    <p>Imports only read <b>new or changed</b> files. The browser asks to allow access to the folder – choose <i>Allow on every visit</i> if offered.</p>
-    <p><b>On the phone:</b> when you import, choose <b>OneDrive</b> in the file picker and open the Inspection Toolbox folder; to save, use 📤 Share → OneDrive. Company data – company OneDrive only.</p>` },
+  { id: 'onedrive', t: 'The shared folder – store, send and pick up files', b: `
+    <p>On a <b>PC (Chrome or Edge)</b> the app links a folder in your OneDrive <i>Documents</i> (the setup wizard does it, or Settings &amp; tools → 📁 Set up shared folder):</p>
+    <pre class="setup-tree">Inspection Toolbox
+├─ 0 Shared - settings &amp; reference
+│   ├─ Reference documents
+│   ├─ Device sync
+│   └─ Backups
+└─ &lt;asset&gt;   (one per asset, e.g. Leman Alpha)
+    ├─ 1 Data pack
+    ├─ 2 P&amp;IDs
+    ├─ 3 Piping systems › &lt;system&gt;
+    └─ 4 Completed reports for IMS › &lt;system&gt; › &lt;schedule&gt;</pre>
+    <p>Each folder has a READ ME. <b>Put files in, then tap 🔍 Scan folder</b> (front page): it merges your other devices' sync files, adds new reference documents (matched by name – unknown ones are checked with you), installs a new data pack per asset, imports new P&amp;IDs, notes piping system folders with new files, and offers the AI scans. Only new or changed files are read.</p>
+    <p><b>Exports go straight into the folder:</b> final Word reports into <i>4 Completed reports for IMS › system › schedule</i> (the system page also has <i>📁 Save signed reports</i>), a system's export into its <i>3 Piping systems</i> folder, asset packs into <i>1 Data pack</i>, backups into <i>0 Shared › Backups</i>.</p>
+    <p><b>Piping systems</b>, when you need them: make a folder per system in <i>3 Piping systems</i> with its line list, ECHs, isos and P&amp;IDs, open it in 📂 Paper Trail and tap Import.</p>
+    <p><b>On the phone:</b> when you import, choose <b>OneDrive</b> in the file picker; to save, use 📤 Share → OneDrive. Company data – company OneDrive only.</p>` },
   { id: 'files', t: 'Paper Trail – the shared folder', b: `
     <p><b>📂 Paper Trail</b> appears on the front page once the OneDrive folder is set up. On the <b>PC</b> it opens the <b>Inspection Toolbox</b> folder inside the app: tap folders to go in, 👁 open PDFs and pictures, ⬇ download anything, ⬆ add files (or drag them onto the page) and ＋ make folders. Each folder has its own shortcut – import new P&amp;IDs, add documents to Standard Issue, import a data pack, import a piping system's prep folder into IMSn't, or sync.</p>
     <p>On the <b>phone</b> it opens the folder in the OneDrive app. Paste the folder's link once on the PC (Settings &amp; tools → OneDrive → <i>Folder link for phones</i>) – it reaches the phone with the next sync.</p>` },
   { id: 'sync', t: 'Sync between devices', b: `
     <p>Do the setup on your laptop and carry on on the phone. Each device keeps its own copy of everything; <b>🔄 Sync</b> keeps them in step through the OneDrive folder – no company sign-in needed.</p>
-    <ul><li><b>PC</b> (OneDrive folder linked): <i>🔄 Sync now</i> – also runs by itself when the app opens and every 15 minutes. It merges anything the phone sent and writes the PC's own sync file into <b>Inspection Toolbox › 7 Sync</b>.</li>
-      <li><b>Phone</b>: Settings &amp; tools → <i>🔄 Get updates</i> → choose <b>OneDrive</b> in the file picker → Inspection Toolbox › 7 Sync → the <i>Toolbox_Sync_PC_…</i> file. After inspecting: <i>📤 Send my changes</i> → share to OneDrive → 7 Sync (replace the old one).</li></ul>
-    <p><b>What syncs:</b> piping systems and line reports with their photos, drawings and signatures; iso sketches, flange sheets and face inspections; acceptance values and reference document results; data packs and P&amp;IDs, for every asset. <b>Not synced:</b> reference document PDFs (each device adds its own licensed copies), settings and AI keys, and deletions.</p>
+    <ul><li><b>PC</b> (OneDrive folder linked): <i>🔄 Sync now</i> – also runs by itself when the app opens and every 15 minutes. It merges anything the phone sent and writes the PC's own sync file into <b>Inspection Toolbox › 0 Shared - settings &amp; reference › Device sync</b>. 🔍 Scan folder does this too.</li>
+      <li><b>Phone</b>: Settings &amp; tools → <i>🔄 Get updates</i> → choose <b>OneDrive</b> in the file picker → Inspection Toolbox › 0 Shared - settings &amp; reference › Device sync → the <i>Toolbox_Sync_PC_…</i> file. After inspecting: <i>📤 Send my changes</i> → share to OneDrive → the same Device sync folder.</li></ul>
+    <p><b>What syncs:</b> piping systems and line reports with their photos, drawings and signatures; iso sketches, flange sheets and face inspections; acceptance values and reference document results; data packs and P&amp;IDs, for every asset. <b>Also synced:</b> reference document PDFs and your name / position. <b>Not synced:</b> other settings, AI keys and deletions.</p>
     <p><b>Small files:</b> the first sync carries everything; after that only photos and drawings the other device hasn't got. If something looks missing, use <i>Full sync</i> / <i>Send a full copy</i>. If the same report was edited on both devices, the newest edit wins.</p>` },
   { id: 'backup', t: 'Backups, storage & updates', b: `
     <ul><li><b>Backup everything</b> saves systems, reports, photos, sketches and flange sheets to one file. Keep it somewhere safe – clearing the browser's site data wipes the app's storage.</li>

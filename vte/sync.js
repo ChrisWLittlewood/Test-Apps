@@ -4,7 +4,7 @@
    P&ID images are only included when the other device hasn't confirmed it has them, so files stay small after the first.
    A PC with the OneDrive folder linked reads and writes "7 Sync" itself; a phone picks the PC's file from OneDrive and
    sends its own back with Share → OneDrive. Newest edit of each record wins; deletions are not synced. */
-const SYNC_DIR = '7 Sync';
+const SYNC_DIR = '0 Shared - settings & reference › Device sync';   // for messages; the real path comes from odPathFor('sync')
 let SYNC = null;
 async function syncLoad() {
   if (!SYNC) SYNC = (await DB.get('meta', 'sync')) || { id: 'sync', peers: {} };
@@ -37,8 +37,10 @@ async function syncBuild(full) {
     }
     assets.push(ent);
   }
+  const refDocs = []; for (const [key, it] of Object.entries(TB.refs.items || {})) if (tms(it.addedAt) > since && (full || !it._src)) { const b = await getBlob(it.blobId); if (b) { zip.file(`refdoc/${key}.pdf`, b); refDocs.push({ key, name: it.name, size: it.size, addedAt: it.addedAt }); } }
+  const me = { inspectorName: S.settings.inspectorName || '', position: S.settings.position || '', defaultSite: S.settings.defaultSite || '' };
   const mf = { format: 'vte-sync', version: 1, created, device: SYNC.device, by: S.settings.inspectorName || '', full: since < 0, ack: Object.fromEntries(Object.entries(SYNC.peers).map(([k, p]) => [k, p.iMerged || ''])),
-    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, odLink: S.settings.odLink || '', crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
+    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, odLink: S.settings.odLink || '', me, refDocs, crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
   zip.file('sync.json', JSON.stringify(mf), J);
   return { blob: await zip.generateAsync({ type: 'blob' }), created, blobs: ids.size, pids: nPid, full: since < 0 };
 }
@@ -76,6 +78,11 @@ async function syncMerge(zip, j) {
   await critSaved();
   for (const c of j.refs?.custom || []) if (!(TB.refs.custom || []).some(x => x.key === c.key)) { (TB.refs.custom = TB.refs.custom || []).push(c); sum.refs++; }
   for (const part of ['ai', 'manual']) for (const [k, v] of Object.entries(j.refs?.[part] || {})) { TB.refs[part] = TB.refs[part] || {}; const l = TB.refs[part][k]; if (!l || tms(l.at) < tms(v.at)) { TB.refs[part][k] = v; sum.refs++; } }
+  for (const r of j.refDocs || []) { const f = zip.file(`refdoc/${r.key}.pdf`); const l = TB.refs.items[r.key]; if (!f || (l && tms(l.addedAt) >= tms(r.addedAt))) continue;
+    if (!allDocs().some(d => d.key === r.key)) continue;
+    const res = await refStoreFile(r.key, new File([await f.async('arraybuffer')], r.name, { type: 'application/pdf' })); Object.assign(TB.refs.items[r.key], { addedAt: r.addedAt, _src: j.device.id, stale: res.old ? TB.refs.items[r.key].stale : false }); sum.refDocs = (sum.refDocs || 0) + 1; }
+  for (const k of ['inspectorName', 'position', 'defaultSite']) if (j.me?.[k] && !S.settings[k]) { S.settings[k] = j.me[k]; sum.me = 1; }
+  if (sum.me) persist('settings');
   await DB.put('meta', TB.refs);
   if (j.odLink && j.odLink !== S.settings.odLink && /^https:\/\//.test(j.odLink)) { S.settings.odLink = j.odLink; persist('settings'); }
   const p = SYNC.peers[j.device.id] = SYNC.peers[j.device.id] || {}; p.name = j.device.name; p.by = j.by || ''; p.iMerged = j.created; if (j.ack?.[SYNC.device.id]) p.theyHave = j.ack[SYNC.device.id];
@@ -85,19 +92,19 @@ async function syncMerge(zip, j) {
 }
 function syncSumHTML(s) {
   const li = [s.newRep && `${s.newRep} new line report${s.newRep > 1 ? 's' : ''}`, s.rep && `${s.rep} line report${s.rep > 1 ? 's' : ''} updated`, s.sys && `${s.sys} piping system${s.sys > 1 ? 's' : ''}`, s.tools && `${s.tools} sketch${s.tools > 1 ? 'es' : ''} / sheet${s.tools > 1 ? 's' : ''} / face inspection${s.tools > 1 ? 's' : ''}`,
-    s.pids && `${s.pids} P&amp;ID page${s.pids > 1 ? 's' : ''}`, s.packs.length && `data pack: ${s.packs.map(esc).join(', ')}`, s.crit && `${s.crit} acceptance value${s.crit > 1 ? 's' : ''}`, s.refs && `${s.refs} reference document result${s.refs > 1 ? 's' : ''}`].filter(Boolean);
+    s.pids && `${s.pids} P&amp;ID page${s.pids > 1 ? 's' : ''}`, s.packs.length && `data pack: ${s.packs.map(esc).join(', ')}`, s.crit && `${s.crit} acceptance value${s.crit > 1 ? 's' : ''}`, s.refs && `${s.refs} reference document result${s.refs > 1 ? 's' : ''}`, s.refDocs && `${s.refDocs} reference document${s.refDocs > 1 ? 's' : ''} (PDF)`, s.me && 'your personal details'].filter(Boolean);
   return `<p><b>From ${esc(s.from)}</b> · ${new Date(s.at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</p>${li.length ? `<ul class="ticks">${li.map(x => `<li>${x}</li>`).join('')}</ul>` : '<p class="small muted">Nothing new – already up to date.</p>'}
     ${s.missing ? `<p class="small">⚠ ${s.missing} photo / signature file${s.missing > 1 ? 's were' : ' was'} missing – on the other device use <i>Full sync</i>.</p>` : ''}`;
 }
 async function syncRead(file) { const z = await JSZip.loadAsync(file); const mf = z.file('sync.json'); if (!mf) throw new Error('Not an Inspection Toolbox sync file'); const j = JSON.parse(await mf.async('string')); if (j.format !== 'vte-sync') throw new Error('Not an Inspection Toolbox sync file'); return [z, j]; }
-const syncPrint = () => { const f = []; f.push(Math.max(0, ...S.reports.map(recT)), Math.max(0, ...S.systems.map(s => s.updatedAt || 0)), Math.max(0, ...[...TB.iso.items, ...TB.fl.items, ...TB.face.items].map(recT)), S.pidlib.updated || '', PACK?.importedAt || '', Math.max(0, ...Object.values(TB.crit.items).map(v => tms(v.at))), Object.keys(TB.refs.ai || {}).length); return f.join('|'); };
+const syncPrint = () => { const f = []; f.push(Object.values(TB.refs.items || {}).map(i => i.addedAt).sort().pop() || '', S.settings.inspectorName || '', Math.max(0, ...S.reports.map(recT)), Math.max(0, ...S.systems.map(s => s.updatedAt || 0)), Math.max(0, ...[...TB.iso.items, ...TB.fl.items, ...TB.face.items].map(recT)), S.pidlib.updated || '', PACK?.importedAt || '', Math.max(0, ...Object.values(TB.crit.items).map(v => tms(v.at))), Object.keys(TB.refs.ai || {}).length); return f.join('|'); };
 /* PC with the OneDrive folder: merge everything new in 7 Sync, then write this device's file */
 async function syncNow(opts = {}) {
   await syncLoad();
-  if (!(typeof odSupported === 'function' && odSupported() && await odRoot(!opts.auto))) { if (!opts.auto) toast('Link the OneDrive folder first (Settings & tools → OneDrive)', 4000); return; }
-  const prog = opts.auto ? null : progressModal('Syncing with OneDrive…', false); const sums = [];
+  if (!(typeof odSupported === 'function' && odSupported() && await odRoot(!opts.auto))) { if (!opts.auto) toast('Link the shared folder first (Settings & tools)', 4000); return opts.quiet ? [] : undefined; }
+  const prog = opts.auto || opts.quiet ? null : progressModal('Syncing with OneDrive…', false); const sums = [];
   try {
-    const dir = await odDir([SYNC_DIR]); const files = (await odFiles(dir, /\.zip$/i)).filter(x => !x.path.includes('/')).sort((a, b) => a.file.lastModified - b.file.lastModified);
+    const dir = await odDir(odPathFor('sync')); const files = (await odFiles(dir, /\.zip$/i)).filter(x => !x.path.includes('/')).sort((a, b) => a.file.lastModified - b.file.lastModified);
     for (const x of files) {
       try { const [z, j] = await syncRead(x.file); if (j.device?.id === SYNC.device.id) continue;
         const p = SYNC.peers[j.device.id]; if (p?.iMerged && tms(p.iMerged) >= tms(j.created)) { if (x.file.name !== `Toolbox_Sync_${j.device.name}_${j.device.id}.zip`) await dir.removeEntry(x.path).catch(() => { }); continue; }
@@ -105,14 +112,14 @@ async function syncNow(opts = {}) {
         if (x.file.name !== `Toolbox_Sync_${j.device.name}_${j.device.id}.zip`) await dir.removeEntry(x.path).catch(() => { });   // tidy up "(1)" copies once merged
       } catch (e) { console.error(e); }
     }
-    if (!opts.auto || sums.length || syncPrint() !== SYNC.fp) {
+    if (!opts.noWrite && (!opts.auto || sums.length || syncPrint() !== SYNC.fp)) {
       prog?.set(0, 1, 'Writing this device\'s sync file…'); const out = await syncBuild(opts.full);
-      await odWrite([SYNC_DIR], syncFileName(), out.blob); SYNC.lastOut = out.created; SYNC.fp = syncPrint(); await syncSave();
+      await odWrite(odPathFor('sync'), syncFileName(), out.blob); SYNC.lastOut = out.created; SYNC.fp = syncPrint(); await syncSave();
       sums.out = out;
     }
-  } catch (e) { prog?.close(); if (!opts.auto) toast('⚠ Sync: ' + e.message, 6000); return; }
-  prog?.close();
-  const got = sums.filter(s => s.newRep + s.rep + s.sys + s.tools + s.pids + s.packs.length + s.crit + s.refs);
+  } catch (e) { prog?.close(); if (!opts.auto) toast('⚠ Sync: ' + e.message, 6000); return opts.quiet ? [] : undefined; }
+  prog?.close(); if (opts.quiet) return sums;
+  const got = sums.filter(s => s.newRep + s.rep + s.sys + s.tools + s.pids + s.packs.length + s.crit + s.refs + (s.refDocs || 0) + (s.me || 0));
   if (opts.auto) { if (got.length) toast(`🔄 Synced from ${got.map(s => s.from).join(', ')}`, 5000); route(); return; }
   await modal('🔄 Synced', `${sums.length ? sums.map(syncSumHTML).join('<hr>') : '<p class="small muted">Nothing new from other devices.</p>'}${sums.out ? `<p class="small">📤 This PC's sync file is up to date in <b>Inspection Toolbox › ${SYNC_DIR}</b>${sums.out.full ? ' (full copy)' : ''} – on the phone: Settings &amp; tools → 🔄 Get updates.</p>` : ''}`, [['OK', '', 'primary']]);
   route();
@@ -132,7 +139,7 @@ async function syncGet() {
 }
 async function syncSend(full) {
   await syncLoad(); toast('Packing your changes…', 15000); const out = await syncBuild(full);
-  if (typeof odSupported === 'function' && odSupported() && await odRoot(false)) { await odWrite([SYNC_DIR], syncFileName(), out.blob); toast('📤 Saved to Inspection Toolbox › ' + SYNC_DIR, 5000); }
+  if (typeof odSupported === 'function' && odSupported() && await odRoot(false)) { await odWrite(odPathFor('sync'), syncFileName(), out.blob); toast('📤 Saved to Inspection Toolbox › ' + SYNC_DIR, 5000); }
   else { await shareBlob(out.blob, syncFileName(), 'Inspection Toolbox sync'); toast(`Save it in OneDrive › Inspection Toolbox › ${SYNC_DIR} (replace the old one)`, 8000); }
   SYNC.lastOut = out.created; SYNC.fp = syncPrint(); await syncSave(); route();
 }
@@ -141,7 +148,7 @@ function syncCardHTML() {
   const when = v => v ? new Date(v).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : 'never';
   const peers = Object.values(S0.peers || {}).map(p => `${esc(p.name)}${p.by ? ' (' + esc(p.by) + ')' : ''}: received ${when(p.iMerged)}`).join(' · ');
   return `<div class="card"><h3>🔄 Sync between devices ${iBtn('sync')}</h3>
-    <p class="small muted">Keeps this ${esc(S0.device.name)} and your other devices in step through OneDrive – systems, line reports and photos, sketches, sheets, acceptance values, data packs and P&amp;IDs. Newest change wins; deletions don't sync. Reference document PDFs stay on each device.</p>
+    <p class="small muted">Keeps this ${esc(S0.device.name)} and your other devices in step through OneDrive – systems, line reports and photos, sketches, sheets, acceptance values, data packs and P&amp;IDs. Newest change wins; deletions don't sync. Reference documents too.</p>
     <p class="small">Last sent: <b>${when(S0.lastOut)}</b>${peers ? `<br>${peers}` : ''}</p>
     ${pc ? `<div class="grid2"><button class="btn primary" data-action="syncNow">🔄 Sync now</button><button class="btn ghost" data-action="syncFull">Full sync</button></div><p class="small muted">Runs by itself when the app opens and every 15 minutes while it's open.</p>`
       : `<div class="grid2"><button class="btn primary" data-action="syncGet">🔄 Get updates</button><button class="btn ghost" data-action="syncSend">📤 Send my changes</button></div>

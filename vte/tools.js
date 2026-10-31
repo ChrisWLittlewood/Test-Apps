@@ -11,6 +11,7 @@ async function flushTB() { clearTimeout(tbTimer); await DB.put('meta', TB.iso); 
 /* ================= landing ================= */
 function renderToolbox() {
   cur.system = null; cur.report = null; cur.flange = null;
+  if (typeof setupNeeded === 'function' && setupNeeded()) return go('/setup');
   setTop('Inspection Toolbox', S.settings.inspectorName ? 'Inspector: ' + S.settings.inspectorName : 'Offline inspection tools');
   const nRep = S.reports.length, nIso = TB.iso.items.length, nFl = TB.fl.items.length;
   const tile = (href, icon, name, sub, count) => `<a class="tool-tile" href="${href}"><div class="tt-ic">${icon}</div><div class="tt-tx"><b>${name}</b><span>${sub}</span>${count ? `<small>${count}</small>` : ''}</div><i>›</i></a>`;
@@ -18,6 +19,7 @@ function renderToolbox() {
     ${installPrompt ? `<button class="btn primary block" data-action="install">⬇ Install Inspection Toolbox on this phone</button>` : ''}
     ${!S.settings.inspectorName ? `<div class="card notice">👋 Add your name in <a href="#/settings">Settings</a> – it is used on every report and sheet.</div>` : ''}
     ${assetBarHTML()}
+    ${typeof homeFolderHTML === 'function' ? homeFolderHTML() : ''}
     ${(() => { const n = typeof refStatus === 'function' ? allDocs().filter(d => refStatus(d).k === 'stale').length : 0; return n ? `<a class="card notice small" style="display:block;text-decoration:none;color:inherit" href="#/refs">⚠ <b>${n} reference document${n > 1 ? 's' : ''}</b> in 📚 Standard Issue ${n > 1 ? 'have' : 'has'} a new copy – rescan or update the values ›</a>` : ''; })()}
     ${tile('#/imsnt', '<img src="img/imsnt-192.png" alt="">', "IMSn't", 'Pipework Visual Inspection Tool – full VTE line reports', nRep ? `${nRep} line report${nRep === 1 ? '' : 's'}` : '')}
     ${tile('#/iso', isoIconSVG(), 'Isometricks', 'Quick isometric sketches – draw, mark up, share', nIso ? `${nIso} sketch${nIso === 1 ? '' : 'es'}` : '')}

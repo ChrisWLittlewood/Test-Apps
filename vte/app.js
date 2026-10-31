@@ -53,7 +53,8 @@ function persist(kind, obj) {
   }, 350);
 }
 async function flushSaves() {
-  for (const k in saveTimers) clearTimeout(saveTimers[k]);
+  const settingsPending = !!saveTimers.settings; for (const k in saveTimers) clearTimeout(saveTimers[k]); saveTimers.settings = null;
+  if (settingsPending && S.settings) await DB.put('meta', S.settings);   // a settings change made just before navigating must not be dropped
   if (cur.report) await DB.put('reports', cur.report);
   if (cur.system) await DB.put('systems', cur.system);
 }
@@ -404,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.17.0';
+const APP_VERSION = '2.18.0';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -461,6 +462,7 @@ async function route() {
   if (p[0] === 'face') return p[1] ? renderFace(p[1]) : renderFaceLib();
   if (p[0] === 'face-limits') return renderFaceLimits();
   if (p[0] === 'files') return renderFiles();
+  if (p[0] === 'setup') return renderSetup(p[1]);
   if (p[0] === 'refs') return p[1] === 'doc' ? renderRefDoc(p[2]) : renderRefs(p[1]);
   if (p[0] === 'xray') return renderXrayLanding();
   if (p[0] === 'help') return renderHelp(p[1]);
@@ -546,6 +548,8 @@ function renderSettings() {
       <button class="btn ghost" data-action="checkUpdate">⟳ Check for updates</button>
       <a class="btn ghost" href="#/promo">🎬 Promo &amp; info</a>
       <a class="btn ghost" href="#/refs">📚 Standard Issue</a>
+      <a class="btn ghost" href="#/setup">🧭 Setup wizard</a>
+      <button class="btn ghost" data-action="assetPick">📍 Assets</button>
     </div>
     <p class="small muted">⬇ Backup everything covers every asset – keep the file in company storage only.</p></div>
   ${typeof odCardHTML === 'function' ? odCardHTML() : ''}
@@ -629,7 +633,7 @@ function renderSystem(id) {
     ${lines.length ? `<div class="grid2"><button class="btn ghost" data-action="epNumbers" data-sys="${s2.id}">✎ EP numbers for all lines</button><button class="btn ghost" data-action="pidAuto" data-sys="${s2.id}">🔎 Find P&amp;IDs in the library</button></div>` : ''}
     ${(() => { const w = lines.filter(r => r.ech && !r.ech.ai).length; return w ? `<div class="grid2">${S.settings.aiKey ? `<button class="btn ghost" data-action="echBulkAi" data-how="api" data-sys="${s2.id}">🤖 AI summaries (${w})</button>` : ''}<button class="btn ghost" data-action="echBulkAi" data-sys="${s2.id}">📋 Copilot summaries (${w})</button></div>` : ''; })()}
     ${lines.length ? `<button class="btn primary block" style="margin-top:18px" data-action="sendToPhone">📤 Export / send to device</button><p class="small muted">Saves the whole system (lines, ECHs, photos, drawings) as one file – send it to another device by Teams or OneDrive, then on that device: Settings & tools → ⬆ Import backup.</p>` : ''}
-    ${(() => { const n = lines.filter(r => r.sigId).length; return n && typeof odSupported === 'function' && odSupported() && OD?.root ? `<button class="btn ghost block" data-action="odSaveSigned">📁 Save signed reports to OneDrive (${n})</button><p class="small muted">Into ${esc(OD_DIRS.reports)} › ${esc(s2.name || '')} › <i>IMS schedule No.</i> – ready to upload into IMS.</p>` : ''; })()}
+    ${(() => { const n = lines.filter(r => r.sigId).length; return n && typeof odLinked === 'function' && odLinked() ? `<button class="btn ghost block" data-action="odSaveSigned">📁 Save signed reports to the shared folder (${n})</button><p class="small muted">Into ${esc(odAF())} › ${esc(OD_AS.reports)} › ${esc(s2.name || '')} › <i>IMS schedule No.</i> – ready to upload into IMS.</p>` : ''; })()}
     <div class="grid2" style="margin-top:18px"><button class="btn ghost" data-action="exportSystem">⬇ Backup this system</button><button class="btn ghost danger-t" data-action="delSystem">🗑 Delete system</button></div>`;
 }
 function blankReport(sys) {

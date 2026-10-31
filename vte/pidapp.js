@@ -120,7 +120,7 @@ async function pidIndex() {
   return PIDIDX;
 }
 
-async function pidImport(files) {
+async function pidImport(files, opts = {}) {
   { const tx = files.filter(f => /\.(txt|json)$/i.test(f.name)); if (tx.length) { let all = ''; for (const f of tx) all += '\n' + await f.text(); if (/"files"\s*:/.test(all)) await pidCpImportText(all); } }
   files = files.filter(f => /\.(pdf|jpe?g|png|webp|zip)$/i.test(f.name) && f.size > 0);
   const packs = files.filter(f => /\.zip$/i.test(f.name)); files = files.filter(f => !/\.zip$/i.test(f.name));
@@ -153,6 +153,7 @@ async function pidImport(files) {
   prog.close();
   S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = new Date().toISOString();
   await savePidLib();
+  if (opts.quiet) return { added, updated, noText };
   const r = await modal('P&IDs imported', `<p><b>${added}</b> page${added === 1 ? '' : 's'} added${updated ? `, <b>${updated}</b> updated (same drawing number – the old copy was replaced)` : ''}.</p>
     ${noText ? `<p class="small">⚠ ${noText} page${noText === 1 ? ' has' : 's have'} no text layer (scanned drawings), so ${noText === 1 ? 'it' : 'they'} can only be found by title until AI-scanned.</p>` : ''}
     ${pidScanPromptHTML()}<p class="small muted">Reports that already use a P&amp;ID keep their own copy.</p>`, pidScanBtns());
@@ -607,7 +608,7 @@ async function assetImport(zip) {
   if (!r) return;
   return assetImportRun(zip, a, pj, r);
 }
-async function assetImportRun(zip, a, pj, r) {
+async function assetImportRun(zip, a, pj, r, quiet) {
   // modal() only returns text values, so the checkbox states were captured by the click handler below
   const want = assetImportRun._want || { dp: true, pid: true }; assetImportRun._want = null;
   const sum = { dp: false, added: 0, updated: [], same: 0 };
@@ -628,6 +629,7 @@ async function assetImportRun(zip, a, pj, r) {
     prog.close();
     S.pidlib.items.sort((x, y) => x.title.localeCompare(y.title, undefined, { numeric: true })); S.pidlib.updated = pj.updated || new Date().toISOString(); await savePidLib();
   }
+  if (quiet) return sum;
   const res = await modal('Asset pack imported', `<ul class="ticks">${sum.promo ? `<li>${sum.promo} promo file${sum.promo > 1 ? 's' : ''} (video / guide) – see 🎬 Promo &amp; info</li>` : ''}${sum.dp ? `<li>Data pack <b>${esc(PACK?.name || '')}</b> v${esc(PACK?.packVersion || '')} loaded</li>` : ''}
     ${want.pid ? `<li><b>${sum.added}</b> new P&amp;ID page${sum.added === 1 ? '' : 's'}</li><li><b>${sum.updated.length}</b> updated${sum.updated.length ? ': ' + sum.updated.slice(0, 8).map(esc).join(', ') + (sum.updated.length > 8 ? '…' : '') : ''}</li><li><b>${sum.same}</b> already up to date</li>` : ''}</ul>
     ${pidScanPromptHTML()}`, pidScanBtns());
