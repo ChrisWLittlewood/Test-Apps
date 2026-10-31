@@ -96,12 +96,12 @@ async function odMigrate(root) {
 }
 async function odConnect() {
   if (!odSupported()) return modal('📁 Shared folder', `<p>Setting up the folder needs <b>Chrome or Edge on a PC</b>. On a phone, pick files from the OneDrive app when you import (choose OneDrive in the file picker), and use 📤 Share → OneDrive to save.</p>`, [['OK', '', 'primary']]);
-  const ok = await modal('📁 Link the shared folder', `<p>Pick your <b>OneDrive Documents</b> folder – for example <i>OneDrive – Shell › Documents</i>. The app creates an <b>Inspection Toolbox</b> folder there (or uses the one already there):</p>
-    <ul class="small"><li>📁 ${esc(OD_SHARED)} – reference documents, device sync, backups</li><li>📁 one folder per asset – data pack, P&amp;IDs, piping systems, completed reports for IMS</li></ul>
-    <p class="small">Your browser will ask to let the app view and edit files in that folder – choose <b>Allow</b> (and “Allow on every visit” if offered). Company data – company OneDrive only.</p>`, [['Cancel', ''], ['📁 Choose folder', 'ok', 'primary']]);
+  const ok = await modal('📁 Link the shared folder', `<p>The app keeps everything in an <b>Inspection Toolbox</b> folder in your OneDrive Documents:</p><ol class="small od-how"><li>In the window that opens, go to <b>OneDrive – Shell › Documents</b>.</li><li>Click <b>New folder</b>, name it <b>Inspection Toolbox</b>, and open it. <i>(Chrome won't let a website have the whole Documents folder – it says “contains system files” – so the app needs its own folder.)</i></li><li>Click <b>Select Folder</b>, then <b>Allow</b> / <b>Edit files</b> (and “Allow on every visit” if offered).</li></ol>
+    <p class="small">Already have an Inspection Toolbox folder (another PC)? Just pick it. Inside, the app makes <i>${esc(OD_SHARED)}</i> and a folder per asset. Company data – company OneDrive only.</p>`, [['Cancel', ''], ['📁 Choose folder', 'ok', 'primary']]);
   if (!ok) return false;
-  let h; try { h = await window.showDirectoryPicker({ id: 'inspection-toolbox', mode: 'readwrite', startIn: 'documents' }); } catch (e) { if (e.name !== 'AbortError') toast('⚠ ' + e.message, 5000); return false; }
-  if (h.name !== 'Inspection Toolbox') h = await h.getDirectoryHandle('Inspection Toolbox', { create: true });
+  let h; try { h = await window.showDirectoryPicker({ id: 'inspection-toolbox', mode: 'readwrite', startIn: 'documents' });
+  } catch (e) { if (e.name !== 'AbortError') toast('⚠ ' + e.message, 5000); return false; }
+  if (!/^inspection toolbox/i.test(h.name)) h = await h.getDirectoryHandle('Inspection Toolbox', { create: true });   // picked a parent folder: make it inside
   await odLoad(); OD.root = h; await odSave();
   if (await odMigrate(h)) toast('📁 Folder reorganised into the new layout', 4000);
   for (const n of await odFolderAssets(h)) if (!ASSETS.list.some(a => odAF(a.id).toLowerCase() === n.toLowerCase())) { const un = ASSETS.list.find(a => !a.name && a.id === ASSETS.list[0].id && !PACK && !S.pidlib.items.length && !S.systems.length); if (un) { un.name = n; await DB.put('meta', ASSETS); } else await newAsset(n); }

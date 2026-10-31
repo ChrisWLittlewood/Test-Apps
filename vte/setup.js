@@ -23,7 +23,7 @@ function renderSetup(step) {
       <button class="btn primary block" data-action="setupImport">⬆ Yes – import it</button>
       ${pc ? `<p class="small">Already set up on another PC with the shared OneDrive folder? Choose <b>No</b> – linking the same folder in a moment brings everything across.</p>` : `<p class="small">Set up on your PC first? Choose <b>Yes</b> and pick the PC's sync file from <b>OneDrive</b> › Inspection Toolbox › 0 Shared - settings &amp; reference › Device sync.</p>`}</div>${nav(true, 'No – start fresh ›')}`;
   if (step === 'me') h = `<div class="card"><h2>🙂 About you</h2><p class="small muted">Used on every report and sheet you make.</p>${inputHTML('settings', 'inspectorName', S.settings.inspectorName, 'Your name (Authorised Inspector)')}${inputHTML('settings', 'position', S.settings.position, 'Position / title')}</div>${nav(true, 'Next ›', `href="#" data-action="setupMe" data-next="${next}"`)}`;
-  if (step === 'folder') h = `<div class="card"><h2>📁 Your shared folder</h2><p>Pick your <b>OneDrive Documents</b> folder (e.g. <i>OneDrive – Shell › Documents</i>). The app makes an <b>Inspection Toolbox</b> folder there:</p>
+  if (step === 'folder') h = `<div class="card"><h2>📁 Your shared folder</h2><p>The app keeps everything in an <b>Inspection Toolbox</b> folder in your <b>OneDrive Documents</b>:</p>
       <pre class="setup-tree">Inspection Toolbox
 ├─ ${OD_SHARED}
 │   ├─ ${OD_SH.refs}
@@ -31,7 +31,7 @@ function renderSetup(step) {
 │   └─ ${OD_SH.backups}
 └─ <i>one folder per asset</i></pre>
       ${OD?.root ? `<p>✓ Linked: <b>${esc(OD.root.name)}</b>${ASSETS.list.some(a => a.name) ? ` · assets: ${ASSETS.list.filter(a => a.name).map(a => esc(a.name)).join(', ')}` : ''}</p><button class="btn ghost block" data-action="setupFolder">📁 Choose a different folder</button>` : `<button class="btn primary block" data-action="setupFolder">📁 Choose the folder</button>`}
-      <p class="small muted">Your browser asks to let the app use the folder – choose <b>Allow</b> (and “Allow on every visit” if offered). Using an existing Inspection Toolbox folder? Its assets are found automatically.</p></div>${nav(true, OD?.root ? 'Next ›' : 'Skip ›')}`;
+      <p class="small"><b>When the window opens:</b> go to <b>OneDrive – Shell › Documents</b> → <b>New folder</b> → name it <b>Inspection Toolbox</b> → open it → <b>Select Folder</b> → <b>Allow</b>. Chrome won't give a website the whole Documents folder (“contains system files”), so the app needs its own folder. Already have one from another PC? Just pick it – its assets are found automatically.</p></div>${nav(true, OD?.root ? 'Next ›' : 'Skip ›')}`;
   if (step === 'assets') { const named = ASSETS.list.filter(a => a.name);
     h = `<div class="card"><h2>📍 Your assets</h2><p>Add each asset you inspect – for example <b>Leman Alpha</b>, then <b>Clipper</b>. Each gets its own data pack, P&amp;IDs and piping systems${OD?.root ? ', and its own folder' : ''}.</p>
       ${named.length ? `<ul class="ticks">${named.map(a => `<li><b>${esc(a.name)}</b></li>`).join('')}</ul>` : '<p class="small muted">No assets yet.</p>'}

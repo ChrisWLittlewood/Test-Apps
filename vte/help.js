@@ -15,7 +15,7 @@ const HELP = [
     <li><b>Install the app</b> – it gets its own desktop / home-screen shortcut and works offline.</li>
     <li><b>From another device?</b> Import a backup or sync file – or, on a second PC, just link the same shared folder and the scan brings everything across.</li>
     <li><b>Your name and position</b> – they go on every report.</li>
-    <li><b>Shared folder</b> (PC): pick your OneDrive <i>Documents</i>; the app makes <b>Inspection Toolbox</b> with <i>0 Shared - settings &amp; reference</i> and a folder per asset.</li>
+    <li><b>Shared folder</b> (PC): in OneDrive › Documents make a <b>New folder</b> called <i>Inspection Toolbox</i> and pick it; the app fills it with <i>0 Shared - settings &amp; reference</i> and a folder per asset.</li>
     <li><b>Assets</b>: add each one – e.g. Leman Alpha, then Clipper.</li>
     <li><b>Put your files in</b>: reference documents in <i>0 Shared › Reference documents</i>; each asset's data pack in <i>&lt;asset&gt; › 1 Data pack</i> and its P&amp;IDs in <i>&lt;asset&gt; › 2 P&amp;IDs</i>. Piping systems can wait.</li>
     <li><b>🔍 Scan the folder</b>: data packs are installed, P&amp;IDs and reference documents imported, and you're offered the AI scans (only if authorised – if in doubt, ask!). It also lists what's still missing.</li></ol>
@@ -116,7 +116,7 @@ const HELP = [
     <p class="small">Everything is read on the PC – nothing is uploaded anywhere. Company devices only (or Workspace Connect): no company data on personal devices.</p>` },
   { id: 'promo', t: 'Promo & info – advert video and guide', b: `<p><b>Settings → 🎬 Promo & info</b> plays the Inspection Toolbox advert – it streams when you have signal, and <i>⬇ Save for offline</i> keeps a copy on this device. It also holds the owner's guide PDF: add it once per device and it travels in the 📤 asset pack. Use them to show the team or share with new users – internally only.</p>` },
   { id: 'onedrive', t: 'The shared folder – store, send and pick up files', b: `
-    <p>On a <b>PC (Chrome or Edge)</b> the app links a folder in your OneDrive <i>Documents</i> (the setup wizard does it, or Settings &amp; tools → 📁 Set up shared folder):</p>
+    <p>On a <b>PC (Chrome or Edge)</b> the app links an <b>Inspection Toolbox</b> folder in your OneDrive <i>Documents</i> (the setup wizard does it, or Settings &amp; tools → 📁 Set up shared folder). In the window: go to OneDrive › Documents → <b>New folder</b> → <i>Inspection Toolbox</i> → open it → <b>Select Folder</b> → Allow. Chrome won't give a website the whole Documents folder (“can't open this folder because it contains system files”), which is why the app needs its own folder.</p>
     <pre class="setup-tree">Inspection Toolbox
 ├─ 0 Shared - settings &amp; reference
 │   ├─ Reference documents
