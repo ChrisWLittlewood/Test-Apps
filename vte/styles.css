@@ -629,3 +629,11 @@ body.dragging::after{content:attr(data-drop);position:fixed;inset:12px;border:4p
 .pack-notes{background:rgba(127,127,127,.08);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:.9em}
 .cls-ed{border-top:2px solid var(--line);margin-top:10px;padding-top:8px}.cls-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
 .cls-tbl{width:100%;border-collapse:collapse;font-size:.85em;margin:6px 0}.cls-tbl th{text-align:left;color:var(--muted);font-weight:600;padding:2px 3px}.cls-tbl td{padding:2px 3px}.cls-tbl input{width:100%;box-sizing:border-box;padding:4px 6px;min-height:0;font-size:.95em}
+
+.ca-res{display:flex;flex-direction:column;margin-top:6px}.ca-row{display:grid;grid-template-columns:90px 1fr;gap:0 10px;padding:8px 6px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.ca-row small{grid-column:2;color:var(--muted)}
+.ca-head .ca-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.ca-code{font-size:1.6rem;font-weight:800;color:var(--navy)}
+.ca-sizes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.ca-size{display:flex;flex-direction:column;align-items:center;min-width:58px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink);background:var(--card)}.ca-size small{color:var(--muted);font-size:.75em}.ca-size.on{background:var(--navy);color:#fff;border-color:var(--navy)}.ca-size.on small{color:#dfe8f1}
+.ca-t{width:100%;border-collapse:collapse;margin:4px 0 6px}.ca-t th{text-align:left;font-weight:500;color:var(--muted);padding:6px 8px 6px 0;width:42%;vertical-align:top}.ca-t td{padding:6px 0;border-bottom:1px solid var(--line)}.ca-t tr.ca-ps td{font-size:1.05em}.ca-t tr.ca-ps th{color:var(--ink);font-weight:700}
+.ca-sw{display:flex;flex-direction:column;gap:6px;margin:6px 0}.ca-sw span{display:flex;align-items:center;gap:8px;font-size:.9em}.ca-sw i{width:34px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.25);flex:none}
+.ca-scroll{overflow-x:auto}.ca-pt{border-collapse:collapse;font-size:.85em}.ca-pt th,.ca-pt td{padding:4px 7px;border:1px solid var(--line);text-align:center;white-space:nowrap}.ca-pt tr>th:first-child{text-align:left}
+.ca-mrwt{margin-top:8px}
