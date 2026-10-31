@@ -405,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.18.0';
+const APP_VERSION = '2.18.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -569,6 +569,8 @@ function renderSettings() {
     <small class="muted">Kept only on this phone. Reports already written keep their own copies of plot plans.</small></div>
   <div class="card"><h3>App version</h3><p>Version <b>v${APP_VERSION}</b>. Updates install by themselves when the app is opened with signal.</p>
     <button class="btn ghost block" data-action="forceUpdate">⟳ Force update now</button><p class="small muted">Use this if a new version isn't showing. Your reports, photos and data pack are kept.</p></div>
+  <div class="card danger-card"><h3>🧹 Reset app on this device</h3><p class="small">Wipes everything the app has stored on <b>this device</b> – reports, photos, sketches, data packs, P&amp;IDs, reference documents, settings and the link to the shared folder – and starts again at the setup wizard. <b>Your OneDrive folder and its files are not touched.</b></p>
+    <button class="btn ghost block danger-t" data-action="resetApp">🧹 Reset app…</button><p class="small muted">To remove the app itself: PC – open the app's ⋮ menu → Uninstall; Android – long-press the icon → Uninstall / Remove.</p></div>
   <div class="card"><h3>📷 Report logo</h3><p class="small muted">The report header uses the logo from the data pack. To use a different one, pick an image – it is stored on this phone only.</p>
     <div class="grid2"><button class="btn ghost" data-action="pickLogo">🖼 Choose logo</button>${st.logoId ? '<button class="btn ghost" data-action="clearLogo">Use data pack logo</button>' : ''}</div></div>
   <div class="card"><h3>About</h3>
@@ -1707,6 +1709,23 @@ const actions = {
   exportReport: async () => { const r = cur.report; toast('Preparing backup…'); saveOut('backup', {}, await makeBackup([cur.system], [r]), `VTE_backup_${safeName(r.h?.tagNo)}_${todayISO()}.json`, 'VTE backup'); },
   sendToPhone: async () => { toast('Packing this system…'); saveOut('prep', { system: cur.system.name }, await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `Prep_${safeName(cur.system.name)}_${todayISO()}.json`, 'Inspection Toolbox export'); },
   exportSystem: async () => { toast('Preparing backup…'); saveOut('backup', {}, await makeBackup([cur.system], S.reports.filter(r => r.systemId === cur.system.id)), `VTE_backup_${safeName(cur.system.name)}_${todayISO()}.json`, 'VTE backup'); },
+  resetApp: async () => {
+    const r = await modal('🧹 Reset app on this device', `<p>This deletes <b>everything</b> the app has stored on this device and can't be undone:</p>
+      <ul class="small"><li>${S.reports.length} line report${S.reports.length === 1 ? '' : 's'} in ${S.systems.length} system${S.systems.length === 1 ? '' : 's'} on this asset (and any on other assets), with photos and signatures</li><li>sketches, flange sheets, face inspections</li><li>data packs, P&amp;IDs, reference documents, acceptance values</li><li>settings, AI key, assets and the shared-folder link</li></ul>
+      <p class="small">Not touched: your OneDrive folder and its files, and anything already synced to your other devices.</p>
+      <label class="imp-row"><input type="checkbox" name="ok" value="" data-cv> <span>I understand – everything on this device will be deleted</span></label>`,
+      [['Cancel', ''], ['⬇ Backup first', 'backup'], ['🧹 Reset', 'reset', 'danger']]);
+    if (!r) return; if (r.v === 'backup') return actions.exportAll();
+    if (r.vals.ok !== 'yes') return toast('Tick the box to confirm', 3000);
+    toast('Resetting…', 10000);
+    try { DB.db?.close(); } catch { }
+    await new Promise(res => { const q = indexedDB.deleteDatabase('vte-inspect'); q.onsuccess = q.onerror = q.onblocked = () => res(); });
+    try { for (const k of await caches.keys()) await caches.delete(k); } catch { }
+    try { for (const reg of await navigator.serviceWorker?.getRegistrations?.() || []) await reg.unregister(); } catch { }
+    try { localStorage.clear(); sessionStorage.clear(); } catch { }
+    location.replace(location.pathname + '#/');
+    setTimeout(() => location.reload(), 300);
+  },
   forceUpdate: () => forceUpdate(),
   checkUpdate: async el => {
     if (!navigator.onLine) return toast('No signal – try again when online');
