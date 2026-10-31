@@ -670,3 +670,5 @@ body:has(#bottombar:not([hidden])) .aijob{bottom:76px}
 .pidv-link:hover,.pidv-link:focus{background:rgba(31,143,255,.38)}
 .pidv-links{display:flex;gap:6px;align-items:center;padding:6px 10px;background:#0f1216;overflow-x:auto;white-space:nowrap;font-size:.8rem}
 .pidv-links .btn{color:#cfe6ff;border-color:#2b6cb0;flex:none}.pidv-links>small{opacity:.7;flex:none}
+.pidv-txt{position:absolute;display:none;outline:1px solid rgba(0,170,80,.8);background:rgba(0,200,90,.08);pointer-events:auto}
+.pidv.show-txt .pidv-txt{display:block}

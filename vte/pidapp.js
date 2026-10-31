@@ -235,23 +235,49 @@ function pidStacks(P) {   // text written in a stack (one piece under the other)
       if (best < 0) break; cur.push(best); s0 += P.loose[best]; last = I[best]; out.push({ L: s0, ids: [...cur] }); } });
   return (P._stk = out);
 }
+/* text runs for finding drawing numbers: pieces of text on one line (or up a rotated line) that touch, however the PDF
+   split them – some CAD PDFs write every character separately */
+function pidChains(P, ar) {
+  if (P._ch) return P._ch; const I = P.items, out = [], vert = I.map(a => a[4] > (a[5] || a[4]) * 1.6 && a[4] > a[3] * 1.2);
+  const run = (ids, along, across, len) => {   // group ids that sit on one line along an axis
+    const used = new Set();
+    for (const i of ids) { if (used.has(i)) continue; const chain = [i]; used.add(i);
+      for (let grow = true; grow;) { grow = false; const last = I[chain[chain.length - 1]];
+        let best = -1, bd = 1e9;
+        for (const j of ids) { if (used.has(j)) continue; const b = I[j], fh = Math.max(last[5] || 0.004, b[5] || 0.004);
+          if (Math.abs(across(b) - across(last)) > fh * 0.6) continue; const gap = along(b) - (along(last) + len(last)); if (gap < -fh * 0.5 || gap > fh * 1.6) continue; if (gap < bd) { bd = gap; best = j; } }
+        if (best >= 0) { chain.push(best); used.add(best); grow = true; } }
+      if (chain.length > 1) out.push(chain); }
+  };
+  const H = I.map((a, i) => i).filter(i => !vert[i]).sort((x, y) => I[x][1] - I[y][1]), V = I.map((a, i) => i).filter(i => vert[i]).sort((x, y) => I[x][2] - I[y][2]);
+  run(H, a => a[1] * ar, a => a[2] + a[4] / 2, a => a[3] * ar);   // x in page-height units so gaps compare with the font size
+  run(V, a => a[2], a => (a[1] + a[3] / 2) * ar, a => a[4]);
+  const ch = []; for (const c of out) { const f = c.map(i => P.loose[i]); ch.push({ ids: c, parts: f }, { ids: [...c].reverse(), parts: [...f].reverse() }); }   // rotated text can read either way
+  for (const st of pidStacks(P)) ch.push({ ids: st.ids, parts: st.ids.map(i => P.loose[i]) });
+  for (const r of P.rows) ch.push({ ids: r.ids, parts: r.ids.map(i => P.loose[i]) });
+  return (P._ch = ch);
+}
+function pidFind(P, ar, key) {   // every place a (loose) number is written: [[item ids], …]
+  const hits = [];
+  P.loose.forEach((l, i) => { if (pidKAt(l, key) >= 0) hits.push([i]); });
+  for (const c of pidChains(P, ar)) { const L = c.parts.join(''); const at = pidKAt(L, key); if (at < 0) continue; let pos = 0; const span = [];
+    c.ids.forEach((i, n) => { const a = pos, b = pos + c.parts[n].length; if (b > at && a < at + key.length) span.push(i); pos = b; });
+    if (span.length && !hits.some(h => h.some(i => span.includes(i)))) hits.push(span); }
+  return hits;
+}
+function pidKeys(dwgNo) {   // the number as written in full, without a sheet suffix, and the short form connectors often use (175-021)
+  const seg = pnorm(dwgNo).split(/[^A-Z0-9]+/).filter(Boolean), out = [seg.join('')];
+  if (seg.length >= 4 && seg[seg.length - 1].length <= 3) out.push(seg.slice(0, -1).join(''));
+  if (seg.length >= 3) { const sh = seg.slice(-2).join(''); if (sh.length >= 5 && /\d/.test(sh)) out.push(sh); }
+  return [...new Set(out)].filter(k => k.length >= 5);
+}
 function pidLinks(it, P) {
-  const own = pidLoose(it.dwgNo), seen = new Map();
+  const own = pidLoose(it.dwgNo), ownKeys = pidKeys(it.dwgNo || ''), seen = new Map(), ar = (it.w || 1) / (it.h || 1);
   for (const o of S.pidlib.items) { if (!o.dwgNo) continue; const k = pidLoose(o.dwgNo); if (k.length < 6 || k === own) continue; const cur = seen.get(k); if (!cur || (o.page || 1) < (cur.page || 1)) seen.set(k, o); }
   const out = [];
   for (const [k, o] of seen) {
-    const boxes = [];
-    if (P) {
-      P.loose.forEach((l, i) => { if (l.length >= 4 && pidKAt(l, k) >= 0) boxes.push([i]); });   // the number in one piece of text (also rotated text)
-      if (!boxes.length) for (const r of P.rows) { const at = pidKAt(r.L, k); if (at < 0) continue; let pos = 0; const span = [];
-        for (const i of r.ids) { const a = pos, b = pos + P.loose[i].length; if (b > at && a < at + k.length) span.push(i); pos = b; } if (span.length) boxes.push(span); }
-      if (!boxes.length) for (const st of pidStacks(P)) if (pidKAt(st.L, k) >= 0 && !boxes.some(bx => bx.some(i => st.ids.includes(i)))) boxes.push(st.ids);
-      if (!boxes.length && !own.endsWith(pnorm(o.dwgNo).split(/[^A-Z0-9]+/).filter(Boolean).slice(-2).join(''))) {   // connectors often give just the end of the number (e.g. 175-021 for A-30-175-021)
-        const seg = pnorm(o.dwgNo).split(/[^A-Z0-9]+/).filter(Boolean), short = seg.length >= 3 ? seg.slice(-2).join('') : '';
-        if (short.length >= 5 && /\d/.test(short)) { P.loose.forEach((l, i) => { if (pidKAt(l, short) >= 0 && (l.length <= short.length + 8)) boxes.push([i]); });
-          if (!boxes.length) for (const r of P.rows) { const at = pidKAt(r.L, short); if (at < 0) continue; let pos = 0; const span = []; for (const i of r.ids) { const a = pos, b = pos + P.loose[i].length; if (b > at && a < at + short.length) span.push(i); pos = b; } if (span.length) boxes.push(span); } }
-      }
-    }
+    let boxes = [];
+    if (P) for (const key of pidKeys(o.dwgNo)) { if (key !== k && ownKeys.includes(key)) continue; boxes = pidFind(P, ar, key); if (boxes.length) break; }
     const ai = it.ai && [...(it.ai.refs || []), ...(it.ai.tags || []), ...(it.ai.lines || [])].some(x => pidKAt(pidLoose(x), k) >= 0);
     if (boxes.length || ai) out.push({ o, k, boxes });
   }
@@ -273,14 +299,23 @@ async function openPidViewer(id, boxes = [], q = '', from = null) {
   const links = pidLinks(it, P); if (!from) PIDV_HIST.length = 0;
   const ov = document.createElement('div'); ov.className = 'pidv';
   ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
-      <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
+      <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="rot" title="Rotate the drawing">⟳</button>${P ? '<button class="btn ghost sm" data-pv="txt" title="Show the text the app can read on this drawing">🔤</button>' : ''}<button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
     ${links.length || PIDV_HIST.length ? `<div class="pidv-links">${PIDV_HIST.length ? `<button class="btn ghost sm" data-pv="back">‹ ${esc(PIDV_HIST[PIDV_HIST.length - 1].label)}</button>` : ''}${links.length ? `<small>🔗 Continues on${!P ? ' <i>(scanned drawing – no text to outline, use these)</i>' : links.some(l => !l.boxes.length) ? ' <i>(outlined on the drawing where found)</i>' : ''}:</small>${links.map((l, i) => `<button class="btn ghost sm" data-pvgo="${i}" title="${esc(l.o.desc || l.o.title)}">${esc(l.o.dwgNo)}</button>`).join('')}` : ''}</div>` : ''}
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
-    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" style="left:${a[1] * 100}%;top:${a[2] * 100}%;width:${a[3] * 100}%;height:${a[4] * 100}%"></i>`; }).join('')}${P ? links.flatMap((l, i) => l.boxes.map(ids => { const [x, y, w, h] = pidBoxRect(P, ids); return `<a class="pidv-link" data-pvgo="${i}" role="button" tabindex="0" title="Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"></a>`; })).join('') : ''}</div></div>`;
+    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${P ? P.items.map(a => `<i class="pidv-txt" data-r="${a[1]},${a[2]},${a[3]},${a[4]}" title="${esc(a[0])}"></i>`).join('') : ''}${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" data-r="${a[1]},${a[2]},${a[3]},${a[4]}"></i>`; }).join('')}${P ? links.flatMap((l, i) => l.boxes.map(ids => { const [x, y, w, h] = pidBoxRect(P, ids); return `<a class="pidv-link" data-pvgo="${i}" role="button" tabindex="0" title="Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" data-r="${x},${y},${w},${h}"></a>`; })).join('') : ''}</div></div>`;
   document.body.append(ov); document.body.classList.add('noscroll');
   const sc = $('.pidv-scroll', ov), pg = $('.pidv-page', ov); let z = 1, k = 0;
-  const fitW = () => Math.min(sc.clientWidth, sc.clientHeight * it.w / it.h) || sc.clientWidth;
+  let rot = it.rot || 0, rurl = null; const img = $('img', pg);
+  const rotR = ([x, y, w, h]) => rot === 1 ? [1 - y - h, x, h, w] : rot === 2 ? [1 - x - w, 1 - y - h, w, h] : rot === 3 ? [y, 1 - x - w, h, w] : [x, y, w, h];
+  const place = () => $$('[data-r]', pg).forEach(el => { const [x, y, w, h] = rotR(el.dataset.r.split(',').map(Number)); Object.assign(el.style, { left: x * 100 + '%', top: y * 100 + '%', width: w * 100 + '%', height: h * 100 + '%' }); });
+  const showRot = async () => {   // turn the picture itself, so zoom and scrolling work as normal
+    if (rurl) { URL.revokeObjectURL(rurl); rurl = null; }
+    if (rot) { const bmp = await createImageBitmap(blob); const c = document.createElement('canvas'); const sw = rot % 2; c.width = sw ? bmp.height : bmp.width; c.height = sw ? bmp.width : bmp.height; const g = c.getContext('2d'); g.translate(c.width / 2, c.height / 2); g.rotate(rot * Math.PI / 2); g.drawImage(bmp, -bmp.width / 2, -bmp.height / 2); rurl = URL.createObjectURL(await canvasToBlob(c, 'image/jpeg', 0.9)); c.width = c.height = 1; }
+    img.src = rurl || url; place();
+  };
+  place(); if (rot) showRot();
+  const fitW = () => Math.min(sc.clientWidth, sc.clientHeight * (rot % 2 ? it.h / it.w : it.w / it.h)) || sc.clientWidth;
   const setZ = (nz, cx = 0.5, cy = 0.5) => { const fx = (sc.scrollLeft + sc.clientWidth * cx) / pg.offsetWidth, fy = (sc.scrollTop + sc.clientHeight * cy) / pg.offsetHeight; z = Math.max(1, Math.min(12, nz)); pg.style.width = fitW() * z + 'px'; sc.scrollLeft = fx * pg.offsetWidth - sc.clientWidth * cx; sc.scrollTop = fy * pg.offsetHeight - sc.clientHeight * cy; };
   const goHit = () => { const bs = $$('.pidv-box', ov); if (!bs.length) return; bs.forEach(b => b.classList.remove('on')); const b = bs[k]; b.classList.add('on'); if (z < 4) setZ(4); requestAnimationFrame(() => { sc.scrollLeft = b.offsetLeft + b.offsetWidth / 2 - sc.clientWidth / 2; sc.scrollTop = b.offsetTop + b.offsetHeight / 2 - sc.clientHeight / 2; }); $('.pidv-hits span', ov).textContent = `${k + 1} of ${bs.length}`; };
   requestAnimationFrame(() => { setZ(1); if (boxes.length) goHit(); });
@@ -289,7 +324,7 @@ async function openPidViewer(id, boxes = [], q = '', from = null) {
   sc.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z }; } });
   sc.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; setZ(pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d); } });
   const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; }; sc.addEventListener('pointerup', up); sc.addEventListener('pointercancel', up);
-  const shut = () => { URL.revokeObjectURL(url); ov.remove(); document.body.classList.remove('noscroll'); };
+  const shut = () => { URL.revokeObjectURL(url); if (rurl) URL.revokeObjectURL(rurl); ov.remove(); document.body.classList.remove('noscroll'); };
   const goTo = async (tid, tb, tq) => { shut(); await openPidViewer(tid, tb, tq, true); };
   ov.addEventListener('click', async e => {
     const g = e.target.closest('[data-pvgo]');
@@ -302,6 +337,8 @@ async function openPidViewer(id, boxes = [], q = '', from = null) {
     if (a === 'back') { const h = PIDV_HIST.pop(); if (h) return goTo(h.id, h.boxes, h.q); }
     if (a === 'close') { PIDV_HIST.length = 0; shut(); }
     if (a === 'in') setZ(z * 1.5); if (a === 'out') setZ(z / 1.5); if (a === 'fit') setZ(1);
+    if (a === 'rot') { rot = (rot + 1) % 4; it.rot = rot || undefined; savePidLib(); await showRot(); setZ(1); }
+    if (a === 'txt') { ov.classList.toggle('show-txt'); toast(ov.classList.contains('show-txt') ? '🔤 Every piece of text the app can read is outlined in green' : 'Text outlines off', 3500); }
     const n = $$('.pidv-box', ov).length; if (a === 'next' && n) { k = (k + 1) % n; goHit(); } if (a === 'prev' && n) { k = (k - 1 + n) % n; goHit(); }
   });
 }
