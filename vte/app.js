@@ -405,7 +405,7 @@ function modal(title, bodyHtml, buttons = [['Cancel', ''], ['OK', 'ok', 'primary
 const confirmBox = (title, msg, ok = 'Delete') => modal(title, `<p>${esc(msg)}</p>`, [['Cancel', ''], [ok, 'ok', 'danger']]).then(r => !!r);
 
 /* ================= app updates ================= */
-const APP_VERSION = '2.25.0';
+const APP_VERSION = '2.25.1';
 function setupUpdates() {
   const hadController = !!navigator.serviceWorker.controller; let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', async () => {
@@ -1498,8 +1498,8 @@ async function assetPick() {
 async function loadPack() {
   Object.values(PACK_URLS).forEach(u => URL.revokeObjectURL(u)); for (const k in PACK_URLS) delete PACK_URLS[k];
   const p = await DB.get('meta', AK('pack')); PACK = p || null;
-  if (typeof classDbLoad === 'function') { if (!CLASSDB) await classDbLoad(); await classDbSeed(p); }
-  PIPE_CLASSES = typeof classesMerged === 'function' ? classesMerged(p?.pipeClasses) : (p?.pipeClasses || []); PIPE_SOURCES = { ...(p?.pipeSources || {}), ...(CLASSDB?.sources || {}) }; PLOT_LIBRARY = p?.plot || { asset: '', drawings: [] };
+  if (typeof classDbLoad === 'function') { if (typeof CLASSDB === 'undefined' || !CLASSDB) await classDbLoad(); await classDbSeed(p); }
+  PIPE_CLASSES = typeof classesMerged === 'function' ? classesMerged(p?.pipeClasses) : (p?.pipeClasses || []); PIPE_SOURCES = { ...(p?.pipeSources || {}), ...((typeof CLASSDB !== 'undefined' && CLASSDB?.sources) || {}) }; PLOT_LIBRARY = p?.plot || { asset: '', drawings: [] };
   if (p) for (const k of p.images || []) { const b = await getBlob(AK('pack') + '_' + k); if (b) PACK_URLS[k] = URL.createObjectURL(b); }
 }
 async function importPack(file) {
@@ -1830,7 +1830,7 @@ window.addEventListener('hashchange', route);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSaves().catch(() => { }); });
 
 /* ================= boot ================= */
-(async function boot() {
+async function boot() {
   try {
     await DB.open();
     S.settings = { ...DEFAULT_SETTINGS, ...(await DB.get('meta', 'settings') || {}) };
@@ -1843,4 +1843,6 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     if (typeof classDbLoad === 'function' && !CLASSDB) { await classDbLoad(); await loadPack(); }
     route(); if (typeof syncAuto === 'function') setTimeout(syncAuto, 2500);
   } catch (e) { $('#main').innerHTML = `<div class="card notice">Could not start: ${esc(e.message)}</div>`; }
-})();
+}
+// wait until every script has loaded (on a slow start the later apps' files may not have run yet)
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
