@@ -672,3 +672,6 @@ body:has(#bottombar:not([hidden])) .aijob{bottom:76px}
 .pidv-links .btn{color:#cfe6ff;border-color:#2b6cb0;flex:none}.pidv-links>small{opacity:.7;flex:none}
 .pidv-txt{position:absolute;display:none;outline:1px solid rgba(0,170,80,.8);background:rgba(0,200,90,.08);pointer-events:auto}
 .pidv.show-txt .pidv-txt{display:block}
+.pidv-link.ai{outline-style:dashed;background:rgba(31,143,255,.12)}
+.pidv-link.pin{outline-color:#00b3ff;outline-width:3px}
+.pidv.pinning .pidv-scroll{cursor:crosshair}.pidv.pinning .pidv-page{box-shadow:0 0 0 4px #e9b23a}

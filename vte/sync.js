@@ -57,7 +57,7 @@ async function syncMerge(zip, j) {
     let changed = 0; await pidIndex();
     for (const it of a.pids || []) {
       const have = S.pidlib.items.find(x => x.id === it.id);
-      if (have) { if (it.ai && (!have.ai || tms(it.ai._at) > tms(have.ai._at))) { have.ai = it.ai; have._rx = now; changed++; } if (it.desc && !have.desc) { have.desc = it.desc; changed++; } continue; }
+      if (have) { if (it.ai && (!have.ai || tms(it.ai._at) > tms(have.ai._at))) { have.ai = it.ai; have._rx = now; changed++; } if (it.desc && !have.desc) { have.desc = it.desc; changed++; } if (it.pins && tms(it.pinsAt) > tms(have.pinsAt)) { have.pins = it.pins; have.pinsAt = it.pinsAt; changed++; } continue; }
       const img = zip.file(`pid/${it.id}.jpg`); if (!img) continue;
       const old = S.pidlib.items.find(x => it.dwgNo && pnorm(x.dwgNo) === pnorm(it.dwgNo) && (x.page || 1) === (it.page || 1));
       if (old && tms(old.added) > tms(it.added)) continue;

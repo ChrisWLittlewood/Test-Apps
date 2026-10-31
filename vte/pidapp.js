@@ -279,12 +279,14 @@ function pidLinks(it, P) {
     let boxes = [];
     if (P) for (const key of pidKeys(o.dwgNo)) { if (key !== k && ownKeys.includes(key)) continue; boxes = pidFind(P, ar, key); if (boxes.length) break; }
     const ai = it.ai && [...(it.ai.refs || []), ...(it.ai.tags || []), ...(it.ai.lines || [])].some(x => pidKAt(pidLoose(x), k) >= 0);
-    if (boxes.length || ai) out.push({ o, k, boxes });
+    const rects = []; (it.pins || []).forEach((pn, n) => { if (pidLoose(pn.no) === k) rects.push([pn.x, pn.y, pn.w || 0.06, pn.h || 0.035, 'pin', n]); });   // placed by hand – exact
+    if (!boxes.length && !rects.length) for (const rp of it.ai?.refPos || []) if (pidKAt(pidLoose(rp.no), k) >= 0) rects.push([rp.x - 0.035, rp.y - 0.022, 0.07, 0.044, 'ai']);   // from the AI scan – roughly here
+    if (boxes.length || rects.length || ai) out.push({ o, k, boxes, rects });
   }
   if (own.length >= 6) for (const o of S.pidlib.items) {   // drawings that point to this one, even if this one doesn't name them (e.g. a scanned drawing)
     if (o.id === it.id || !o.dwgNo || out.some(x => x.k === pidLoose(o.dwgNo)) || pidLoose(o.dwgNo) === own) continue;
     const OP = PIDIDX?.get(o.id), byText = OP && OP.loose.some(l => pidKAt(l, own) >= 0), byAi = o.ai && (o.ai.refs || []).some(x => pidKAt(pidLoose(x), own) >= 0);
-    if (byText || byAi) out.push({ o, k: pidLoose(o.dwgNo), boxes: [] });
+    if (byText || byAi) out.push({ o, k: pidLoose(o.dwgNo), boxes: [], rects: [] });
   }
   return out.sort((a, b) => a.o.dwgNo.localeCompare(b.o.dwgNo, undefined, { numeric: true }));
 }
@@ -299,11 +301,11 @@ async function openPidViewer(id, boxes = [], q = '', from = null) {
   const links = pidLinks(it, P); if (!from) PIDV_HIST.length = 0;
   const ov = document.createElement('div'); ov.className = 'pidv';
   ov.innerHTML = `<div class="pidv-top"><button class="btn ghost sm" data-pv="close">✕</button><span><b>${esc(it.title)}</b>${it.dwgNo && !pnorm(it.title).startsWith(pnorm(it.dwgNo)) ? ` · ${esc(it.dwgNo)}` : ''}${it.rev ? ` · rev ${esc(it.rev)}` : ''}${it.desc ? `<br><small>${esc(it.desc)}</small>` : ''}</span>
-      <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="rot" title="Rotate the drawing">⟳</button>${P ? '<button class="btn ghost sm" data-pv="txt" title="Show the text the app can read on this drawing">🔤</button>' : ''}<button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
+      <span class="pidv-z"><button class="btn ghost sm" data-action="pidAiPick" data-id="${it.id}" title="AI index this drawing">🤖</button><button class="btn ghost sm" data-pv="pin" title="Link a connector by hand">📌</button><button class="btn ghost sm" data-pv="rot" title="Rotate the drawing">⟳</button>${P ? '<button class="btn ghost sm" data-pv="txt" title="Show the text the app can read on this drawing">🔤</button>' : ''}<button class="btn ghost sm" data-pv="out">－</button><button class="btn ghost sm" data-pv="fit">⤢</button><button class="btn ghost sm" data-pv="in">＋</button></span></div>
     <div class="pidv-disc">UNCONTROLLED COPY – check latest revision before use · library updated ${S.pidlib.updated ? fmtDate(S.pidlib.updated.slice(0, 10)) : '–'}</div>
-    ${links.length || PIDV_HIST.length ? `<div class="pidv-links">${PIDV_HIST.length ? `<button class="btn ghost sm" data-pv="back">‹ ${esc(PIDV_HIST[PIDV_HIST.length - 1].label)}</button>` : ''}${links.length ? `<small>🔗 Continues on${!P ? ' <i>(scanned drawing – no text to outline, use these)</i>' : links.some(l => !l.boxes.length) ? ' <i>(outlined on the drawing where found)</i>' : ''}:</small>${links.map((l, i) => `<button class="btn ghost sm" data-pvgo="${i}" title="${esc(l.o.desc || l.o.title)}">${esc(l.o.dwgNo)}</button>`).join('')}` : ''}</div>` : ''}
+    ${links.length || PIDV_HIST.length ? `<div class="pidv-links">${PIDV_HIST.length ? `<button class="btn ghost sm" data-pv="back">‹ ${esc(PIDV_HIST[PIDV_HIST.length - 1].label)}</button>` : ''}${links.length ? `<small>🔗 Continues on${links.some(l => !l.boxes.length && !l.rects?.length) ? ` <i>(${!P ? 'scanned drawing – ' : ''}not all found on the drawing – 📌 to place one)</i>` : ''}:</small>${links.map((l, i) => `<button class="btn ghost sm" data-pvgo="${i}" title="${esc(l.o.desc || l.o.title)}">${esc(l.o.dwgNo)}</button>`).join('')}` : ''}</div>` : ''}
     ${boxes.length ? `<div class="pidv-hits"><button class="btn ghost sm" data-pv="prev">‹</button><span></span><button class="btn ghost sm" data-pv="next">›</button><small>“${esc(q)}”</small></div>` : ''}
-    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${P ? P.items.map(a => `<i class="pidv-txt" data-r="${a[1]},${a[2]},${a[3]},${a[4]}" title="${esc(a[0])}"></i>`).join('') : ''}${(P ? boxes : []).map((i, k) => { const a = P.items[i]; return `<i class="pidv-box" data-k="${k}" data-r="${a[1]},${a[2]},${a[3]},${a[4]}"></i>`; }).join('')}${P ? links.flatMap((l, i) => l.boxes.map(ids => { const [x, y, w, h] = pidBoxRect(P, ids); return `<a class="pidv-link" data-pvgo="${i}" role="button" tabindex="0" title="Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" data-r="${x},${y},${w},${h}"></a>`; })).join('') : ''}</div></div>`;
+    <div class="pidv-scroll"><div class="pidv-page"><img src="${url}" alt="">${P ? P.items.map(a => `<i class="pidv-txt" data-r="${a[1]},${a[2]},${a[3]},${a[4]}" title="${esc(a[0])}"></i>`).join('') : ''}${boxes.map((i, k) => { const a = typeof i === 'object' ? [0, ...i.r] : P?.items[i]; return a ? `<i class="pidv-box" data-k="${k}" data-r="${a[1]},${a[2]},${a[3]},${a[4]}"></i>` : ''; }).join('')}${P ? links.flatMap((l, i) => l.boxes.map(ids => { const [x, y, w, h] = pidBoxRect(P, ids); return `<a class="pidv-link" data-pvgo="${i}" role="button" tabindex="0" title="Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" data-r="${x},${y},${w},${h}"></a>`; })).join('') : ''}${links.flatMap((l, i) => (l.rects || []).map(r => `<a class="pidv-link ${r[4]}" data-pvgo="${i}" ${r[4] === 'pin' ? `data-pin="${r[5]}"` : ''} role="button" tabindex="0" title="${r[4] === 'ai' ? 'About here (from the AI scan) – ' : ''}Open ${esc(l.o.dwgNo)}${l.o.desc ? ' – ' + esc(l.o.desc) : ''}" data-r="${r[0]},${r[1]},${r[2]},${r[3]}"></a>`)).join('')}</div></div>`;
   document.body.append(ov); document.body.classList.add('noscroll');
   const sc = $('.pidv-scroll', ov), pg = $('.pidv-page', ov); let z = 1, k = 0;
   let rot = it.rot || 0, rurl = null; const img = $('img', pg);
@@ -327,16 +329,27 @@ async function openPidViewer(id, boxes = [], q = '', from = null) {
   const shut = () => { URL.revokeObjectURL(url); if (rurl) URL.revokeObjectURL(rurl); ov.remove(); document.body.classList.remove('noscroll'); };
   const goTo = async (tid, tb, tq) => { shut(); await openPidViewer(tid, tb, tq, true); };
   ov.addEventListener('click', async e => {
+    if (ov.classList.contains('pinning') && !e.target.closest('.pidv-top, .pidv-links, .pidv-hits')) {
+      e.preventDefault(); ov.classList.remove('pinning'); const pinEl = e.target.closest('[data-pin]');
+      if (pinEl) { if (!await confirmBox('Remove this link', 'Remove the link you placed here?', 'Remove')) return; it.pins.splice(+pinEl.dataset.pin, 1); it.pinsAt = new Date().toISOString(); await savePidLib(); return goTo(id, boxes, q); }
+      const rc = pg.getBoundingClientRect(); let u = (e.clientX - rc.left) / rc.width, v = (e.clientY - rc.top) / rc.height; if (u < 0 || u > 1 || v < 0 || v > 1) return;
+      const [x, y] = rot === 1 ? [v, 1 - u] : rot === 2 ? [1 - u, 1 - v] : rot === 3 ? [1 - v, u] : [u, v];
+      const opts = [...new Map(S.pidlib.items.filter(o => o.dwgNo && o.id !== it.id && pidLoose(o.dwgNo) !== pidLoose(it.dwgNo)).map(o => [pidLoose(o.dwgNo), o])).values()].sort((a, b) => (links.some(l => l.o.id === b.id) - links.some(l => l.o.id === a.id)) || a.dwgNo.localeCompare(b.dwgNo, undefined, { numeric: true }));
+      const r = await modal('📌 Link this connector', `<p class="small">Which drawing does the line continue on? The link is saved with this drawing (and goes out in the asset data pack).</p><label class="field"><span>Drawing</span><select name="to">${opts.map(o => `<option value="${esc(o.dwgNo)}">${esc(o.dwgNo)}${o.desc ? ' – ' + esc(o.desc.slice(0, 50)) : ''}</option>`).join('')}</select></label>`, [['Cancel', ''], ['📌 Link it', 'ok', 'primary']]);
+      if (!r?.vals.to) return; it.pins = it.pins || []; const w = 0.06, h = 0.035; it.pins.push({ no: r.vals.to, x: Math.max(0, x - w / 2), y: Math.max(0, y - h / 2), w, h }); it.pinsAt = new Date().toISOString(); await savePidLib();
+      toast('📌 Linked to ' + r.vals.to); return goTo(id, boxes, q);
+    }
     const g = e.target.closest('[data-pvgo]');
     if (g) { e.preventDefault(); const l = links[+g.dataset.pvgo]; if (!l) return;
       PIDV_HIST.push({ id, boxes, q, label: it.dwgNo || it.title });
       const TP = (await pidIndex()).get(l.o.id); let tb = [];   // on the next drawing, highlight where it points back to this one
-      if (TP && it.dwgNo) { const back = pidLinks(l.o, TP).find(x => x.o.id === it.id || x.k === pidLoose(it.dwgNo)); if (back) tb = back.boxes.flat(); }
+      if (it.dwgNo) { const back = pidLinks(l.o, TP).find(x => x.o.id === it.id || x.k === pidLoose(it.dwgNo)); if (back) tb = back.boxes.length ? back.boxes.flat() : (back.rects || []).map(r => ({ r: r.slice(0, 4) })); }
       return goTo(l.o.id, tb, tb.length ? it.dwgNo : ''); }
     const a = e.target.closest('[data-pv]')?.dataset.pv; if (!a) return;
     if (a === 'back') { const h = PIDV_HIST.pop(); if (h) return goTo(h.id, h.boxes, h.q); }
     if (a === 'close') { PIDV_HIST.length = 0; shut(); }
     if (a === 'in') setZ(z * 1.5); if (a === 'out') setZ(z / 1.5); if (a === 'fit') setZ(1);
+    if (a === 'pin') { ov.classList.toggle('pinning'); toast(ov.classList.contains('pinning') ? '📌 Tap the connector on the drawing (tap a 📌 link to remove it)' : 'Cancelled', 4000); return; }
     if (a === 'rot') { rot = (rot + 1) % 4; it.rot = rot || undefined; savePidLib(); await showRot(); setZ(1); }
     if (a === 'txt') { ov.classList.toggle('show-txt'); toast(ov.classList.contains('show-txt') ? '🔤 Every piece of text the app can read is outlined in green' : 'Text outlines off', 3500); }
     const n = $$('.pidv-box', ov).length; if (a === 'next' && n) { k = (k + 1) % n; goHit(); } if (a === 'prev' && n) { k = (k - 1 + n) % n; goHit(); }
@@ -484,9 +497,10 @@ Object.assign(actions, {
 /* ---------- AI scan (run on the phone if the PC can't reach the AI service) ----------
    Reads each drawing image in 4 overlapping tiles so small text stays legible. Mostly for scanned P&IDs with no
    text layer, but also adds anything the PDF text missed. Results are searchable and travel in the library pack. */
-const PID_AI_SCHEMA = `{"dwgNo":"drawing number from the title block","rev":"revision","title":"the drawing title / description from the title block in the bottom-right corner, e.g. GAS COMPRESSION – 1ST STAGE SUCTION SCRUBBER (not just 'Piping and instrument diagram')",
+const PID_REF_HOW = tiles => `\nIn "refs" list every OTHER drawing number written at an off-page connector / continuation arrow (where a line leaves or arrives from another drawing) – not this drawing's own number. For each, give where the centre of that number is ${tiles ? 'in the image it appears in: "img" is 1 (top-left), 2 (top-right), 3 (bottom-left) or 4 (bottom-right), and x / y are fractions of that image\'s width and height measured from its top-left corner' : 'on the drawing: x / y are fractions of the drawing\'s width and height measured from its top-left corner'}.`;
+const PID_AI_SCHEMA = (tiles = false) => `{"dwgNo":"drawing number from the title block","rev":"revision","title":"the drawing title / description from the title block in the bottom-right corner, e.g. GAS COMPRESSION – 1ST STAGE SUCTION SCRUBBER (not just 'Piping and instrument diagram')",
 "lines":["every pipeline number exactly as written, e.g. 6\"-PX-20189-61472"],
-"tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"],"refs":["other drawing numbers named at the off-page connectors / continuation arrows where lines leave or arrive, e.g. A-30-175-021"]}`;
+"tags":["equipment, valve and instrument tags exactly as written, e.g. AK-V-2902, AK-HV-2301"],"refs":${tiles ? '[{"no":"A-30-175-021","img":2,"x":0.96,"y":0.41}]' : '[{"no":"A-30-175-021","x":0.96,"y":0.41}]'}}` + PID_REF_HOW(tiles);
 function pidAiWaiting(all) { return S.pidlib.items.filter(it => !it.ai && (all || !it.hasText)); }
 function pidAiHTML() {
   if (!S.pidlib.items.length) return '';
@@ -513,20 +527,27 @@ async function pidAiOne(it) {
   const blob = await getBlob(it.blobId); if (!blob) throw new Error('drawing missing');
   const tiles = await pidTiles(blob);
   const content = [...tiles.map(d => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: d } })),
-    { type: 'text', text: `These 4 images are the top-left, top-right, bottom-left and bottom-right quarters (slightly overlapping) of one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the drawing carefully, including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA}` }];
+    { type: 'text', text: `These 4 images are the top-left, top-right, bottom-left and bottom-right quarters (slightly overlapping) of one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the drawing carefully, including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA(true)}` }];
   const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({ model: S.settings.aiModel || 'claude-sonnet-5-5', max_tokens: 4000, messages: [{ role: 'user', content }] }) });
   if (!res.ok) throw new Error(`AI request failed (${res.status}) ${(await res.text()).slice(0, 120)}`);
-  pidAiApply(it, parseAiJson(((await res.json()).content || []).map(c => c.text || '').join('')), S.settings.aiModel || 'AI');
+  pidAiApply(it, parseAiJson(((await res.json()).content || []).map(c => c.text || '').join('')), S.settings.aiModel || 'AI', { tiles: true });
 }
-function pidAiApply(it, j, via) {
-  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), refs: (j.refs || []).map(String).slice(0, 60), title: j.title || '', _at: new Date().toISOString(), _via: via, _file: it.src || '', _rev: it.rev || '' };
+function pidRefPos(refs, tiles) {   // connector positions from the AI reply → fractions of the whole drawing
+  const ov = 0.08, out = [];
+  for (const r of refs || []) { if (!r || typeof r !== 'object' || !r.no) continue; let x = +r.x, y = +r.y; if (!isFinite(x) || !isFinite(y)) continue; if (x > 1.5 || y > 1.5) { x /= 100; y /= 100; }
+    if (tiles) { const t = Math.max(1, Math.min(4, +r.img || 1)) - 1, cx = t % 2, cy = t >= 2 ? 1 : 0, sz = 0.5 + ov; x = (cx ? 1 - sz : 0) + x * sz; y = (cy ? 1 - sz : 0) + y * sz; }
+    out.push({ no: String(r.no), x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) }); }
+  return out;
+}
+function pidAiApply(it, j, via, opts = {}) {
+  it.ai = { lines: (j.lines || []).map(String).slice(0, 400), tags: (j.tags || []).map(String).slice(0, 600), refs: (j.refs || []).map(r => typeof r === 'object' && r ? String(r.no || '') : String(r)).filter(Boolean).slice(0, 60), refPos: pidRefPos(j.refs, opts.tiles).slice(0, 60), title: j.title || '', _at: new Date().toISOString(), _via: via, _file: it.src || '', _rev: it.rev || '' };
   if (!it.desc && it.ai.title) it.desc = pidAiDesc(it.ai.title);
   if (!it.dwgNo && j.dwgNo) it.dwgNo = String(j.dwgNo); if (!it.rev && j.rev) it.rev = String(j.rev);
 }
 /* Copilot route – one drawing at a time: save the drawing, attach it in Copilot with the prompt, paste the reply back. */
-const pidCopilotPrompt = () => `The attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA}`;
+const pidCopilotPrompt = () => `The attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. Read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out. Reply with ONLY a JSON object in exactly this shape:\n${PID_AI_SCHEMA()}`;
 async function pidCopilot(id) {
   const it = S.pidlib.items.find(x => x.id === id); if (!it) return;
   try { await navigator.clipboard.writeText(pidCopilotPrompt()); toast('Prompt copied', 2500); } catch { }
@@ -791,7 +812,7 @@ async function assetImportRun(zip, a, pj, r, quiet) {
     for (const [k, it] of pj.items.entries()) {
       prog.set(k, pj.items.length, it.title); if (k % 10 === 0) await tick();
       const old = S.pidlib.items.find(x => x.id === it.id || (it.dwgNo && pnorm(x.dwgNo) === pnorm(it.dwgNo) && (x.page || 1) === (it.page || 1)) || (!it.dwgNo && x.title === it.title));
-      if (old && pnorm(old.rev) === pnorm(it.rev) && (old.ai || !it.ai)) { sum.same++; continue; }
+      if (old && pnorm(old.rev) === pnorm(it.rev) && (old.ai || !it.ai)) { if (it.pins && Date.parse(it.pinsAt || 0) > Date.parse(old.pinsAt || 0)) { old.pins = it.pins; old.pinsAt = it.pinsAt; } sum.same++; continue; }
       if (old && pnorm(old.rev) !== pnorm(it.rev) && Date.parse(old.added || 0) > Date.parse(it.added || 0)) { sum.same++; continue; }   // the copy on this device is a newer revision
       const img = zip.file(`img/${it.id}.jpg`); if (!img) continue;
       if (old) { sum.updated.push(`${it.dwgNo || it.title}${old.rev !== it.rev ? ` rev ${old.rev || '?'} → ${it.rev || '?'}` : ''}`); await pidDelete(old, true); } else sum.added++;
@@ -818,7 +839,7 @@ const PID_CP_TAG = /__(p_[a-z0-9]+)/i;
 const pidCpFileName = it => `${safeName(it.dwgNo || it.title)}${it.rev ? '_rev' + safeName(it.rev) : ''}${(it.page || 1) > 1 ? '_p' + it.page : ''}__${it.id}.jpg`;
 const pidCpBatchPrompt = () => `Each attached image is one P&ID (piping and instrumentation diagram) from a UK offshore platform. For EACH attached image, read the whole drawing carefully, zooming in where needed and including rotated text. List every pipeline number and every equipment / valve / instrument tag you can read, exactly as written, without duplicates. Do not guess unreadable characters – leave those items out.
 Reply with ONLY one JSON object in exactly this shape – one entry per attached image, with "file" set to the image's exact file name (it ends in a code like __p_abc123 – keep that code):
-{"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"],"refs":["other drawing numbers named at the off-page connectors / continuation arrows where lines leave or arrive, e.g. A-30-175-021"]}]}`;
+{"files":[{"file":"exact file name","dwgNo":"drawing number from the title block","rev":"revision","title":"drawing title / description from the title block (bottom right)","lines":["every pipeline number, e.g. 6\\"-PX-20189-61472"],"tags":["equipment, valve and instrument tags, e.g. AK-V-2902"],"refs":[{"no":"A-30-175-021","x":0.96,"y":0.41}]}]}${PID_REF_HOW(false)}`;
 async function pidCpExport(perIn) {
   const list = pidAiWaiting(true); if (!list.length) return toast('Every P&ID is already indexed');
   const r = perIn ? { vals: { per: perIn } } : await modal('📦 Export for Copilot', `<p><b>${list.length}</b> P&amp;ID page${list.length > 1 ? 's' : ''} not yet indexed (new or replaced). This saves one zip with each drawing as a sharp image, split into batches, plus the prompt.</p>
