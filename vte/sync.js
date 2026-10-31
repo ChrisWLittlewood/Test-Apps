@@ -38,7 +38,7 @@ async function syncBuild(full) {
     assets.push(ent);
   }
   const mf = { format: 'vte-sync', version: 1, created, device: SYNC.device, by: S.settings.inspectorName || '', full: since < 0, ack: Object.fromEntries(Object.entries(SYNC.peers).map(([k, p]) => [k, p.iMerged || ''])),
-    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
+    systems, reports, iso: TB.iso.items, fl: TB.fl.items, face: TB.face.items, assets, types, odLink: S.settings.odLink || '', crit: TB.crit.items, refs: { ai: TB.refs.ai || {}, manual: TB.refs.manual || {}, custom: TB.refs.custom || [] } };
   zip.file('sync.json', JSON.stringify(mf), J);
   return { blob: await zip.generateAsync({ type: 'blob' }), created, blobs: ids.size, pids: nPid, full: since < 0 };
 }
@@ -77,6 +77,7 @@ async function syncMerge(zip, j) {
   for (const c of j.refs?.custom || []) if (!(TB.refs.custom || []).some(x => x.key === c.key)) { (TB.refs.custom = TB.refs.custom || []).push(c); sum.refs++; }
   for (const part of ['ai', 'manual']) for (const [k, v] of Object.entries(j.refs?.[part] || {})) { TB.refs[part] = TB.refs[part] || {}; const l = TB.refs[part][k]; if (!l || tms(l.at) < tms(v.at)) { TB.refs[part][k] = v; sum.refs++; } }
   await DB.put('meta', TB.refs);
+  if (j.odLink && j.odLink !== S.settings.odLink && /^https:\/\//.test(j.odLink)) { S.settings.odLink = j.odLink; persist('settings'); }
   const p = SYNC.peers[j.device.id] = SYNC.peers[j.device.id] || {}; p.name = j.device.name; p.by = j.by || ''; p.iMerged = j.created; if (j.ack?.[SYNC.device.id]) p.theyHave = j.ack[SYNC.device.id];
   SYNC.lastIn = new Date().toISOString(); await syncSave();
   await setAsset(ASSETS.list.some(x => x.id === orig) ? orig : ASSETS.list[0].id); if (typeof imgCache !== 'undefined') imgCache.clear();

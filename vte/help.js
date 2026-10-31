@@ -122,6 +122,9 @@ const HELP = [
       <li><b>6 Backups</b> – Backup everything files.</li></ul>
     <p>Imports only read <b>new or changed</b> files. The browser asks to allow access to the folder – choose <i>Allow on every visit</i> if offered.</p>
     <p><b>On the phone:</b> when you import, choose <b>OneDrive</b> in the file picker and open the Inspection Toolbox folder; to save, use 📤 Share → OneDrive. Company data – company OneDrive only.</p>` },
+  { id: 'files', t: 'Paper Trail – the shared folder', b: `
+    <p><b>📂 Paper Trail</b> appears on the front page once the OneDrive folder is set up. On the <b>PC</b> it opens the <b>Inspection Toolbox</b> folder inside the app: tap folders to go in, 👁 open PDFs and pictures, ⬇ download anything, ⬆ add files (or drag them onto the page) and ＋ make folders. Each folder has its own shortcut – import new P&amp;IDs, add documents to Standard Issue, import a data pack, import a piping system's prep folder into IMSn't, or sync.</p>
+    <p>On the <b>phone</b> it opens the folder in the OneDrive app. Paste the folder's link once on the PC (Settings &amp; tools → OneDrive → <i>Folder link for phones</i>) – it reaches the phone with the next sync.</p>` },
   { id: 'sync', t: 'Sync between devices', b: `
     <p>Do the setup on your laptop and carry on on the phone. Each device keeps its own copy of everything; <b>🔄 Sync</b> keeps them in step through the OneDrive folder – no company sign-in needed.</p>
     <ul><li><b>PC</b> (OneDrive folder linked): <i>🔄 Sync now</i> – also runs by itself when the app opens and every 15 minutes. It merges anything the phone sent and writes the PC's own sync file into <b>Inspection Toolbox › 7 Sync</b>.</li>

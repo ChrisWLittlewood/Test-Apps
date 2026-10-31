@@ -110,7 +110,10 @@ async function addRef(key) {
 }
 async function openRef(key) {
   const it = TB.refs.items[key]; if (!it) return; const b = await getBlob(it.blobId); if (!b) return toast('File missing – add it again');
-  const d = allDocs().find(x => x.key === key);
+  const d = allDocs().find(x => x.key === key); return openPdfBlob(b, d?.name || it.name, it.name);
+}
+async function openPdfBlob(b, title, fileName) {   // offline PDF reader (reference documents, Paper Trail)
+  const d = { name: title }, it = { name: fileName || title };
   const ov = document.createElement('div'); ov.className = 'refview';
   ov.innerHTML = `<div class="annot-top"><button class="btn ghost" data-rv="close">✕ Close</button><span>${esc(d?.name || it.name)}</span><span class="rv-z"><button class="btn ghost sm" data-rv="zout">－</button><button class="btn ghost sm" data-rv="zin">＋</button></span></div>
     <div class="rv-pages"><p class="muted" style="padding:20px">Loading…</p></div>`;

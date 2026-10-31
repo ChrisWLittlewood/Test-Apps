@@ -64,6 +64,7 @@ function odCardHTML() {
     <p class="small"><b>Import from OneDrive</b> – only new or changed files:</p>
     <div class="grid2"><button class="btn ghost" data-action="odImport" data-k="pids">📐 New P&amp;IDs</button><button class="btn ghost" data-action="odImport" data-k="refs">📚 New reference documents</button>
       <button class="btn ghost" data-action="odImport" data-k="packs">📦 Data pack</button><button class="btn ghost" data-action="odImport" data-k="prep">🗂 Piping system prep</button></div>
+    <label class="field" style="margin-top:8px"><span>Folder link for phones <small class="muted">(optional)</small></span><input type="url" data-bind="settings" data-path="odLink" value="${esc(S.settings.odLink || '')}" placeholder="https://…sharepoint.com/…"><small>In OneDrive (web or File Explorer) right-click <b>Inspection Toolbox</b> → Share / Copy link, and paste it here. It goes to your phone with the next sync, so 📂 Paper Trail opens the folder there.</small></label>
     <div class="grid2" style="margin-top:6px"><button class="btn ghost sm" data-action="odConnect">📁 Change folder</button><button class="btn ghost sm danger-t" data-action="odDisconnect">Unlink</button></div></div>`;
 }
 /* ---- imports ---- */
@@ -74,13 +75,20 @@ function refKeyForFile(name) {
   for (const c of TB.refs.custom || []) if (pnorm(name).includes(pnorm(c.name))) return c.key;
   return (REF_MATCH.find(([, re]) => re.test(name)) || [])[0] || null;
 }
+/* import the new / changed P&IDs in any folder (used by Paper Trail); remembers what it read by full path */
+async function odImportPidsIn(dir, parts) {
+  await odLoad(); const scope = 'f/' + parts.join('/'); const all = await odFiles(dir, /\.(pdf|jpe?g|png|webp|zip)$/i);
+  const nw = all.filter(x => OD.seen[scope + '/' + x.path] !== odSig(x.file));
+  if (!nw.length) return modal('📐 P&IDs', `<p>No new or changed P&amp;IDs in <b>${esc(parts.join(' › '))}</b> (${all.length} already read).</p>`, [['OK', '', 'primary']]);
+  await pidImport(nw.map(x => x.file)); for (const x of nw) OD.seen[scope + '/' + x.path] = odSig(x.file); await odSave();
+}
 async function odImport(kind) {
   let root; try { root = await odDir([], false); } catch (e) { return toast('⚠ ' + e.message, 5000); }
   const sub = async parts => { let d = root; for (const p of parts) d = await d.getDirectoryHandle(odClean(p), { create: true }); return d; };
   const fresh = (scope, list) => list.filter(x => OD.seen[scope + '/' + x.path] !== odSig(x.file));
   const mark = async (scope, list) => { for (const x of list) OD.seen[scope + '/' + x.path] = odSig(x.file); await odSave(); };
   if (kind === 'pids') {
-    const scope = 'pids/' + assetName(); const all = await odFiles(await sub([OD_DIRS.pids, assetName()]), /\.(pdf|jpe?g|png|webp|zip)$/i); const nw = fresh(scope, all);
+    const scope = 'f/' + [OD_DIRS.pids, odClean(assetName())].join('/'); const all = await odFiles(await sub([OD_DIRS.pids, assetName()]), /\.(pdf|jpe?g|png|webp|zip)$/i); const nw = fresh(scope, all);
     if (!nw.length) return modal('📐 P&IDs', `<p>No new or changed files in <b>${esc(OD_DIRS.pids)} › ${esc(assetName())}</b> (${all.length} file${all.length === 1 ? '' : 's'} already read).</p>`, [['OK', '', 'primary']]);
     await pidImport(nw.map(x => x.file)); await mark(scope, nw); return;
   }
