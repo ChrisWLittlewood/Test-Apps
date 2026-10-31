@@ -3,7 +3,8 @@
    saves exports straight into the right place and imports new files from them. On a phone, files are picked from
    the OneDrive app and saved with Share → OneDrive. */
 const OD_DIRS = { packs: '1 Data packs', prep: '2 Piping system prep', pids: '3 P&IDs', refs: '4 Reference documents', reports: '5 Completed reports for IMS', backups: '6 Backups', sync: '7 Sync' };
-const odSupported = () => typeof window.showDirectoryPicker === 'function';
+const odMobile = () => navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const odSupported = () => typeof window.showDirectoryPicker === 'function' && !odMobile();   // phones can't link a OneDrive folder – the OneDrive app only hands over single files
 let OD = null;
 async function odLoad() { if (!OD) OD = (await DB.get('meta', 'onedrive')) || { id: 'onedrive', root: null, seen: {} }; OD.seen = OD.seen || {}; return OD; }
 const odSave = () => DB.put('meta', OD);
@@ -52,7 +53,10 @@ async function odConnect() {
   await odLoad(); OD.root = h; await odSave(); toast('📁 Inspection Toolbox folder ready', 4000); route();
 }
 function odCardHTML() {
-  if (!odSupported()) return `<div class="card"><h3>📁 OneDrive</h3><p class="small muted">On a PC (Chrome or Edge) you can link an <b>Inspection Toolbox</b> folder in your OneDrive and the app files everything there. On this device: when importing, pick files straight from the <b>OneDrive</b> app in the file picker; to save, use 📤 Share → OneDrive and choose the folder.</p></div>`;
+  if (!odSupported()) return `<div class="card"><h3>📁 OneDrive ${iBtn('onedrive')}</h3><p class="small">The <b>Inspection Toolbox</b> folder is set up from a <b>PC</b> (Chrome or Edge) – a phone can't link a OneDrive folder. On this phone:</p>
+    <ul class="small"><li><b>Open a file from OneDrive</b> (data pack, P&amp;IDs, sync file…): in the file picker tap <b>☰</b> (or <i>Browse</i>) → <b>OneDrive</b> → Inspection Toolbox. If OneDrive isn't listed, open the OneDrive app once and sign in.</li>
+      <li><b>Save to OneDrive</b>: use 📤 Share / Export → <b>OneDrive</b> → choose the folder.</li></ul>
+    <p class="small muted">If your phone's work profile blocks sharing between the OneDrive app and this browser, use the PC for OneDrive files.</p></div>`;
   if (!OD?.root) return `<div class="card"><h3>📁 OneDrive folder</h3><p class="small muted">Link an <b>Inspection Toolbox</b> folder in your OneDrive Documents. The app creates folders for data packs, piping system prep, P&amp;IDs, reference documents, completed reports for IMS and backups – then saves exports into them and imports new files from them.</p>
     <button class="btn primary block" data-action="odConnect">📁 Set up OneDrive folder</button></div>`;
   return `<div class="card"><h3>📁 OneDrive folder ${iBtn('onedrive')}</h3><p class="small">Linked: <b>${esc(OD.root.name)}</b>. Exports are saved straight into it:</p>
